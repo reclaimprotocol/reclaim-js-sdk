@@ -4,7 +4,21 @@
   "description": "Designed to request proofs from the Reclaim protocol and manage the flow of claims and witness interactions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "keywords": [],
+  "keywords": [
+    "reclaim",
+    "protocol",
+    "blockchain",
+    "proof",
+    "verification",
+    "identity",
+    "claims",
+    "witness",
+    "sdk",
+    "javascript",
+    "typescript",
+    "decentralized",
+    "web3"
+  ],
   "files": [
     "dist"
   ],
@@ -17,21 +31,21 @@
     "clean": true
   },
   "scripts": {
-    "build": "sh build.sh",
+    "build": "sh scripts/build.sh",
     "release": "release-it",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "commitlint": "commitlint --edit"
   },
   "repository": {
     "type": "git",
-    "url": "git@gitlab.reclaimprotocol.org:reclaim-developer-experience/reclaim-sdk.git",
-    "directory": "packages/js"
+    "url": "https://github.com/reclaimprotocol/reclaim-js-sdk"
   },
-  "author": "ali <ali@creatoros.co> (https://gitlab.reclaimprotocol.org/ali)",
-  "license": "MIT",
+  "author": "ali <ali@creatoros.co>",
+  "license": "See License in <https://github.com/reclaimprotocol/.github/blob/main/LICENSE>",
   "bugs": {
-    "url": "https://gitlab.reclaimprotocol.org/reclaim-developer-experience/reclaim-sdk/-/issues"
+    "url": "https://github.com/reclaimprotocol/reclaim-js-sdk/issues"
   },
-  "homepage": "https://gitlab.reclaimprotocol.org/reclaim-developer-experience/reclaim-sdk/-/blob/main/packages/js/README.md?ref_type=heads",
+  "homepage": "https://github.com/reclaimprotocol/reclaim-js-sdk/issues",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
     "access": "public"
@@ -56,6 +70,8 @@
   },
   "devDependencies": {
     "@bconnorwhite/bob": "^2.9.5",
+    "@commitlint/cli": "^17.7.1",
+    "@commitlint/config-conventional": "^17.7.0",
     "@release-it/conventional-changelog": "^5.0.0",
     "@types/qs": "^6.9.11",
     "@types/url-parse": "^1.4.11",
