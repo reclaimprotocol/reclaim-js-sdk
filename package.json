@@ -1,0 +1,75 @@
+{
+  "name": "@reclaimprotocol/js-sdk",
+  "version": "1.3.10",
+  "description": "Designed to request proofs from the Reclaim protocol and manage the flow of claims and witness interactions.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": [],
+  "files": [
+    "dist"
+  ],
+  "tsup": {
+    "entry": [
+      "src/index.ts"
+    ],
+    "splitting": false,
+    "sourcemap": true,
+    "clean": true
+  },
+  "scripts": {
+    "build": "sh build.sh",
+    "release": "release-it",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@gitlab.reclaimprotocol.org:reclaim-developer-experience/reclaim-sdk.git",
+    "directory": "packages/js"
+  },
+  "author": "ali <ali@creatoros.co> (https://gitlab.reclaimprotocol.org/ali)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://gitlab.reclaimprotocol.org/reclaim-developer-experience/reclaim-sdk/-/issues"
+  },
+  "homepage": "https://gitlab.reclaimprotocol.org/reclaim-developer-experience/reclaim-sdk/-/blob/main/packages/js/README.md?ref_type=heads",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "release-it": {
+    "git": {
+      "commitMessage": "chore: release ${version}",
+      "tagName": "v${version}"
+    },
+    "npm": {
+      "publish": true,
+      "tag": "latest"
+    },
+    "github": {
+      "release": true
+    },
+    "plugins": {
+      "@release-it/conventional-changelog": {
+        "preset": "angular"
+      }
+    }
+  },
+  "devDependencies": {
+    "@bconnorwhite/bob": "^2.9.5",
+    "@release-it/conventional-changelog": "^5.0.0",
+    "@types/qs": "^6.9.11",
+    "@types/url-parse": "^1.4.11",
+    "@types/uuid": "^9.0.7",
+    "release-it": "^15.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "canonicalize": "^2.0.0",
+    "ethers": "^6.9.1",
+    "pino": "^8.19.0",
+    "qs": "^6.11.2",
+    "url-parse": "^1.5.10",
+    "uuid": "^9.0.1"
+  }
+}

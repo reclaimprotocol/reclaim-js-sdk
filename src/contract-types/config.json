@@ -1,0 +1,13 @@
+{
+  "0x1a4": {
+    "chainName": "opt-goerli",
+    "address": "0xF93F605142Fb1Efad7Aa58253dDffF67775b4520",
+    "rpcUrl": "https://opt-goerli.g.alchemy.com/v2/rksDkSUXd2dyk2ANy_zzODknx_AAokui"
+  },
+  "0xaa37dc": {
+    "chainName": "opt-sepolia",
+    "address": "0x6D0f81BDA11995f25921aAd5B43359630E65Ca96",
+    "rpcUrl": "https://opt-sepolia.g.alchemy.com/v2/aO1-SfG4oFRLyAiLREqzyAUu0HTCwHgs"
+}
+
+}
