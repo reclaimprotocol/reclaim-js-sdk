@@ -133,13 +133,18 @@ function App() {
           )}
           {proofs.length > 0 && (
             <div>
-              <h3>Proofs</h3>
+             <h3 style={{color: 'black'}}>Proofs</h3>
               <ul>
                 {proofs.map((proof, index) => {
                   return (
-                    <p key={index}>
-                      {JSON.stringify(proof.extractedParameterValues)}
+                    <div key={index}>
+                    <p  style={{color: 'black'}}>
+                      Identifier: {JSON.stringify(proof.identifier)}
                     </p>
+                    <p style={{color: 'black'}}>
+                    Signature: {JSON.stringify(proof.signatures)}
+                    </p>
+                    </div>
                   )
                 })}
               </ul>
