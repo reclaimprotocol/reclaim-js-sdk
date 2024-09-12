@@ -1,4 +1,8 @@
-# Reclaim JavaScript SDK
+<div>
+    <div>
+        <img src="https://raw.githubusercontent.com/reclaimprotocol/.github/main/assets/banners/JS-SDK.png"  />
+    </div>
+</div>
 
 This README provides a step-by-step guide on integrating the Reclaim Protocol JavaScript SDK into application
 
