@@ -45,7 +45,7 @@
   "bugs": {
     "url": "https://github.com/reclaimprotocol/reclaim-js-sdk/issues"
   },
-  "homepage": "https://github.com/reclaimprotocol/reclaim-js-sdk/issues",
+  "homepage": "https://github.com/reclaimprotocol/reclaim-js-sdk/",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
     "access": "public"

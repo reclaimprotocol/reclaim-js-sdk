@@ -9,12 +9,12 @@ export default function Home() {
   const [verificationReqUrl, setVerificationReqUrl] = React.useState<string>('')
   const [extracted, setExtracted] = React.useState<any>(null)
   const { Canvas } = useQRCode()
-  const APP_ID = "0x486dD3B9C8DF7c9b263C75713c79EC1cf8F592F2";
+  const APP_ID = "<INSERT_SECRET>";
   // prototype mode
   async function startVerificationSession() {
     const reclaimProofRequest = new Reclaim.ProofRequest(APP_ID, { log: true })
     reclaimProofRequest.addContext('0x00000000000', 'hi there')
-    await reclaimProofRequest.buildProofRequest("c94476a0-8a75-4563-b70a-bf6124d7c59b", false, 'V2Linking')
+    await reclaimProofRequest.buildProofRequest("<INSERT_SECRET>", false, 'V2Linking')
     await reclaimProofRequest.setRedirectUrl("https://google.com")
 
     // reclaimProofRequest.setParams({ test: "aim" })
@@ -24,7 +24,7 @@ export default function Home() {
     reclaimProofRequest.setSignature(
       await reclaimProofRequest
         .generateSignature(
-          '0x1f86678fe5ec8c093e8647d5eb72a65b5b2affb7ee12b70f74e519a77b295887' // Note: This is for prototype mode only. In production, the application secret should be handled on the backend.
+          '<INSERT_SECRET>' // Note: This is for prototype mode only. In production, the application secret should be handled on the backend.
         )
     );
 
