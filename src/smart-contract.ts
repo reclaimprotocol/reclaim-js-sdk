@@ -1,4 +1,4 @@
-import type { Beacon, BeaconState } from './interfaces';
+import type { Beacon, BeaconState } from './utils/interfaces';
 import { Reclaim__factory as ReclaimFactory } from './contract-types';
 import CONTRACTS_CONFIG from './contract-types/config.json';
 import { Contract, ethers } from 'ethers';
