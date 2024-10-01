@@ -10,6 +10,14 @@ function createErrorClass(name: string) {
     };
 }
 
+// extends error for Contract Configuration
+export class ContractConfigurationError extends Error {
+    constructor(chainId:number){
+        super(`No configuration found for chain ID: ${chainId}`);
+        this.name = 'ContractConfigurationError';
+    }
+}
+
 export const TimeoutError = createErrorClass('TimeoutError');
 export const ProofNotVerifiedError = createErrorClass('ProofNotVerifiedError');
 export const SessionNotStartedError = createErrorClass('SessionNotStartedError');
