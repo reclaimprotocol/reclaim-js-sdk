@@ -81,11 +81,11 @@ function App() {
     console.log('Status URL:', status)
 
     await reclaimProofRequest.startSession({
-      onSuccessCallback: (proofs) => {
+      onSuccess: (proofs) => {
         console.log('Verification success', proofs)
         setProofs(proofs)
       },
-      onFailureCallback: (error) => {
+      onFailure: (error) => {
         console.error('Verification failed', error)
       }
     })
@@ -149,9 +149,9 @@ Your Reclaim SDK demo should now be running. Click the "Create Claim" button to 
 
 3. **Status URL**: This URL (logged to the console) can be used to check the status of the claim process. It's useful for tracking the progress of verification.
 
-4. **Verification**: The `onSuccessCallback` is called when verification is successful, providing the proof data.
+4. **Verification**: The `onSuccess` is called when verification is successful, providing the proof data.
 
-5. **Handling Failures**: The `onFailureCallback` is called if verification fails, allowing you to handle errors gracefully.
+5. **Handling Failures**: The `onFailure` is called if verification fails, allowing you to handle errors gracefully.
 
 ## Advanced Configuration
 
