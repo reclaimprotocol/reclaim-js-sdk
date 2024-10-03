@@ -2,10 +2,11 @@ import type { Beacon, BeaconState } from './utils/interfaces';
 import { Reclaim__factory as ReclaimFactory } from './contract-types';
 import CONTRACTS_CONFIG from './contract-types/config.json';
 import { Contract, ethers } from 'ethers';
+import { ContractConfigurationError } from './utils/errors';
 
 const DEFAULT_CHAIN_ID = 11155420;
 
-export function makeBeacon(chainId?: number): Beacon | undefined {
+export function makeBeacon(chainId?: number): Beacon {
   chainId = chainId || DEFAULT_CHAIN_ID;
   const contract = getContract(chainId);
   if (contract) {
@@ -29,7 +30,7 @@ export function makeBeacon(chainId?: number): Beacon | undefined {
       },
     });
   } else {
-    return undefined;
+    throw new ContractConfigurationError(chainId)
   }
 }
 
@@ -58,13 +59,14 @@ export function makeBeaconCacheable(beacon: Beacon): Beacon {
 
 const existingContractsMap: { [chain: string]: Contract } = {};
 
-function getContract(chainId: number): Contract {
+export function getContract(chainId: number): Contract {
   const chainKey = `0x${chainId.toString(16)}`;
+
   if (!existingContractsMap[chainKey]) {
     const contractData =
       CONTRACTS_CONFIG[chainKey as keyof typeof CONTRACTS_CONFIG];
     if (!contractData) {
-      throw new Error(`Unsupported chain: "${chainKey}"`);
+      throw new ContractConfigurationError(chainId)
     }
 
     const rpcProvider = new ethers.JsonRpcProvider(contractData.rpcUrl);
