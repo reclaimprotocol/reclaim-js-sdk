@@ -40,13 +40,7 @@ export async function initSession(
 
     return res as InitSessionResponse;
   } catch (err) {
-    logger.info({
-      message: 'Failed to initialize session',
-      providerId,
-      appId,
-      timestamp,
-      error: err
-    });
+    logger.info(`Failed to initialize session for providerId: ${providerId}, appId: ${appId}`, err);
     throw err;
   }
 }

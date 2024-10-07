@@ -42,7 +42,7 @@ export function scheduleIntervalEndingTask(
             const message = 'Interval ended without receiving proofs'
             onFailureCallback(new TimeoutError(message))
             logger.info(message)
-            clearInterval(intervals.get(sessionId)!)
+            clearInterval(intervals.get(sessionId) as NodeJS.Timeout)
             intervals.delete(sessionId)
         }
     }, timeout)

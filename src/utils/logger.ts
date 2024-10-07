@@ -1,22 +1,31 @@
-import pino from 'pino';
-
 // Define the possible log levels
-export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
+export type LogLevel = 'info' | 'silent';
 
-// Create the logger instance with default level set to 'info'
-const logger = pino({
-  level: 'info',
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true
+// Define a simple logger class
+class SimpleLogger {
+  private level: LogLevel = 'info';
+
+  setLevel(level: LogLevel) {
+    this.level = level;
+  }
+
+  private log(message: string, ...args: any[]) {
+    if (this.level === 'info') {
+      console.info(`[INFO]`, message, ...args);
     }
   }
-});
+
+  info(message: string, ...args: any[]) {
+    this.log(message, ...args);
+  }
+}
+
+// Create the logger instance
+const logger = new SimpleLogger();
 
 // Function to set the log level
 export function setLogLevel(level: LogLevel) {
-  logger.level = level;
+  logger.setLevel(level);
 }
 
 // Export the logger instance and the setLogLevel function
