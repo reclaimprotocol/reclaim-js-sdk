@@ -172,7 +172,7 @@ export class ReclaimProofRequest {
 
             return proofRequestInstance
         } catch (error) {
-            logger.info(error);
+            logger.info('Failed to initialize ReclaimProofRequest', error as Error);
             throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
         }
     }
@@ -307,7 +307,7 @@ export class ReclaimProofRequest {
         try {
             validateFunctionParams([{ input: signature, paramName: 'signature', isString: true }], 'setSignature');
             this.signature = signature;
-            logger.info(`Signature set successfully for session ID: ${this.sessionId}`);
+            logger.info(`Signature set successfully for applicationId: ${this.applicationId}`);
         } catch (error) {
             logger.info("Error setting signature", error)
             throw new SetSignatureError("Error setting signature", error as Error)
@@ -368,7 +368,7 @@ export class ReclaimProofRequest {
 
     private clearInterval(): void {
         if (this.sessionId && this.intervals.has(this.sessionId)) {
-            clearInterval(this.intervals.get(this.sessionId)!)
+            clearInterval(this.intervals.get(this.sessionId) as NodeJS.Timeout)
             this.intervals.delete(this.sessionId)
         }
     }
