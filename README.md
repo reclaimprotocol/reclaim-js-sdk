@@ -205,10 +205,6 @@ For production applications, it's recommended to handle proofs on your backend:
    reclaimProofRequest.setCallbackUrl('https://your-backend.com/receive-proofs')
    ```
 
-2. Set a custom status URL:
-   ```javascript
-   reclaimProofRequest.setStatusUrl('https://your-backend.com/receive-status')
-   ```
 
 These options allow you to securely process proofs and status updates on your server.
 

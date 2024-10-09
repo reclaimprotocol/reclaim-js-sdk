@@ -32,7 +32,7 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError} from './utils/errors'
 import { validateContext, validateFunctionParams, validateRequestedProof, validateSignature, validateURL } from './utils/validationUtils'
-import { initSession, updateSession } from './utils/sessionUtils'
+import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, generateRequestedProof, getFilledParameters, getWitnessesForClaim } from './utils/proofUtils'
 import loggerModule from './utils/logger';
 const logger = loggerModule.logger
@@ -423,8 +423,7 @@ export class ReclaimProofRequest {
     }
 
     async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
-        const statusUrl = this.getStatusUrl()
-        if (!statusUrl || !this.sessionId) {
+        if (!this.sessionId) {
             const message = "Session can't be started due to undefined value of statusUrl and sessionId"
             logger.info(message)
             throw new SessionNotStartedError(message)
@@ -433,14 +432,13 @@ export class ReclaimProofRequest {
         logger.info('Starting session')
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(statusUrl)
-                const data = await res.json()
+                const statusUrlResponse = await fetchStatusUrl(this.sessionId)
 
-                if (!data.session) return
-                if (data.session.status === SessionStatus.PROOF_GENERATION_FAILED) throw new ProviderFailedError()
-                if (data.session.proofs.length === 0) return
+                if (!statusUrlResponse.session) return
+                if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_GENERATION_FAILED) throw new ProviderFailedError()
+                if (!statusUrlResponse.session.proofs || statusUrlResponse.session.proofs.length === 0) return
 
-                const proof = data.session.proofs[0]
+                const proof = statusUrlResponse.session.proofs[0]
                 const verified = await verifyProof(proof)
                 if (!verified) {
                     logger.info(`Proof not verified: ${proof}`)

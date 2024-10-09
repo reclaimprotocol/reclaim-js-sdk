@@ -15,23 +15,6 @@ export type SignedClaim = {
   signatures: Uint8Array[];
 };
 
-// URL and query-related types
-export type QueryParams = ParsedQs;
-
-// @needsAudit @docsMissing
-export type ParsedURL = {
-  scheme: string | null;
-  hostname: string | null;
-  /**
-   * The path into the app specified by the URL.
-   */
-  path: string | null;
-  /**
-   * The set of query parameters specified by the query string of the url used to open the app.
-   */
-  queryParams: QueryParams | null;
-};
-
 // Request and session-related types
 export type CreateVerificationRequest = {
   providerIds: string[];
@@ -99,4 +82,18 @@ export type TemplateData = {
   parameters: { [key: string]: string | string };
   redirectUrl: string;
   acceptAiProviders: boolean;
+};
+
+// Add the new StatusUrlResponse type
+export type StatusUrlResponse = {
+  message: string;
+  session?: {
+    id: string;
+    appId: string;
+    httpProviderId: string[];
+    sessionId: string;
+    proofs?: Proof[];
+    statusV2: string;
+  };
+  providerId?: string;
 };

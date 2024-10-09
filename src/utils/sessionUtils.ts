@@ -1,10 +1,11 @@
 import {
   InitSessionError,
-  UpdateSessionError
+  UpdateSessionError,
+  StatusUrlError
 } from "./errors";
-import { InitSessionResponse, SessionStatus } from "./types";
+import { InitSessionResponse, SessionStatus, StatusUrlResponse } from "./types";
 import { validateFunctionParams } from "./validationUtils";
-import { BACKEND_BASE_URL } from './constants';
+import { BACKEND_BASE_URL, constants } from './constants';
 import loggerModule from './logger';
 const logger = loggerModule.logger;
 
@@ -82,3 +83,39 @@ export async function updateSession(sessionId: string, status: SessionStatus) {
     throw new UpdateSessionError(`Error updating session with sessionId: ${sessionId}`);
   }
 }
+
+/**
+ * Fetches the status URL for a given session ID
+ * @param sessionId - The ID of the session to fetch the status URL for
+ * @returns A promise that resolves to a StatusUrlResponse
+ * @throws StatusUrlError if the status URL fetch fails
+ */
+export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlResponse> {
+  validateFunctionParams(
+    [{ input: sessionId, paramName: 'sessionId', isString: true }],
+    'fetchStatusUrl'
+  );
+
+  try {
+    const response = await fetch(`${constants.DEFAULT_RECLAIM_STATUS_URL}${sessionId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const res = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = `Error fetching status URL for sessionId: ${sessionId}. Status Code: ${response.status}`;
+      logger.info(errorMessage, res);
+      throw new StatusUrlError(errorMessage);
+    }
+
+    return res as StatusUrlResponse;
+  } catch (err) {
+    const errorMessage = `Failed to fetch status URL for sessionId: ${sessionId}`;
+    logger.info(errorMessage, err);
+    throw new StatusUrlError(`Error fetching status URL for sessionId: ${sessionId}`);
+  }
+}
+
+
