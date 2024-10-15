@@ -114,7 +114,7 @@ export class ReclaimProofRequest {
     private appCallbackUrl?: string;
     private sessionId: string;
     private options?: ProofRequestOptions;
-    private context: Context = { contextAddress: '0x0', contextMessage: '' };
+    private context: Context = { contextAddress: '0x0', contextMessage: 'sample context' };
     private requestedProof?: RequestedProof;
     private providerId: string;
     private redirectUrl?: string;
