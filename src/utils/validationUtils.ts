@@ -15,15 +15,15 @@ const logger = loggerModule.logger;
 export function validateFunctionParams(params: { input: any, paramName: string, isString?: boolean }[], functionName: string): void {
   params.forEach(({ input, paramName, isString }) => {
     if (input == null) {
-      logger.info(`Validation failed: ${paramName} in ${functionName} is null or undefined`);
+      logger.warn(`Validation failed: ${paramName} in ${functionName} is null or undefined`);
       throw new InvalidParamError(`${paramName} passed to ${functionName} must not be null or undefined.`);
     }
     if (isString && typeof input !== 'string') {
-      logger.info(`Validation failed: ${paramName} in ${functionName} is not a string`);
+      logger.warn(`Validation failed: ${paramName} in ${functionName} is not a string`);
       throw new InvalidParamError(`${paramName} passed to ${functionName} must be a string.`);
     }
     if (isString && input.trim() === '') {
-      logger.info(`Validation failed: ${paramName} in ${functionName} is an empty string`);
+      logger.warn(`Validation failed: ${paramName} in ${functionName} is an empty string`);
       throw new InvalidParamError(`${paramName} passed to ${functionName} must not be an empty string.`);
     }
   });
@@ -39,7 +39,7 @@ export function validateURL(url: string, functionName: string): void {
   try {
     new URL(url);
   } catch (e) {
-    logger.info(`URL validation failed for ${url} in ${functionName}: ${(e as Error).message}`);
+    logger.error(`URL validation failed for ${url} in ${functionName}: ${(e as Error).message}`);
     throw new InvalidParamError(`Invalid URL format ${url} passed to ${functionName}.`, e as Error);
   }
 }
@@ -58,8 +58,8 @@ export function validateSignature(providerId: string, signature: string, applica
 
     const message = canonicalize({ providerId, timestamp });
     if (!message) {
-      logger.info('Failed to canonicalize message for signature validation');
-      throw new Error('Failed to canonicalize message');
+      logger.warn('Failed to canonicalize message for signature validation');
+      throw new Error(`Failed to canonicalize message because message is ${message}`);
     }
     const messageHash = ethers.keccak256(new TextEncoder().encode(message));
     let appId = ethers.verifyMessage(
@@ -68,13 +68,13 @@ export function validateSignature(providerId: string, signature: string, applica
     ).toLowerCase();
 
     if (ethers.getAddress(appId) !== ethers.getAddress(applicationId)) {
-      logger.info(`Signature validation failed: Mismatch between derived appId (${appId}) and provided applicationId (${applicationId})`);
+      logger.warn(`Signature validation failed: Mismatch between derived appId (${appId}) and provided applicationId (${applicationId})`);
       throw new InvalidSignatureError(`Signature does not match the application id: ${appId}`);
     }
 
     logger.info(`Signature validated successfully for applicationId: ${applicationId}`);
   } catch (err) {
-    logger.info(`Signature validation failed: ${(err as Error).message}`);
+    logger.error(`Signature validation failed: ${(err as Error).message}`);
     if (err instanceof InvalidSignatureError) {
       throw err;
     }
@@ -90,12 +90,12 @@ export function validateSignature(providerId: string, signature: string, applica
  */
 export function validateRequestedProof(requestedProof: RequestedProof): void {
   if (!requestedProof.url) {
-    logger.info(`Requested proof validation failed: Provided url in requested proof is not valid`);
+    logger.warn(`Requested proof validation failed: Provided url in requested proof is not valid`);
     throw new InvalidParamError(`The provided url in requested proof is not valid`);
   }
 
   if (requestedProof.parameters && typeof requestedProof.parameters !== 'object') {
-    logger.info(`Requested proof validation failed: Provided parameters in requested proof is not valid`);
+    logger.warn(`Requested proof validation failed: Provided parameters in requested proof is not valid`);
     throw new InvalidParamError(`The provided parameters in requested proof is not valid`);
   }
 }
@@ -107,12 +107,12 @@ export function validateRequestedProof(requestedProof: RequestedProof): void {
  */
 export function validateContext(context: Context): void {
   if (!context.contextAddress) {
-    logger.info(`Context validation failed: Provided context address in context is not valid`);
+    logger.warn(`Context validation failed: Provided context address in context is not valid`);
     throw new InvalidParamError(`The provided context address in context is not valid`);
   }
 
   if (!context.contextMessage) {
-    logger.info(`Context validation failed: Provided context message in context is not valid`);
+    logger.warn(`Context validation failed: Provided context message in context is not valid`);
     throw new InvalidParamError(`The provided context message in context is not valid`);
   }
 
@@ -129,12 +129,12 @@ export function validateContext(context: Context): void {
  */
 export function validateOptions(options: ProofRequestOptions): void {
   if (options.acceptAiProviders && typeof options.acceptAiProviders !== 'boolean') {
-    logger.info(`Options validation failed: Provided acceptAiProviders in options is not valid`);
+    logger.warn(`Options validation failed: Provided acceptAiProviders in options is not valid`);
     throw new InvalidParamError(`The provided acceptAiProviders in options is not valid`);
   }
 
   if (options.log && typeof options.log !== 'boolean') {
-    logger.info(`Options validation failed: Provided log in options is not valid`);
+    logger.warn(`Options validation failed: Provided log in options is not valid`);
     throw new InvalidParamError(`The provided log in options is not valid`);
   }
 }
