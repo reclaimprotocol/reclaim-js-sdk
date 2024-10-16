@@ -61,13 +61,13 @@ export async function getShortenedUrl(url: string): Promise<string> {
     })
     const res = await response.json()
     if (!response.ok) {
-      logger.info(`Failed to shorten URL: ${url}, Response: ${JSON.stringify(res)}`);
+      logger.error(`Failed to shorten URL: ${url}, Response: ${JSON.stringify(res)}`);
       return url;
     }
     const shortenedVerificationUrl = res.result.shortUrl
     return shortenedVerificationUrl
   } catch (err) {
-    logger.info(`Error shortening URL: ${url}, Error: ${err}`);
+    logger.error(`Error shortening URL: ${url}, Error: ${err}`);
     return url
   }
 }
@@ -87,7 +87,7 @@ export async function createLinkWithTemplateData(templateData: TemplateData): Pr
     const shortenedLink = await getShortenedUrl(fullLink)
     return shortenedLink;
   } catch (err) {
-    logger.info(`Error creating link for sessionId: ${templateData.sessionId}, Error: ${err}`);
+    logger.error(`Error creating link for sessionId: ${templateData.sessionId}, Error: ${err}`);
     return fullLink;
   }
 }
@@ -107,7 +107,7 @@ export async function getWitnessesForClaim(
 ): Promise<string[]> {
   const beacon = makeBeacon()
   if (!beacon) {
-    logger.info('No beacon available for getting witnesses');
+    logger.warn('No beacon available for getting witnesses');
     throw new Error('No beacon available');
   }
   const state = await beacon.getState(epoch)
@@ -153,7 +153,7 @@ export function assertValidSignedClaim(
 
   if (witnessesNotSeen.size > 0) {
     const missingWitnesses = Array.from(witnessesNotSeen).join(', ');
-    logger.info(`Claim validation failed. Missing signatures from: ${missingWitnesses}`);
+    logger.warn(`Claim validation failed. Missing signatures from: ${missingWitnesses}`);
     throw new ProofNotVerifiedError(
       `Missing signatures from ${missingWitnesses}`
     )

@@ -1,5 +1,5 @@
 import type { Proof, RequestedProof, Context, ProviderData } from './utils/interfaces'
-import { getIdentifierFromClaimInfo } from './witness'
+import { getIdentifierFromClaimerror } from './witness'
 import type {
     SignedClaim,
     ProofRequestOptions,
@@ -40,7 +40,7 @@ const logger = loggerModule.logger
 
 export async function verifyProof(proof: Proof): Promise<boolean> {
     if (!proof.signatures.length) {
-        throw new SignatureNotFoundError('No signatures')
+        throw new SignatureNotFoundError('No signatures, proof object is undefined')
     }
 
     try {
@@ -55,8 +55,8 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
                 proof.claimData.timestampS
             )
         }
-        // then hash the claim info with the encoded ctx to get the identifier
-        const calculatedIdentifier = getIdentifierFromClaimInfo({
+        // then hash the claim error with the encoded ctx to get the identifier
+        const calculatedIdentifier = getIdentifierFromClaimerror({
             parameters: JSON.parse(
                 canonicalize(proof.claimData.parameters) as string
             ),
@@ -66,7 +66,7 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
         proof.identifier = replaceAll(proof.identifier, '"', '')
         // check if the identifier matches the one in the proof
         if (calculatedIdentifier !== proof.identifier) {
-            throw new ProofNotVerifiedError('Identifier Mismatch')
+            throw new ProofNotVerifiedError(`Identifier Mismatch, ${calculatedIdentifier} is not as ${proof.identifier}`)
         }
 
         const signedClaim: SignedClaim = {
@@ -80,20 +80,20 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
 
         assertValidSignedClaim(signedClaim, witnesses)
     } catch (e: Error | unknown) {
-        logger.info(`Error verifying proof: ${e instanceof Error ? e.message : String(e)}`)
+        logger.error(`Error verifying proof: ${e instanceof Error ? e.message : String(e)}`)
         return false
     }
 
     return true
 }
 
-export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim: any } {
-    const claimInfoBuilder = new Map([
+export function transformForOnchain(proof: Proof): { claimerror: any, signedClaim: any } {
+    const claimerrorBuilder = new Map([
         ['context', proof.claimData.context],
         ['parameters', proof.claimData.parameters],
         ['provider', proof.claimData.provider],
     ]);
-    const claimInfo = Object.fromEntries(claimInfoBuilder);
+    const claimerror = Object.fromEntries(claimerrorBuilder);
     const claimBuilder = new Map<string, number | string>([
         ['epoch', proof.claimData.epoch],
         ['identifier', proof.claimData.identifier],
@@ -104,7 +104,7 @@ export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim
         claim: Object.fromEntries(claimBuilder),
         signatures: proof.signatures,
     };
-    return { claimInfo, signedClaim };
+    return { claimerror, signedClaim };
 }
 
 export class ReclaimProofRequest {
@@ -128,12 +128,12 @@ export class ReclaimProofRequest {
         this.applicationId = applicationId;
         this.sessionId = "";
         if (options?.log) {
-            loggerModule.setLogLevel('info');
+            loggerModule.setLogLevel('error');
         } else {
             loggerModule.setLogLevel('silent');
         }
         this.options = options;
-        logger.info(`Initializing client with applicationId: ${this.applicationId}`);
+        logger.error(`Initializing client with applicationId: ${this.applicationId}`);
     }
 
     // Static initialization methods
@@ -172,7 +172,7 @@ export class ReclaimProofRequest {
 
             return proofRequestInstance
         } catch (error) {
-            logger.info('Failed to initialize ReclaimProofRequest', error as Error);
+            logger.error('Failed to initialize ReclaimProofRequest', error as Error);
             throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
         }
     }
@@ -225,7 +225,7 @@ export class ReclaimProofRequest {
 
             return proofRequestInstance
         } catch (error) {
-            logger.info('Failed to parse JSON string in fromJsonString:', error);
+            logger.error('Failed to parse JSON string in fromJsonString:', error);
             throw new InvalidParamError('Invalid JSON string provided to fromJsonString');
         }
     }
@@ -249,7 +249,7 @@ export class ReclaimProofRequest {
             ], 'addContext');
             this.context = { contextAddress: address, contextMessage: message };
         } catch (error) {
-            logger.info("Error adding context", error)
+            logger.error("Error adding context", error)
             throw new AddContextError("Error adding context", error as Error)
         }
     }
@@ -276,7 +276,7 @@ export class ReclaimProofRequest {
             }
             this.requestedProof.parameters = { ...requestedProof.parameters, ...params }
         } catch (error) {
-            logger.info('Error Setting Params:', error);
+            logger.error('Error Setting Params:', error);
             throw new SetParamsError("Error setting params", error as Error)
         }
     }
@@ -287,7 +287,7 @@ export class ReclaimProofRequest {
             validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getAppCallbackUrl');
             return this.appCallbackUrl || `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`
         } catch (error) {
-            logger.info("Error getting app callback url", error)
+            logger.error("Error getting app callback url", error)
             throw new GetAppCallbackUrlError("Error getting app callback url", error as Error)
         }
     }
@@ -297,7 +297,7 @@ export class ReclaimProofRequest {
             validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getStatusUrl');
             return `${constants.DEFAULT_RECLAIM_STATUS_URL}${this.sessionId}`
         } catch (error) {
-            logger.info("Error fetching Status Url", error)
+            logger.error("Error fetching Status Url", error)
             throw new GetStatusUrlError("Error fetching status url", error as Error)
         }
     }
@@ -309,7 +309,7 @@ export class ReclaimProofRequest {
             this.signature = signature;
             logger.info(`Signature set successfully for applicationId: ${this.applicationId}`);
         } catch (error) {
-            logger.info("Error setting signature", error)
+            logger.error("Error setting signature", error)
             throw new SetSignatureError("Error setting signature", error as Error)
         }
     }
@@ -328,7 +328,7 @@ export class ReclaimProofRequest {
 
             return await wallet.signMessage(ethers.getBytes(messageHash));
         } catch (err) {
-            logger.info(`Error generating proof request for applicationId: ${this.applicationId}, providerId: ${this.providerId}, signature: ${this.signature}, timeStamp: ${this.timeStamp}`, err);
+            logger.error(`Error generating proof request for applicationId: ${this.applicationId}, providerId: ${this.providerId}, signature: ${this.signature}, timeStamp: ${this.timeStamp}`, err);
             throw new SignatureGeneratingError(`Error generating signature for applicationSecret: ${applicationSecret}`)
         }
     }
@@ -338,7 +338,7 @@ export class ReclaimProofRequest {
             this.requestedProof = generateRequestedProof(provider);
             return this.requestedProof;
         } catch (err: Error | unknown) {
-            logger.info(err instanceof Error ? err.message : String(err));
+            logger.error(err instanceof Error ? err.message : String(err));
             throw new BuildProofRequestError('Something went wrong while generating proof request', err as Error);
         }
     }
@@ -361,7 +361,7 @@ export class ReclaimProofRequest {
             return [...new Set(availableParamsStore)];
 
         } catch (error) {
-            logger.info("Error fetching available params", error)
+            logger.error("Error fetching available params", error)
             throw new AvailableParamsError("Error fetching available params", error as Error)
         }
     }
@@ -390,7 +390,7 @@ export class ReclaimProofRequest {
     }
 
     async getRequestUrl(): Promise<string> {
-        logger.info('Creating Request Url')
+        logger.error('Creating Request Url')
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
         }
@@ -417,7 +417,7 @@ export class ReclaimProofRequest {
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
             return link
         } catch (error) {
-            logger.info('Error creating Request Url:', error)
+            logger.error('Error creating Request Url:', error)
             throw error
         }
     }
@@ -425,7 +425,7 @@ export class ReclaimProofRequest {
     async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
         if (!this.sessionId) {
             const message = "Session can't be started due to undefined value of statusUrl and sessionId"
-            logger.info(message)
+            logger.warn(message)
             throw new SessionNotStartedError(message)
         }
 
@@ -441,8 +441,8 @@ export class ReclaimProofRequest {
                 const proof = statusUrlResponse.session.proofs[0]
                 const verified = await verifyProof(proof)
                 if (!verified) {
-                    logger.info(`Proof not verified: ${proof}`)
-                    throw new ProofNotVerifiedError()
+                    logger.error(`Proof not verified: ${proof}`)
+                    throw new ProofNotVerifiedError(`${proof} is not verified`)
                 }
                 if (onSuccess) {
                     onSuccess(proof)
