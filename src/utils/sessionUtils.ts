@@ -35,13 +35,13 @@ export async function initSession(
     const res = await response.json();
 
     if (!response.ok) {
-      logger.info(`Session initialization failed: ${res.message || 'Unknown error'}`);
+      logger.error(`Session initialization failed: ${res.message || 'Unknown error'}`);
       throw new InitSessionError(res.message || `Error initializing session with providerId: ${providerId}`);
     }
 
     return res as InitSessionResponse;
   } catch (err) {
-    logger.info(`Failed to initialize session for providerId: ${providerId}, appId: ${appId}`, err);
+    logger.error(`Failed to initialize session for providerId: ${providerId}, appId: ${appId}`, err);
     throw err;
   }
 }
@@ -71,7 +71,7 @@ export async function updateSession(sessionId: string, status: SessionStatus) {
 
     if (!response.ok) {
       const errorMessage = `Error updating session with sessionId: ${sessionId}. Status Code: ${response.status}`;
-      logger.info(errorMessage, res);
+      logger.error(errorMessage, res);
       throw new UpdateSessionError(errorMessage);
     }
 
@@ -79,7 +79,7 @@ export async function updateSession(sessionId: string, status: SessionStatus) {
     return res;
   } catch (err) {
     const errorMessage = `Failed to update session with sessionId: ${sessionId}`;
-    logger.info(errorMessage, err);
+    logger.error(errorMessage, err);
     throw new UpdateSessionError(`Error updating session with sessionId: ${sessionId}`);
   }
 }
@@ -106,14 +106,14 @@ export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlRespon
 
     if (!response.ok) {
       const errorMessage = `Error fetching status URL for sessionId: ${sessionId}. Status Code: ${response.status}`;
-      logger.info(errorMessage, res);
+      logger.error(errorMessage, res);
       throw new StatusUrlError(errorMessage);
     }
 
     return res as StatusUrlResponse;
   } catch (err) {
     const errorMessage = `Failed to fetch status URL for sessionId: ${sessionId}`;
-    logger.info(errorMessage, err);
+    logger.error(errorMessage, err);
     throw new StatusUrlError(`Error fetching status URL for sessionId: ${sessionId}`);
   }
 }
