@@ -29,8 +29,11 @@ jobs:
       with:
         node-version: '16'  
     
-    - name: Install dependencies
-      run: npm ci
+    - name: Clean install dependencies
+      run: |
+        rm -rf node_modules
+        rm -rf package-lock.json
+        npm i
     
     - name: Build package
       run: npm run build
