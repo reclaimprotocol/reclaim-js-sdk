@@ -34,3 +34,4 @@ export const SetSignatureError = createErrorClass('SetSignatureError');
 export const GetAppCallbackUrlError = createErrorClass("GetAppCallbackUrlError");
 export const GetRequestUrlError = createErrorClass('GetRequestUrlError');
 export const StatusUrlError = createErrorClass('StatusUrlError');
+export const ProofSubmissionFailedError = createErrorClass('ProofSubmissionFailedError');

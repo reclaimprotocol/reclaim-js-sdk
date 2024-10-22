@@ -50,7 +50,7 @@ export default function Home() {
       // proofRequest.setRedirectUrl('https://example.com/redirect')
 
       // Set a custom app callback URL (if needed)
-      // proofRequest.setAppCallbackUrl('https://example.com/callback')
+      // proofRequest.setAppCallbackUrl('https://your-website.com/callback')
 
       // Uncomment the following line to log the proof request and to get the Json String
       // console.log('Proof request initialized:', proofRequest.toJsonString())
@@ -76,11 +76,16 @@ export default function Home() {
 
       // Start the verification session
       await reclaimProofRequest.startSession({
-        onSuccess: async (proof: Proof) => {
-          console.log('Proof received:', proof)
-
-
-          setExtracted(JSON.stringify(proof.claimData.context))
+        onSuccess: async (proof: Proof | string | undefined) => {
+          if (proof && typeof proof === 'string') {
+            // When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof
+            console.log('SDK Message:', proof)
+            setExtracted(proof)
+          } else if (proof && typeof proof !== 'string') {
+            // When using the default callback url, we get a proof
+            console.log('Proof received:', proof?.claimData.context)
+            setExtracted(JSON.stringify(proof?.claimData.context))
+          }
         },
         onError: (error: Error) => {
           console.error('Error in proof generation:', error)
