@@ -136,7 +136,7 @@ export class ReclaimProofRequest {
             loggerModule.setLogLevel('silent');
         }
         this.options = options;
-        this.sdkVersion = 'js-2.0.6';
+        this.sdkVersion = 'js-2.1.0';
         logger.info(`Initializing client with applicationId: ${this.applicationId}`);
     }
 
