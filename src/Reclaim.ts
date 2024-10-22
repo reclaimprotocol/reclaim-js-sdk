@@ -1,5 +1,5 @@
 import type { Proof, RequestedProof, Context, ProviderData } from './utils/interfaces'
-import { getIdentifierFromClaimerror } from './witness'
+import { getIdentifierFromClaimInfo } from './witness'
 import type {
     SignedClaim,
     ProofRequestOptions,
@@ -56,7 +56,7 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
             )
         }
         // then hash the claim error with the encoded ctx to get the identifier
-        const calculatedIdentifier = getIdentifierFromClaimerror({
+        const calculatedIdentifier = getIdentifierFromClaimInfo({
             parameters: JSON.parse(
                 canonicalize(proof.claimData.parameters) as string
             ),
