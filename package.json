@@ -1,6 +1,6 @@
 {
   "name": "@reclaimprotocol/js-sdk",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Designed to request proofs from the Reclaim protocol and manage the flow of claims and witness interactions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
