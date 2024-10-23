@@ -39,6 +39,8 @@ import { assertValidSignedClaim, createLinkWithTemplateData, generateRequestedPr
 import loggerModule from './utils/logger';
 const logger = loggerModule.logger
 
+const sdkVersion = require('../package.json').version;
+
 
 export async function verifyProof(proof: Proof): Promise<boolean> {
     if (!proof.signatures.length) {
@@ -136,7 +138,8 @@ export class ReclaimProofRequest {
             loggerModule.setLogLevel('silent');
         }
         this.options = options;
-        this.sdkVersion = 'js-2.1.0';
+        // Fetch sdk version from package.json
+        this.sdkVersion = sdkVersion;
         logger.info(`Initializing client with applicationId: ${this.applicationId}`);
     }
 
