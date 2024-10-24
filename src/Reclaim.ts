@@ -139,7 +139,7 @@ export class ReclaimProofRequest {
         }
         this.options = options;
         // Fetch sdk version from package.json
-        this.sdkVersion = sdkVersion;
+        this.sdkVersion = 'js-' + sdkVersion;
         logger.info(`Initializing client with applicationId: ${this.applicationId}`);
     }
 
