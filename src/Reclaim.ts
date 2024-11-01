@@ -25,17 +25,21 @@ import {
     InvalidParamError,
     NoProviderParamsError,
     ProofNotVerifiedError,
+    ProofSubmissionFailedError,
     ProviderFailedError,
     SessionNotStartedError,
     SetParamsError,
     SetSignatureError,
     SignatureGeneratingError,
-    SignatureNotFoundError} from './utils/errors'
+    SignatureNotFoundError
+} from './utils/errors'
 import { validateContext, validateFunctionParams, validateRequestedProof, validateSignature, validateURL } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, generateRequestedProof, getFilledParameters, getWitnessesForClaim } from './utils/proofUtils'
 import loggerModule from './utils/logger';
 const logger = loggerModule.logger
+
+const sdkVersion = require('../package.json').version;
 
 
 export async function verifyProof(proof: Proof): Promise<boolean> {
@@ -120,6 +124,7 @@ export class ReclaimProofRequest {
     private redirectUrl?: string;
     private intervals: Map<string, NodeJS.Timer> = new Map();
     private timeStamp: string;
+    private sdkVersion: string;
 
     // Private constructor
     private constructor(applicationId: string, providerId: string, options?: ProofRequestOptions) {
@@ -133,6 +138,8 @@ export class ReclaimProofRequest {
             loggerModule.setLogLevel('all')
         }
         this.options = options;
+        // Fetch sdk version from package.json
+        this.sdkVersion = 'js-' + sdkVersion;
         logger.info(`Initializing client with applicationId: ${this.applicationId}`);
     }
 
@@ -195,7 +202,8 @@ export class ReclaimProofRequest {
                 redirectUrl,
                 timeStamp,
                 appCallbackUrl,
-                options
+                options,
+                sdkVersion
             }: ProofPropertiesJSON = JSON.parse(jsonString)
 
             validateFunctionParams([
@@ -204,6 +212,7 @@ export class ReclaimProofRequest {
                 { input: signature, paramName: 'signature', isString: true },
                 { input: sessionId, paramName: 'sessionId', isString: true },
                 { input: timeStamp, paramName: 'timeStamp', isString: true },
+                { input: sdkVersion, paramName: 'sdkVersion', isString: true },
             ], 'fromJsonString');
 
             validateRequestedProof(requestedProof);
@@ -228,7 +237,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.redirectUrl = redirectUrl
             proofRequestInstance.timeStamp = timeStamp
             proofRequestInstance.signature = signature
-
+            proofRequestInstance.sdkVersion = sdkVersion;
             return proofRequestInstance
         } catch (error) {
             logger.error('Failed to parse JSON string in fromJsonString:', error);
@@ -395,7 +404,8 @@ export class ReclaimProofRequest {
             signature: this.signature,
             redirectUrl: this.redirectUrl,
             timeStamp: this.timeStamp,
-            options: this.options
+            options: this.options,
+            sdkVersion: this.sdkVersion
         })
     }
 
@@ -419,7 +429,8 @@ export class ReclaimProofRequest {
                 context: JSON.stringify(this.context),
                 parameters: getFilledParameters(requestedProof),
                 redirectUrl: this.redirectUrl ?? '',
-                acceptAiProviders: this.options?.acceptAiProviders ?? false
+                acceptAiProviders: this.options?.acceptAiProviders ?? false,
+                sdkVersion: this.sdkVersion
             }
 
             const link = await createLinkWithTemplateData(templateData)
@@ -439,35 +450,52 @@ export class ReclaimProofRequest {
             throw new SessionNotStartedError(message)
         }
 
-        logger.info('Starting session')
+        logger.info('Starting session');
         const interval = setInterval(async () => {
             try {
-                const statusUrlResponse = await fetchStatusUrl(this.sessionId)
+                const statusUrlResponse = await fetchStatusUrl(this.sessionId);
 
-                if (!statusUrlResponse.session) return
-                if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_GENERATION_FAILED) throw new ProviderFailedError()
-                if (!statusUrlResponse.session.proofs || statusUrlResponse.session.proofs.length === 0) return
+                if (!statusUrlResponse.session) return;
+                if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_GENERATION_FAILED) {
+                    throw new ProviderFailedError();
+                }
 
-                const proof = statusUrlResponse.session.proofs[0]
-                const verified = await verifyProof(proof)
-                if (!verified) {
-                    logger.error(`Proof not verified: ${proof}`)
-                    throw new ProofNotVerifiedError(`${proof} is not verified`)
+                const isDefaultCallbackUrl = this.getAppCallbackUrl() === `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`;
+
+                if (isDefaultCallbackUrl) {
+                    if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
+                        const proof = statusUrlResponse.session.proofs[0];
+                        const verified = await verifyProof(proof);
+                        if (!verified) {
+                            logger.info(`Proof not verified: ${JSON.stringify(proof)}`);
+                            throw new ProofNotVerifiedError();
+                        }
+                        if (onSuccess) {
+                            onSuccess(proof);
+                        }
+                        this.clearInterval();
+                    }
+                } else {
+                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
+                        throw new ProofSubmissionFailedError();
+                    }
+                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED) {
+                        if (onSuccess) {
+                            onSuccess('Proof submitted successfully to the custom callback url');
+                        }
+                        this.clearInterval();
+                    }
                 }
-                if (onSuccess) {
-                    onSuccess(proof)
-                }
-                this.clearInterval()
             } catch (e) {
                 if (onError) {
-                    onError(e as Error)
+                    onError(e as Error);
                 }
-                this.clearInterval()
+                this.clearInterval();
             }
-        }, 3000)
+        }, 3000);
 
-        this.intervals.set(this.sessionId, interval)
-        scheduleIntervalEndingTask(this.sessionId, this.intervals, onError)
+        this.intervals.set(this.sessionId, interval);
+        scheduleIntervalEndingTask(this.sessionId, this.intervals, onError);
     }
 }
 

@@ -30,7 +30,7 @@ export type StartSessionParams = {
   onError: OnError;
 };
 
-export type OnSuccess = (proof: Proof) => void;
+export type OnSuccess = (proof?: Proof | string) => void;
 export type OnError = (error: Error) => void;
 
 
@@ -61,6 +61,7 @@ export enum SessionStatus {
   PROOF_GENERATION_SUCCESS = 'PROOF_GENERATION_SUCCESS',
   PROOF_GENERATION_FAILED = 'PROOF_GENERATION_FAILED',
   PROOF_SUBMITTED = 'PROOF_SUBMITTED',
+  PROOF_SUBMISSION_FAILED = 'PROOF_SUBMISSION_FAILED',
   PROOF_MANUAL_VERIFICATION_SUBMITED = 'PROOF_MANUAL_VERIFICATION_SUBMITED',
 };
 
@@ -76,6 +77,7 @@ export type ProofPropertiesJSON = {
   timeStamp: string;
   appCallbackUrl?: string;
   options?: ProofRequestOptions;
+  sdkVersion: string;
 };
 
 export type TemplateData = {
@@ -89,6 +91,7 @@ export type TemplateData = {
   parameters: { [key: string]: string | string };
   redirectUrl: string;
   acceptAiProviders: boolean;
+  sdkVersion: string;
 };
 
 // Add the new StatusUrlResponse type
