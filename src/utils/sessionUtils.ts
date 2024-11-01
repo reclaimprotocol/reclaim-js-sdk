@@ -36,12 +36,12 @@ export async function initSession(
 
     if (!response.ok) {
       logger.error(`Session initialization failed: ${res.message || 'Unknown error'}`);
-      throw new InitSessionError(res.message || `Error initializing session with providerId: ${providerId}`);
+      throw new InitSessionError(); 
     }
 
     return res as InitSessionResponse;
   } catch (err) {
-    logger.error(`Failed to initialize session for providerId: ${providerId}, appId: ${appId}`, err);
+    logger.error(`Failed to initialize session for providerId: ${providerId}, appId: ${appId}`);
     throw err;
   }
 }

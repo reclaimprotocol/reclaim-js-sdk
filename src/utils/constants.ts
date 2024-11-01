@@ -11,5 +11,6 @@ export const constants = {
     DEFAULT_RECLAIM_STATUS_URL: `${BACKEND_BASE_URL}/api/sdk/session/`,
 
     // URL for sharing Reclaim templates
-    RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template='
+    RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template=',
+
 };

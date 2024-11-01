@@ -127,13 +127,13 @@ export class ReclaimProofRequest {
         this.timeStamp = Date.now().toString();
         this.applicationId = applicationId;
         this.sessionId = "";
-        if (options?.log) {
-            loggerModule.setLogLevel('error');
+        if (options?.log && options?.logLevel) {
+            loggerModule.setLogLevel(options?.logLevel!);
         } else {
-            loggerModule.setLogLevel('silent');
+            loggerModule.setLogLevel('all')
         }
         this.options = options;
-        logger.error(`Initializing client with applicationId: ${this.applicationId}`);
+        logger.info(`Initializing client with applicationId: ${this.applicationId}`);
     }
 
     // Static initialization methods
@@ -154,8 +154,13 @@ export class ReclaimProofRequest {
                 }
                 if (options.log) {
                     validateFunctionParams([
-                        { paramName: 'log', input: options.log }
+                        { paramName: 'log', input: options.log },
                     ], 'the constructor')
+
+                    if(options.logLevel){
+                        validateFunctionParams([{ paramName: 'logLevel', input: options.logLevel }
+                        ], 'the constructor')
+                    } 
                 }
 
             }
@@ -173,6 +178,7 @@ export class ReclaimProofRequest {
             return proofRequestInstance
         } catch (error) {
             logger.error('Failed to initialize ReclaimProofRequest', error as Error);
+            logger.info("Try changing values of applicationId, applicationSecret, ProviderId, Option's Parameters")
             throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
         }
     }
@@ -250,6 +256,7 @@ export class ReclaimProofRequest {
             this.context = { contextAddress: address, contextMessage: message };
         } catch (error) {
             logger.error("Error adding context", error)
+            logger.info(`contextId: A unique identifier for the context (hex address) \nContext message: Additional information about the proof request (string)`)
             throw new AddContextError("Error adding context", error as Error)
         }
     }
@@ -277,6 +284,7 @@ export class ReclaimProofRequest {
             this.requestedProof.parameters = { ...requestedProof.parameters, ...params }
         } catch (error) {
             logger.error('Error Setting Params:', error);
+            logger.info(`Arguments passed in setParams must be object which contains key => value pairs`)
             throw new SetParamsError("Error setting params", error as Error)
         }
     }
@@ -288,6 +296,7 @@ export class ReclaimProofRequest {
             return this.appCallbackUrl || `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`
         } catch (error) {
             logger.error("Error getting app callback url", error)
+            logger.info(`Make sure to pass URL and as a string`)
             throw new GetAppCallbackUrlError("Error getting app callback url", error as Error)
         }
     }
@@ -298,6 +307,7 @@ export class ReclaimProofRequest {
             return `${constants.DEFAULT_RECLAIM_STATUS_URL}${this.sessionId}`
         } catch (error) {
             logger.error("Error fetching Status Url", error)
+            logger.info(`Make sure to pass URL and as a string`)
             throw new GetStatusUrlError("Error fetching status url", error as Error)
         }
     }
@@ -390,7 +400,7 @@ export class ReclaimProofRequest {
     }
 
     async getRequestUrl(): Promise<string> {
-        logger.error('Creating Request Url')
+        logger.info('Creating Request Url')
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
         }

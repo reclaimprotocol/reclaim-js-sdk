@@ -1,5 +1,7 @@
 import type { Context, Proof, ProviderClaimData, ProviderData, RequestedProof } from './interfaces';
 import type { ParsedQs } from 'qs';
+import { LogLevel } from './logger';
+
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
@@ -9,6 +11,8 @@ export type ClaimInfo = Pick<ProviderClaimData, 'context' | 'provider' | 'parame
 export type AnyClaimInfo = ClaimInfo | { identifier: ClaimID };
 
 export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'> & AnyClaimInfo;
+
+
 
 export type SignedClaim = {
   claim: CompleteClaimData;
@@ -29,9 +33,12 @@ export type StartSessionParams = {
 export type OnSuccess = (proof: Proof) => void;
 export type OnError = (error: Error) => void;
 
+
+
 export type ProofRequestOptions = {
   log?: boolean;
-  acceptAiProviders?: boolean;
+  logLevel?: LogLevel;           
+  acceptAiProviders?: boolean;  
 };
 
 // Session and response types

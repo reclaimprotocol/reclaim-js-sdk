@@ -2,9 +2,11 @@ import { ethers } from "ethers";
 import { InvalidParamError, InvalidSignatureError, ProviderNotFoundError } from "./errors";
 import canonicalize from 'canonicalize'
 import { Context, RequestedProof } from "./interfaces";
-import loggerModule from './logger';
+import loggerModule, {LogLevel} from './logger';
 import { ProofRequestOptions } from "./types";
 const logger = loggerModule.logger;
+
+const REFERENCE_FOR_DASHBOARD = "https://dev.reclaimprotocol.org/dashboard"
 
 /**
  * Validates function parameters based on specified criteria
@@ -15,8 +17,11 @@ const logger = loggerModule.logger;
 export function validateFunctionParams(params: { input: any, paramName: string, isString?: boolean }[], functionName: string): void {
   params.forEach(({ input, paramName, isString }) => {
     if (input == null) {
-      logger.warn(`Validation failed: ${paramName} in ${functionName} is null or undefined`);
+      logger.warn(`Validation failed: Expected ${paramName} in ${functionName} is null or undefined`);
       throw new InvalidParamError(`${paramName} passed to ${functionName} must not be null or undefined.`);
+    }
+    if(paramName === 'acceptAiProvider' || paramName === 'log' || paramName || paramName === 'logLevel') {
+      validateOptions(input)
     }
     if (isString && typeof input !== 'string') {
       logger.warn(`Validation failed: ${paramName} in ${functionName} is not a string`);
@@ -40,6 +45,7 @@ export function validateURL(url: string, functionName: string): void {
     new URL(url);
   } catch (e) {
     logger.error(`URL validation failed for ${url} in ${functionName}: ${(e as Error).message}`);
+    logger.info('Make sure to pass URL as string')
     throw new InvalidParamError(`Invalid URL format ${url} passed to ${functionName}.`, e as Error);
   }
 }
@@ -96,6 +102,7 @@ export function validateRequestedProof(requestedProof: RequestedProof): void {
 
   if (requestedProof.parameters && typeof requestedProof.parameters !== 'object') {
     logger.warn(`Requested proof validation failed: Provided parameters in requested proof is not valid`);
+    logger.info(`Requested Proof's parameters must be an Object`)
     throw new InvalidParamError(`The provided parameters in requested proof is not valid`);
   }
 }
@@ -130,11 +137,19 @@ export function validateContext(context: Context): void {
 export function validateOptions(options: ProofRequestOptions): void {
   if (options.acceptAiProviders && typeof options.acceptAiProviders !== 'boolean') {
     logger.warn(`Options validation failed: Provided acceptAiProviders in options is not valid`);
+    logger.info(`acceptAiProviders option must be boolean value`)
     throw new InvalidParamError(`The provided acceptAiProviders in options is not valid`);
   }
 
   if (options.log && typeof options.log !== 'boolean') {
     logger.warn(`Options validation failed: Provided log in options is not valid`);
+    logger.info(`log option must be boolean value`)
+    throw new InvalidParamError(`The provided log in options is not valid`);
+  }
+
+  if (options.logLevel && !['info', 'warn', 'error'].includes(options.logLevel)) {
+    logger.warn(`Options validation failed: Provided loglevel in options is not valid`);
+    logger.info(`Available options for log is 'info' , 'warn' , 'error' `)
     throw new InvalidParamError(`The provided log in options is not valid`);
   }
 }
