@@ -6,7 +6,6 @@ import loggerModule, {LogLevel} from './logger';
 import { ProofRequestOptions } from "./types";
 const logger = loggerModule.logger;
 
-const REFERENCE_FOR_DASHBOARD = "https://dev.reclaimprotocol.org/dashboard"
 
 /**
  * Validates function parameters based on specified criteria
@@ -45,7 +44,7 @@ export function validateURL(url: string, functionName: string): void {
     new URL(url);
   } catch (e) {
     logger.error(`URL validation failed for ${url} in ${functionName}: ${(e as Error).message}`);
-    logger.info('Make sure to pass URL as string')
+    logger.warn('Make sure to pass URL as string')
     throw new InvalidParamError(`Invalid URL format ${url} passed to ${functionName}.`, e as Error);
   }
 }
@@ -102,7 +101,7 @@ export function validateRequestedProof(requestedProof: RequestedProof): void {
 
   if (requestedProof.parameters && typeof requestedProof.parameters !== 'object') {
     logger.warn(`Requested proof validation failed: Provided parameters in requested proof is not valid`);
-    logger.info(`Requested Proof's parameters must be an Object`)
+    logger.warn(`Requested Proof's parameters must be an Object`)
     throw new InvalidParamError(`The provided parameters in requested proof is not valid`);
   }
 }

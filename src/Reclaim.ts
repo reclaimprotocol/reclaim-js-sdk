@@ -59,7 +59,7 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
                 proof.claimData.timestampS
             )
         }
-        // then hash the claim error with the encoded ctx to get the identifier
+        // then hash the claim info with the encoded ctx to get the identifier
         const calculatedIdentifier = getIdentifierFromClaimInfo({
             parameters: JSON.parse(
                 canonicalize(proof.claimData.parameters) as string
@@ -91,13 +91,13 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
     return true
 }
 
-export function transformForOnchain(proof: Proof): { claimerror: any, signedClaim: any } {
-    const claimerrorBuilder = new Map([
+export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim: any } {
+    const claimInfoBuilder = new Map([
         ['context', proof.claimData.context],
         ['parameters', proof.claimData.parameters],
         ['provider', proof.claimData.provider],
     ]);
-    const claimerror = Object.fromEntries(claimerrorBuilder);
+    const claimInfo = Object.fromEntries(claimInfoBuilder);
     const claimBuilder = new Map<string, number | string>([
         ['epoch', proof.claimData.epoch],
         ['identifier', proof.claimData.identifier],
@@ -108,8 +108,9 @@ export function transformForOnchain(proof: Proof): { claimerror: any, signedClai
         claim: Object.fromEntries(claimBuilder),
         signatures: proof.signatures,
     };
-    return { claimerror, signedClaim };
+    return { claimInfo, signedClaim };
 }
+
 
 export class ReclaimProofRequest {
     // Private class properties
@@ -185,7 +186,7 @@ export class ReclaimProofRequest {
             return proofRequestInstance
         } catch (error) {
             logger.error('Failed to initialize ReclaimProofRequest', error as Error);
-            logger.info("Try changing values of applicationId, applicationSecret, ProviderId, Option's Parameters")
+            logger.warn("Try changing values of applicationId, applicationSecret, ProviderId, Option's Parameters")
             throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
         }
     }
@@ -293,7 +294,7 @@ export class ReclaimProofRequest {
             this.requestedProof.parameters = { ...requestedProof.parameters, ...params }
         } catch (error) {
             logger.error('Error Setting Params:', error);
-            logger.info(`Arguments passed in setParams must be object which contains key => value pairs`)
+            logger.warn(`Arguments passed in setParams must be object which contains key => value pairs`)
             throw new SetParamsError("Error setting params", error as Error)
         }
     }
@@ -305,7 +306,7 @@ export class ReclaimProofRequest {
             return this.appCallbackUrl || `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`
         } catch (error) {
             logger.error("Error getting app callback url", error)
-            logger.info(`Make sure to pass URL and as a string`)
+            logger.warn(`Make sure to pass URL and as a string`)
             throw new GetAppCallbackUrlError("Error getting app callback url", error as Error)
         }
     }
@@ -316,7 +317,7 @@ export class ReclaimProofRequest {
             return `${constants.DEFAULT_RECLAIM_STATUS_URL}${this.sessionId}`
         } catch (error) {
             logger.error("Error fetching Status Url", error)
-            logger.info(`Make sure to pass URL and as a string`)
+            logger.warn(`Make sure to pass URL and as a string`)
             throw new GetStatusUrlError("Error fetching status url", error as Error)
         }
     }
