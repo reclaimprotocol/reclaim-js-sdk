@@ -1,57 +1,53 @@
-import type { Proof, RequestedProofs, Context } from './interfaces'
+import type { Proof, RequestedProof, Context, ProviderData } from './utils/interfaces'
 import { getIdentifierFromClaimInfo } from './witness'
 import type {
-    AppCallbackUrl,
-    ApplicationId,
-    NoReturn,
-    OnFailureCallback,
-    SessionId,
-    Signature,
     SignedClaim,
-    StatusUrl,
     ProofRequestOptions,
-    StartSessionParams
-} from './types'
-import { SessionStatus } from './types'
-import { v4 } from 'uuid'
+    StartSessionParams,
+    ProofPropertiesJSON,
+    TemplateData
+} from './utils/types'
+import { SessionStatus } from './utils/types'
 import { ethers } from 'ethers'
 import canonicalize from 'canonicalize'
 import {
-    getWitnessesForClaim,
-    assertValidSignedClaim,
-    getShortenedUrl,
-    fetchProvidersByAppId,
-    generateRequestedProofs,
-    validateProviderIdsAndReturnProviders,
-    validateSignature,
     replaceAll,
-    validateURL,
-    updateSession,
-    createSession,
-    validateNotNullOrUndefined,
-    validateNonEmptyString,
-    getBranchLink
-} from './utils'
-import { constants } from './constants'
-import P from 'pino'
+    scheduleIntervalEndingTask
+} from './utils/helper'
+import { constants } from './utils/constants'
 import {
+    AddContextError,
+    AvailableParamsError,
     BuildProofRequestError,
+    GetAppCallbackUrlError,
+    GetStatusUrlError,
+    InitError,
     InvalidParamError,
+    NoProviderParamsError,
     ProofNotVerifiedError,
+    ProofSubmissionFailedError,
     ProviderFailedError,
     SessionNotStartedError,
-    SignatureNotFoundError,
-    TimeoutError
-} from './errors'
+    SetParamsError,
+    SetSignatureError,
+    SignatureGeneratingError,
+    SignatureNotFoundError
+} from './utils/errors'
+import { validateContext, validateFunctionParams, validateRequestedProof, validateSignature, validateURL } from './utils/validationUtils'
+import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
+import { assertValidSignedClaim, createLinkWithTemplateData, generateRequestedProof, getFilledParameters, getWitnessesForClaim } from './utils/proofUtils'
+import loggerModule from './utils/logger';
+const logger = loggerModule.logger
 
-const logger = P()
+const sdkVersion = require('../package.json').version;
 
-export class Reclaim {
-    static async verifySignedProof(proof: Proof) {
-        if (!proof.signatures.length) {
-            throw new Error('No signatures')
-        }
 
+export async function verifyProof(proof: Proof): Promise<boolean> {
+    if (!proof.signatures.length) {
+        throw new SignatureNotFoundError('No signatures')
+    }
+
+    try {
         // check if witness array exist and first element is manual-verify
         let witnesses = []
         if (proof.witnesses.length && proof.witnesses[0]?.url === 'manual-verify') {
@@ -63,427 +59,433 @@ export class Reclaim {
                 proof.claimData.timestampS
             )
         }
+        // then hash the claim info with the encoded ctx to get the identifier
+        const calculatedIdentifier = getIdentifierFromClaimInfo({
+            parameters: JSON.parse(
+                canonicalize(proof.claimData.parameters) as string
+            ),
+            provider: proof.claimData.provider,
+            context: proof.claimData.context
+        })
+        proof.identifier = replaceAll(proof.identifier, '"', '')
+        // check if the identifier matches the one in the proof
+        if (calculatedIdentifier !== proof.identifier) {
+            throw new ProofNotVerifiedError('Identifier Mismatch')
+        }
 
-        try {
-            // then hash the claim info with the encoded ctx to get the identifier
-            const calculatedIdentifier = getIdentifierFromClaimInfo({
-                parameters: JSON.parse(
-                    canonicalize(proof.claimData.parameters) as string
-                ),
-                provider: proof.claimData.provider,
-                context: proof.claimData.context
+        const signedClaim: SignedClaim = {
+            claim: {
+                ...proof.claimData
+            },
+            signatures: proof.signatures.map(signature => {
+                return ethers.getBytes(signature)
             })
-            proof.identifier = replaceAll(proof.identifier, '"', '')
-            // check if the identifier matches the one in the proof
-            if (calculatedIdentifier !== proof.identifier) {
-                throw new ProofNotVerifiedError('Identifier Mismatch')
-            }
-
-            const signedClaim: SignedClaim = {
-                claim: {
-                    ...proof.claimData
-                },
-                signatures: proof.signatures.map(signature => {
-                    return ethers.getBytes(signature)
-                })
-            }
-
-            // verify the witness signature
-            assertValidSignedClaim(signedClaim, witnesses)
-        } catch (e: Error | unknown) {
-            logger.error(e)
-            return false
         }
 
-        return true
+        assertValidSignedClaim(signedClaim, witnesses)
+    } catch (e: Error | unknown) {
+        logger.info(`Error verifying proof: ${e instanceof Error ? e.message : String(e)}`)
+        return false
     }
-    static transformForOnchain(proof: Proof) {
-        const claimInfoBuilder = new Map([
-            ['context', proof.claimData.context],
-            ['parameters', proof.claimData.parameters],
-            ['provider', proof.claimData.provider],
-        ]);
-        const claimInfo = Object.fromEntries(claimInfoBuilder);
-        const claimBuilder = new Map<string, number | string>([
-            ['epoch', proof.claimData.epoch],
-            ['identifier', proof.claimData.identifier],
-            ['owner', proof.claimData.owner],
-            ['timestampS', proof.claimData.timestampS],
-        ]);
-        const signedClaim = {
-            claim: Object.fromEntries(claimBuilder),
-            signatures: proof.signatures,
-        };
-        return { claimInfo, signedClaim };
+
+    return true
+}
+
+export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim: any } {
+    const claimInfoBuilder = new Map([
+        ['context', proof.claimData.context],
+        ['parameters', proof.claimData.parameters],
+        ['provider', proof.claimData.provider],
+    ]);
+    const claimInfo = Object.fromEntries(claimInfoBuilder);
+    const claimBuilder = new Map<string, number | string>([
+        ['epoch', proof.claimData.epoch],
+        ['identifier', proof.claimData.identifier],
+        ['owner', proof.claimData.owner],
+        ['timestampS', proof.claimData.timestampS],
+    ]);
+    const signedClaim = {
+        claim: Object.fromEntries(claimBuilder),
+        signatures: proof.signatures,
+    };
+    return { claimInfo, signedClaim };
+}
+
+export class ReclaimProofRequest {
+    // Private class properties
+    private applicationId: string;
+    private signature?: string;
+    private appCallbackUrl?: string;
+    private sessionId: string;
+    private options?: ProofRequestOptions;
+    private context: Context = { contextAddress: '0x0', contextMessage: 'sample context' };
+    private requestedProof?: RequestedProof;
+    private providerId: string;
+    private redirectUrl?: string;
+    private intervals: Map<string, NodeJS.Timer> = new Map();
+    private timeStamp: string;
+    private sdkVersion: string;
+
+    // Private constructor
+    private constructor(applicationId: string, providerId: string, options?: ProofRequestOptions) {
+        this.providerId = providerId;
+        this.timeStamp = Date.now().toString();
+        this.applicationId = applicationId;
+        this.sessionId = "";
+        if (options?.log) {
+            loggerModule.setLogLevel('info');
+        } else {
+            loggerModule.setLogLevel('silent');
+        }
+        this.options = options;
+        // Fetch sdk version from package.json
+        this.sdkVersion = 'js-' + sdkVersion;
+        logger.info(`Initializing client with applicationId: ${this.applicationId}`);
     }
-    static verifyProvider(proof: Proof, providerHash: string): boolean {
+
+    // Static initialization methods
+    static async init(applicationId: string, appSecret: string, providerId: string, options?: ProofRequestOptions): Promise<ReclaimProofRequest> {
         try {
-            validateNotNullOrUndefined(providerHash, 'applicationId', 'verifyProvider function')
-            validateNotNullOrUndefined(proof, 'proof', 'verifyProvider function')
+            validateFunctionParams([
+                { paramName: 'applicationId', input: applicationId, isString: true },
+                { paramName: 'providerId', input: providerId, isString: true },
+                { paramName: 'appSecret', input: appSecret, isString: true }
+            ], 'the constructor')
 
-            validateNonEmptyString(providerHash, 'applicationId', 'verifyProvider function')
-            validateNonEmptyString(proof.claimData.context, 'context', 'verifyProvider function')
+            // check if options is provided and validate each property of options
+            if (options) {
+                if (options.acceptAiProviders) {
+                    validateFunctionParams([
+                        { paramName: 'acceptAiProviders', input: options.acceptAiProviders }
+                    ], 'the constructor')
+                }
+                if (options.log) {
+                    validateFunctionParams([
+                        { paramName: 'log', input: options.log }
+                    ], 'the constructor')
+                }
 
-            const jsonContext = JSON.parse(proof.claimData.context)
-            if (!jsonContext.providerHash) {
-                logger.info(`ProviderHash is not included in proof's context`)
-                return false
             }
-            if (providerHash !== jsonContext.providerHash) {
-                logger.info(`ProviderHash in context: ${jsonContext.providerHash} does not match the stored providerHash: ${providerHash}`)
-                return false
-            }
-            return true
-        } catch (e: Error | unknown) {
-            logger.error(e)
-            return false
+
+            const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options)
+
+            const signature = await proofRequestInstance.generateSignature(appSecret)
+            proofRequestInstance.setSignature(signature)
+
+            const data = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature);
+            proofRequestInstance.sessionId = data.sessionId
+
+            await proofRequestInstance.buildProofRequest(data.provider)
+
+            return proofRequestInstance
+        } catch (error) {
+            logger.info('Failed to initialize ReclaimProofRequest', error as Error);
+            throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
         }
     }
-    static ProofRequest = class {
-        applicationId: ApplicationId
-        signature?: Signature
-        appCallbackUrl?: AppCallbackUrl
-        sessionId: SessionId
-        statusUrl?: StatusUrl
-        context: Context = { contextAddress: '0x0', contextMessage: '' }
-        requestedProofs?: RequestedProofs
-        providerId?: string
-        redirectUrl?: string
-        intervals: Map<string, NodeJS.Timer> = new Map()
-        linkingVersion: string
-        timeStamp: string
 
-        constructor(applicationId: string, options?: ProofRequestOptions) {
-            validateNotNullOrUndefined(applicationId, 'applicationId', 'the constructor')
-            validateNonEmptyString(applicationId, 'applicationId', 'the constructor')
-            if (options?.sessionId) {
-                validateNonEmptyString(options?.sessionId, 'sessionId', 'the constructor')
-            }
-            this.linkingVersion = 'V1'
-
-            this.applicationId = applicationId
-            this.sessionId = options?.sessionId || v4().toString()
-            logger.level = options?.log ? 'info' : 'silent'
-            logger.info(
-                `Initializing client with applicationId: ${this.applicationId} and sessionId: ${this.sessionId}`
-            )
-            this.timeStamp = Date.now().toString();
-        }
-
-        addContext(address: string, message: string): NoReturn {
-            validateNotNullOrUndefined(address, 'address', 'addContext')
-            validateNotNullOrUndefined(message, 'message', 'addContext')
-            this.context = { contextAddress: address, contextMessage: message }
-        }
-
-        setAppCallbackUrl(url: string): NoReturn {
-            validateURL(url, 'setAppCallbackUrl')
-            const urlObj = new URL(url)
-            urlObj.searchParams.append('callbackId', this.sessionId)
-            this.appCallbackUrl = urlObj.toString()
-        }
-
-        setRedirectUrl(url: string): NoReturn {
-            validateURL(url, 'setRedirectUrl')
-            const urlObj = new URL(url)
-            this.redirectUrl = urlObj.toString()
-        }
-
-        setStatusUrl(url: string): NoReturn {
-            validateURL(url, 'setStatusUrl')
-            this.statusUrl = url
-        }
-
-        setSignature(signature: Signature): NoReturn {
-            validateNotNullOrUndefined(signature, 'signature', 'setSignature')
-            validateNonEmptyString(signature, 'signature', 'setSignature')
-            this.signature = signature
-        }
-
-        getAppCallbackUrl(): AppCallbackUrl {
-            return (
-                this.appCallbackUrl ||
-                `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`
-            )
-        }
-
-        getStatusUrl(): StatusUrl {
-            return (
-                this.statusUrl ||
-                `${constants.DEFAULT_RECLAIM_STATUS_URL}${this.sessionId}`
-            )
-        }
-
-        getRequestedProofs(): RequestedProofs {
-            try {
-                if (!this.requestedProofs) {
-                    throw new BuildProofRequestError(
-                        'Call buildProofRequest(providerId: string) first!'
-                    )
-                }
-                return this.requestedProofs!
-            } catch (err) {
-                throw err
-            }
-        }
-
-        async generateSignature(applicationSecret: string): Promise<Signature> {
-            try {
-                const wallet = new ethers.Wallet(applicationSecret)
-                const requestedProofs = this.getRequestedProofs();
-                if (requestedProofs.claims.length && (this.linkingVersion === 'V2Linking' || requestedProofs.claims[0]?.payload?.verificationType === 'MANUAL')) {
-                    const signature: Signature = (await wallet.signMessage(
-                        ethers.getBytes(
-                            ethers.keccak256(
-                                new TextEncoder().encode(
-                                    canonicalize({
-                                        providerId: requestedProofs.claims[0].httpProviderId,
-                                        timestamp: this.timeStamp,
-
-                                    })!
-                                )
-                            )
-                        )
-                    )) as unknown as Signature
-
-                    return signature
-                }
-                const signature: Signature = (await wallet.signMessage(
-                    ethers.getBytes(
-                        ethers.keccak256(
-                            new TextEncoder().encode(
-                                canonicalize(requestedProofs)!
-                            )
-                        )
-                    )
-                )) as unknown as Signature
-
-                return signature
-            } catch (err) {
-                logger.error(err)
-                throw new BuildProofRequestError(
-                    'Error generating signature for applicationSecret: ' +
-                    applicationSecret
-                )
-            }
-        }
-
-        async buildProofRequest(providerId: string, redirectUser: boolean = false, linkingVersion?: string): Promise<RequestedProofs> {
-            let providers = await fetchProvidersByAppId(this.applicationId, providerId)
-            const provider = validateProviderIdsAndReturnProviders(
+    static async fromJsonString(jsonString: string): Promise<ReclaimProofRequest> {
+        try {
+            const {
+                applicationId,
                 providerId,
-                providers
-            )
-            try {
-                this.providerId = providerId
-                this.requestedProofs = generateRequestedProofs(
-                    provider,
-                    this.context,
-                    this.getAppCallbackUrl(),
-                    this.getStatusUrl(),
-                    this.sessionId,
-                    redirectUser,
-                )
-                if (linkingVersion) {
-                    if (linkingVersion === 'V2Linking') {
-                        this.linkingVersion = linkingVersion
-                    }
-                    else {
-                        throw new BuildProofRequestError(
-                            'Invalid linking version. Supported linking versions are V2Linking'
-                        )
-                    }
-                }
+                sessionId,
+                context,
+                requestedProof,
+                signature,
+                redirectUrl,
+                timeStamp,
+                appCallbackUrl,
+                options,
+                sdkVersion
+            }: ProofPropertiesJSON = JSON.parse(jsonString)
 
-                return this.requestedProofs
-            } catch (err: Error | unknown) {
-                logger.error(err)
-                throw new BuildProofRequestError(
-                    'Something went wrong while generating proof request'
-                )
+            validateFunctionParams([
+                { input: applicationId, paramName: 'applicationId', isString: true },
+                { input: providerId, paramName: 'providerId', isString: true },
+                { input: signature, paramName: 'signature', isString: true },
+                { input: sessionId, paramName: 'sessionId', isString: true },
+                { input: timeStamp, paramName: 'timeStamp', isString: true },
+                { input: sdkVersion, paramName: 'sdkVersion', isString: true },
+            ], 'fromJsonString');
+
+            validateRequestedProof(requestedProof);
+
+            if (redirectUrl) {
+                validateURL(redirectUrl, 'fromJsonString');
             }
-        }
 
-        async createVerificationRequest(): Promise<{
-            statusUrl: StatusUrl
-            requestUrl: string
-        }> {
-            try {
-                const requestedProofs = await this.getRequestedProofs()
-
-                if (!requestedProofs) {
-                    throw new BuildProofRequestError(
-                        'Requested proofs are not built yet. Call buildProofRequest(providerId: string) first!'
-                    )
-                }
-
-                if (!this.signature) {
-                    throw new SignatureNotFoundError(
-                        'Signature is not set. Use reclaim.setSignature(signature) to set the signature'
-                    )
-                }
-
-                validateSignature(requestedProofs, this.signature, this.applicationId, this.linkingVersion, this.timeStamp)
-                let templateData = {}
-                if (requestedProofs.claims.length && (this.linkingVersion === 'V2Linking' || requestedProofs.claims[0]?.payload?.verificationType === 'MANUAL')) {
-                    templateData = {
-                        sessionId: this.sessionId,
-                        providerId: this.providerId,
-                        applicationId: this.applicationId,
-                        signature: this.signature,
-                        timestamp: this.timeStamp,
-                        callbackUrl: this.getAppCallbackUrl(),
-                        context: JSON.stringify(this.context),
-                        verificationType: requestedProofs.claims[0].payload.verificationType,
-                        parameters: requestedProofs.claims[0].payload.parameters,
-                        redirectUrl: this.redirectUrl ?? ''
-                    }
-                } else {
-                    templateData = {
-                        ...requestedProofs,
-                        signature: this.signature
-                    }
-                }
-
-                let template = encodeURIComponent(
-                    JSON.stringify(templateData)
-                )
-
-                template = replaceAll(template, '(', '%28')
-                template = replaceAll(template, ')', '%29')
-
-                let link = ''
-                if (requestedProofs.claims.length && (this.linkingVersion === 'V2Linking' || requestedProofs.claims[0]?.payload?.verificationType === 'MANUAL')) {
-                    link = `https://share.reclaimprotocol.org/verifier?template=` + template
-                    link = await getShortenedUrl(link)
-                } else {
-                    link = await getBranchLink(template)
-                }
-                await createSession(this.sessionId, this.applicationId, this.providerId!)
-                return { requestUrl: link, statusUrl: this.getStatusUrl() }
-            } catch (error) {
-                logger.error('Error creating verification request:', error)
-                throw error
+            if (appCallbackUrl) {
+                validateURL(appCallbackUrl, 'fromJsonString');
             }
-        }
 
-        async startSession({
-            onSuccessCallback,
-            onFailureCallback
-        }: StartSessionParams) {
-            const statusUrl = this.getStatusUrl()
-            if (statusUrl && this.sessionId) {
-                logger.info('Starting session')
-                try {
-                    await updateSession(this.sessionId, SessionStatus.SDK_STARTED)
-                } catch (e) {
-                    logger.error(e)
-                }
-                const interval = setInterval(async () => {
-                    try {
-                        const res = await fetch(statusUrl)
-                        const data = await res.json()
-
-                        if (!data.session) return
-                        if (data.session.status === SessionStatus.FAILED) throw new ProviderFailedError()
-                        if (data.session.proofs.length === 0) return
-
-                        const proof = data.session.proofs[0]
-                        const verified = await Reclaim.verifySignedProof(proof)
-                        if (!verified) {
-                            throw new ProofNotVerifiedError()
-                        }
-                        if (onSuccessCallback) {
-                            try {
-                                await updateSession(this.sessionId, SessionStatus.SDK_RECEIVED)
-                            } catch (e) {
-                                logger.error(e)
-                            }
-                            onSuccessCallback(data.session.proofs)
-                        }
-                        clearInterval(this.intervals.get(this.sessionId!))
-                        this.intervals.delete(this.sessionId!)
-                    } catch (e) {
-                        if (!(e instanceof ProviderFailedError)) {
-                            try {
-                                await updateSession(this.sessionId, SessionStatus.FAILED)
-                            } catch (e) {
-                                logger.error(e)
-                            }
-                        }
-                        if (onFailureCallback) {
-                            onFailureCallback(e as Error)
-                        }
-                        clearInterval(this.intervals.get(this.sessionId!))
-                        this.intervals.delete(this.sessionId!)
-                    }
-                }, 3000)
-
-                this.intervals.set(this.sessionId, interval)
-                this.scheduleIntervalEndingTask(onFailureCallback)
-            } else {
-                const message =
-                    "Session can't be started due to undefined value of statusUrl and sessionId"
-                logger.error(message)
-                throw new SessionNotStartedError(message)
+            if (context) {
+                validateContext(context);
             }
+
+            const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
+            proofRequestInstance.sessionId = sessionId;
+            proofRequestInstance.context = context;
+            proofRequestInstance.requestedProof = requestedProof
+            proofRequestInstance.appCallbackUrl = appCallbackUrl
+            proofRequestInstance.redirectUrl = redirectUrl
+            proofRequestInstance.timeStamp = timeStamp
+            proofRequestInstance.signature = signature
+            proofRequestInstance.sdkVersion = sdkVersion;
+            return proofRequestInstance
+        } catch (error) {
+            logger.info('Failed to parse JSON string in fromJsonString:', error);
+            throw new InvalidParamError('Invalid JSON string provided to fromJsonString');
         }
+    }
 
-        scheduleIntervalEndingTask(onFailureCallback: OnFailureCallback) {
-            setTimeout(async () => {
-                if (this.intervals.has(this.sessionId)) {
-                    const message = 'Interval ended without receiveing proofs'
-                    await updateSession(this.sessionId, SessionStatus.FAILED)
-                    onFailureCallback(new TimeoutError(message))
-                    logger.warn(message)
-                    clearInterval(this.intervals.get(this.sessionId!))
-                }
-            }, 1000 * 60 * 10)
+    // Setter methods
+    setAppCallbackUrl(url: string): void {
+        validateURL(url, 'setAppCallbackUrl')
+        this.appCallbackUrl = url
+    }
+
+    setRedirectUrl(url: string): void {
+        validateURL(url, 'setRedirectUrl');
+        this.redirectUrl = url;
+    }
+
+    addContext(address: string, message: string): void {
+        try {
+            validateFunctionParams([
+                { input: address, paramName: 'address', isString: true },
+                { input: message, paramName: 'message', isString: true }
+            ], 'addContext');
+            this.context = { contextAddress: address, contextMessage: message };
+        } catch (error) {
+            logger.info("Error adding context", error)
+            throw new AddContextError("Error adding context", error as Error)
         }
+    }
 
-        availableParams(): string[] {
-            const requestedProofs = this.getRequestedProofs();
-
-            if (!requestedProofs || !this.requestedProofs) {
-                throw new BuildProofRequestError(
-                    'Requested proofs are not built yet. Call buildProofRequest(providerId: string) first!'
-                );
+    setParams(params: { [key: string]: string }): void {
+        try {
+            const requestedProof = this.getRequestedProof();
+            if (!requestedProof || !this.requestedProof) {
+                throw new BuildProofRequestError('Requested proof is not present.');
             }
-            let availableParamsStore = Object.keys(requestedProofs.claims[0].payload.parameters)
-            availableParamsStore = availableParamsStore.concat(requestedProofs.claims[0].payload.url
-                .split(/{{(.*?)}}/)
-                .filter((_: string, i: number) => i % 2))
-            availableParamsStore = availableParamsStore.concat(requestedProofs.claims[0].payload.login.url
+
+            const currentParams = this.availableParams()
+            if (!currentParams) {
+                throw new NoProviderParamsError('No params present in the provider config.');
+            }
+
+            const paramsToSet = Object.keys(params)
+            for (const param of paramsToSet) {
+                if (!currentParams.includes(param)) {
+                    throw new InvalidParamError(
+                        `Cannot set parameter ${param} for provider ${this.providerId}. Available parameters: ${currentParams}`
+                    );
+                }
+            }
+            this.requestedProof.parameters = { ...requestedProof.parameters, ...params }
+        } catch (error) {
+            logger.info('Error Setting Params:', error);
+            throw new SetParamsError("Error setting params", error as Error)
+        }
+    }
+
+    // Getter methods
+    getAppCallbackUrl(): string {
+        try {
+            validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getAppCallbackUrl');
+            return this.appCallbackUrl || `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`
+        } catch (error) {
+            logger.info("Error getting app callback url", error)
+            throw new GetAppCallbackUrlError("Error getting app callback url", error as Error)
+        }
+    }
+
+    getStatusUrl(): string {
+        try {
+            validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getStatusUrl');
+            return `${constants.DEFAULT_RECLAIM_STATUS_URL}${this.sessionId}`
+        } catch (error) {
+            logger.info("Error fetching Status Url", error)
+            throw new GetStatusUrlError("Error fetching status url", error as Error)
+        }
+    }
+
+    // Private helper methods
+    private setSignature(signature: string): void {
+        try {
+            validateFunctionParams([{ input: signature, paramName: 'signature', isString: true }], 'setSignature');
+            this.signature = signature;
+            logger.info(`Signature set successfully for applicationId: ${this.applicationId}`);
+        } catch (error) {
+            logger.info("Error setting signature", error)
+            throw new SetSignatureError("Error setting signature", error as Error)
+        }
+    }
+
+    private async generateSignature(applicationSecret: string): Promise<string> {
+        try {
+            const wallet = new ethers.Wallet(applicationSecret)
+            const canonicalData = canonicalize({ providerId: this.providerId, timestamp: this.timeStamp });
+
+
+            if (!canonicalData) {
+                throw new SignatureGeneratingError('Failed to canonicalize data for signing.');
+            }
+
+            const messageHash = ethers.keccak256(new TextEncoder().encode(canonicalData));
+
+            return await wallet.signMessage(ethers.getBytes(messageHash));
+        } catch (err) {
+            logger.info(`Error generating proof request for applicationId: ${this.applicationId}, providerId: ${this.providerId}, signature: ${this.signature}, timeStamp: ${this.timeStamp}`, err);
+            throw new SignatureGeneratingError(`Error generating signature for applicationSecret: ${applicationSecret}`)
+        }
+    }
+
+    private async buildProofRequest(provider: ProviderData): Promise<RequestedProof> {
+        try {
+            this.requestedProof = generateRequestedProof(provider);
+            return this.requestedProof;
+        } catch (err: Error | unknown) {
+            logger.info(err instanceof Error ? err.message : String(err));
+            throw new BuildProofRequestError('Something went wrong while generating proof request', err as Error);
+        }
+    }
+
+    private getRequestedProof(): RequestedProof {
+        if (!this.requestedProof) {
+            throw new BuildProofRequestError('RequestedProof is not present in the instance.')
+        }
+        return this.requestedProof
+    }
+
+    private availableParams(): string[] {
+        try {
+            const requestedProofs = this.getRequestedProof();
+            let availableParamsStore = Object.keys(requestedProofs.parameters)
+            availableParamsStore = availableParamsStore.concat(requestedProofs.url
                 .split(/{{(.*?)}}/)
                 .filter((_: string, i: number) => i % 2))
 
             return [...new Set(availableParamsStore)];
-        }
 
-        setParams(params: { [key: string]: string }): NoReturn {
-            try {
-                const requestedProofs = this.getRequestedProofs();
-
-                if (!requestedProofs || !this.requestedProofs) {
-                    throw new BuildProofRequestError(
-                        'Requested proofs are not built yet. Call buildProofRequest(providerId: string) first!'
-                    );
-                }
-                const availableParams = this.availableParams()
-                const paramsToSet = Object.keys(params)
-                for (let i = 0; i < paramsToSet.length; i++) {
-                    if (requestedProofs.claims[0].payload.verificationType === 'WITNESS' && !availableParams.includes(paramsToSet[i])) {
-                        throw new InvalidParamError(
-                            `Cannot Set parameter ${paramsToSet[i]} for provider ${this.providerId} available Prameters inculde : ${availableParams}`
-                        );
-                    }
-                }
-                this.requestedProofs.claims[0].payload.parameters = { ...requestedProofs.claims[0].payload.parameters, ...params }
-
-            } catch (error) {
-                logger.error('Error Setting Params:', error);
-                throw error;
-            }
+        } catch (error) {
+            logger.info("Error fetching available params", error)
+            throw new AvailableParamsError("Error fetching available params", error as Error)
         }
     }
+
+    private clearInterval(): void {
+        if (this.sessionId && this.intervals.has(this.sessionId)) {
+            clearInterval(this.intervals.get(this.sessionId) as NodeJS.Timeout)
+            this.intervals.delete(this.sessionId)
+        }
+    }
+
+    // Public methods
+    toJsonString(options?: ProofRequestOptions): string {
+        return JSON.stringify({
+            applicationId: this.applicationId,
+            providerId: this.providerId,
+            sessionId: this.sessionId,
+            context: this.context,
+            requestedProof: this.requestedProof,
+            appCallbackUrl: this.appCallbackUrl,
+            signature: this.signature,
+            redirectUrl: this.redirectUrl,
+            timeStamp: this.timeStamp,
+            options: this.options,
+            sdkVersion: this.sdkVersion
+        })
+    }
+
+    async getRequestUrl(): Promise<string> {
+        logger.info('Creating Request Url')
+        if (!this.signature) {
+            throw new SignatureNotFoundError('Signature is not set.')
+        }
+
+        try {
+            const requestedProof = this.getRequestedProof()
+            validateSignature(this.providerId, this.signature, this.applicationId, this.timeStamp)
+
+            const templateData: TemplateData = {
+                sessionId: this.sessionId,
+                providerId: this.providerId,
+                applicationId: this.applicationId,
+                signature: this.signature,
+                timestamp: this.timeStamp,
+                callbackUrl: this.getAppCallbackUrl(),
+                context: JSON.stringify(this.context),
+                parameters: getFilledParameters(requestedProof),
+                redirectUrl: this.redirectUrl ?? '',
+                acceptAiProviders: this.options?.acceptAiProviders ?? false,
+                sdkVersion: this.sdkVersion
+            }
+
+            const link = await createLinkWithTemplateData(templateData)
+            logger.info('Request Url created successfully: ' + link)
+            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
+            return link
+        } catch (error) {
+            logger.info('Error creating Request Url:', error)
+            throw error
+        }
+    }
+
+    async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
+        if (!this.sessionId) {
+            const message = "Session can't be started due to undefined value of sessionId";
+            logger.info(message);
+            throw new SessionNotStartedError(message);
+        }
+
+        logger.info('Starting session');
+        const interval = setInterval(async () => {
+            try {
+                const statusUrlResponse = await fetchStatusUrl(this.sessionId);
+
+                if (!statusUrlResponse.session) return;
+                if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_GENERATION_FAILED) {
+                    throw new ProviderFailedError();
+                }
+
+                const isDefaultCallbackUrl = this.getAppCallbackUrl() === `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`;
+
+                if (isDefaultCallbackUrl) {
+                    if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
+                        const proof = statusUrlResponse.session.proofs[0];
+                        const verified = await verifyProof(proof);
+                        if (!verified) {
+                            logger.info(`Proof not verified: ${JSON.stringify(proof)}`);
+                            throw new ProofNotVerifiedError();
+                        }
+                        if (onSuccess) {
+                            onSuccess(proof);
+                        }
+                        this.clearInterval();
+                    }
+                } else {
+                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
+                        throw new ProofSubmissionFailedError();
+                    }
+                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED) {
+                        if (onSuccess) {
+                            onSuccess('Proof submitted successfully to the custom callback url');
+                        }
+                        this.clearInterval();
+                    }
+                }
+            } catch (e) {
+                if (onError) {
+                    onError(e as Error);
+                }
+                this.clearInterval();
+            }
+        }, 3000);
+
+        this.intervals.set(this.sessionId, interval);
+        scheduleIntervalEndingTask(this.sessionId, this.intervals, onError);
+    }
 }
+
