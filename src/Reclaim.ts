@@ -125,6 +125,7 @@ export class ReclaimProofRequest {
     private intervals: Map<string, NodeJS.Timer> = new Map();
     private timeStamp: string;
     private sdkVersion: string;
+    private jsonProofResponse: boolean = false;
 
     // Private constructor
     private constructor(applicationId: string, providerId: string, options?: ProofRequestOptions) {
@@ -197,7 +198,8 @@ export class ReclaimProofRequest {
                 timeStamp,
                 appCallbackUrl,
                 options,
-                sdkVersion
+                sdkVersion,
+                jsonProofResponse
             }: ProofPropertiesJSON = JSON.parse(jsonString)
 
             validateFunctionParams([
@@ -223,6 +225,12 @@ export class ReclaimProofRequest {
                 validateContext(context);
             }
 
+            if (jsonProofResponse !== undefined) {
+                validateFunctionParams([
+                    { input: jsonProofResponse, paramName: 'jsonProofResponse' }
+                ], 'fromJsonString');
+            }
+
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
@@ -240,9 +248,10 @@ export class ReclaimProofRequest {
     }
 
     // Setter methods
-    setAppCallbackUrl(url: string): void {
+    setAppCallbackUrl(url: string, jsonProofResponse?: boolean): void {
         validateURL(url, 'setAppCallbackUrl')
         this.appCallbackUrl = url
+        this.jsonProofResponse = jsonProofResponse ?? false
     }
 
     setRedirectUrl(url: string): void {
@@ -395,7 +404,8 @@ export class ReclaimProofRequest {
             redirectUrl: this.redirectUrl,
             timeStamp: this.timeStamp,
             options: this.options,
-            sdkVersion: this.sdkVersion
+            sdkVersion: this.sdkVersion,
+            jsonProofResponse: this.jsonProofResponse
         })
     }
 
@@ -420,7 +430,8 @@ export class ReclaimProofRequest {
                 parameters: getFilledParameters(requestedProof),
                 redirectUrl: this.redirectUrl ?? '',
                 acceptAiProviders: this.options?.acceptAiProviders ?? false,
-                sdkVersion: this.sdkVersion
+                sdkVersion: this.sdkVersion,
+                jsonProofResponse: this.jsonProofResponse
             }
 
             const link = await createLinkWithTemplateData(templateData)
