@@ -184,8 +184,9 @@ The Reclaim SDK offers several advanced options to customize your integration:
 
 4. **Custom Callback URL**:
    Set a custom callback URL for your app which allows you to receive proofs and status updates on your callback URL:
+   Pass in `jsonProofResponse: true` to receive the proof in JSON format: By default, the proof is returned as a url encoded string.
    ```javascript
-   reclaimProofRequest.setAppCallbackUrl('https://example.com/callback')
+   reclaimProofRequest.setAppCallbackUrl('https://example.com/callback', true)
    ```
 
 5. **Exporting and Importing SDK Configuration**:

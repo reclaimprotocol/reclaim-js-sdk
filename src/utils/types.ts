@@ -71,6 +71,7 @@ export type ProofPropertiesJSON = {
   appCallbackUrl?: string;
   options?: ProofRequestOptions;
   sdkVersion: string;
+  jsonProofResponse?: boolean;
 };
 
 export type TemplateData = {
@@ -85,6 +86,7 @@ export type TemplateData = {
   redirectUrl: string;
   acceptAiProviders: boolean;
   sdkVersion: string;
+  jsonProofResponse?: boolean;
 };
 
 // Add the new StatusUrlResponse type
