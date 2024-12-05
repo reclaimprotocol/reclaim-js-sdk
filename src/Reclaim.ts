@@ -44,7 +44,7 @@ const sdkVersion = require('../package.json').version;
 
 export async function verifyProof(proof: Proof): Promise<boolean> {
     if (!proof.signatures.length) {
-        throw new SignatureNotFoundError('No signatures')
+        throw new SignatureNotFoundError('No signatures, proof object is undefined')
     }
 
     try {
@@ -70,7 +70,7 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
         proof.identifier = replaceAll(proof.identifier, '"', '')
         // check if the identifier matches the one in the proof
         if (calculatedIdentifier !== proof.identifier) {
-            throw new ProofNotVerifiedError('Identifier Mismatch')
+            throw new ProofNotVerifiedError(`Identifier Mismatch, ${calculatedIdentifier} is not as ${proof.identifier}`)
         }
 
         const signedClaim: SignedClaim = {
@@ -84,7 +84,7 @@ export async function verifyProof(proof: Proof): Promise<boolean> {
 
         assertValidSignedClaim(signedClaim, witnesses)
     } catch (e: Error | unknown) {
-        logger.info(`Error verifying proof: ${e instanceof Error ? e.message : String(e)}`)
+        logger.error(`Error verifying proof: ${e instanceof Error ? e.message : String(e)}`)
         return false
     }
 
@@ -111,6 +111,7 @@ export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim
     return { claimInfo, signedClaim };
 }
 
+
 export class ReclaimProofRequest {
     // Private class properties
     private applicationId: string;
@@ -133,10 +134,10 @@ export class ReclaimProofRequest {
         this.timeStamp = Date.now().toString();
         this.applicationId = applicationId;
         this.sessionId = "";
-        if (options?.log) {
-            loggerModule.setLogLevel('info');
+        if (options?.log && options?.logLevel) {
+            loggerModule.setLogLevel(options?.logLevel!);
         } else {
-            loggerModule.setLogLevel('silent');
+            loggerModule.setLogLevel('all')
         }
         this.options = options;
         // Fetch sdk version from package.json
@@ -162,8 +163,13 @@ export class ReclaimProofRequest {
                 }
                 if (options.log) {
                     validateFunctionParams([
-                        { paramName: 'log', input: options.log }
+                        { paramName: 'log', input: options.log },
                     ], 'the constructor')
+
+                    if(options.logLevel){
+                        validateFunctionParams([{ paramName: 'logLevel', input: options.logLevel }
+                        ], 'the constructor')
+                    } 
                 }
 
             }
@@ -180,7 +186,8 @@ export class ReclaimProofRequest {
 
             return proofRequestInstance
         } catch (error) {
-            logger.info('Failed to initialize ReclaimProofRequest', error as Error);
+            logger.error('Failed to initialize ReclaimProofRequest', error as Error);
+            logger.warn("Try changing values of applicationId, applicationSecret, ProviderId, Option's Parameters")
             throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
         }
     }
@@ -242,7 +249,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.sdkVersion = sdkVersion;
             return proofRequestInstance
         } catch (error) {
-            logger.info('Failed to parse JSON string in fromJsonString:', error);
+            logger.error('Failed to parse JSON string in fromJsonString:', error);
             throw new InvalidParamError('Invalid JSON string provided to fromJsonString');
         }
     }
@@ -267,7 +274,8 @@ export class ReclaimProofRequest {
             ], 'addContext');
             this.context = { contextAddress: address, contextMessage: message };
         } catch (error) {
-            logger.info("Error adding context", error)
+            logger.error("Error adding context", error)
+            logger.info(`contextId: A unique identifier for the context (hex address) \nContext message: Additional information about the proof request (string)`)
             throw new AddContextError("Error adding context", error as Error)
         }
     }
@@ -294,7 +302,8 @@ export class ReclaimProofRequest {
             }
             this.requestedProof.parameters = { ...requestedProof.parameters, ...params }
         } catch (error) {
-            logger.info('Error Setting Params:', error);
+            logger.error('Error Setting Params:', error);
+            logger.warn(`Arguments passed in setParams must be object which contains key => value pairs`)
             throw new SetParamsError("Error setting params", error as Error)
         }
     }
@@ -305,7 +314,8 @@ export class ReclaimProofRequest {
             validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getAppCallbackUrl');
             return this.appCallbackUrl || `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`
         } catch (error) {
-            logger.info("Error getting app callback url", error)
+            logger.error("Error getting app callback url", error)
+            logger.warn(`Make sure to pass URL and as a string`)
             throw new GetAppCallbackUrlError("Error getting app callback url", error as Error)
         }
     }
@@ -315,7 +325,8 @@ export class ReclaimProofRequest {
             validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getStatusUrl');
             return `${constants.DEFAULT_RECLAIM_STATUS_URL}${this.sessionId}`
         } catch (error) {
-            logger.info("Error fetching Status Url", error)
+            logger.error("Error fetching Status Url", error)
+            logger.warn(`Make sure to pass URL and as a string`)
             throw new GetStatusUrlError("Error fetching status url", error as Error)
         }
     }
@@ -327,7 +338,7 @@ export class ReclaimProofRequest {
             this.signature = signature;
             logger.info(`Signature set successfully for applicationId: ${this.applicationId}`);
         } catch (error) {
-            logger.info("Error setting signature", error)
+            logger.error("Error setting signature", error)
             throw new SetSignatureError("Error setting signature", error as Error)
         }
     }
@@ -346,7 +357,7 @@ export class ReclaimProofRequest {
 
             return await wallet.signMessage(ethers.getBytes(messageHash));
         } catch (err) {
-            logger.info(`Error generating proof request for applicationId: ${this.applicationId}, providerId: ${this.providerId}, signature: ${this.signature}, timeStamp: ${this.timeStamp}`, err);
+            logger.error(`Error generating proof request for applicationId: ${this.applicationId}, providerId: ${this.providerId}, signature: ${this.signature}, timeStamp: ${this.timeStamp}`, err);
             throw new SignatureGeneratingError(`Error generating signature for applicationSecret: ${applicationSecret}`)
         }
     }
@@ -356,7 +367,7 @@ export class ReclaimProofRequest {
             this.requestedProof = generateRequestedProof(provider);
             return this.requestedProof;
         } catch (err: Error | unknown) {
-            logger.info(err instanceof Error ? err.message : String(err));
+            logger.error(err instanceof Error ? err.message : String(err));
             throw new BuildProofRequestError('Something went wrong while generating proof request', err as Error);
         }
     }
@@ -379,7 +390,7 @@ export class ReclaimProofRequest {
             return [...new Set(availableParamsStore)];
 
         } catch (error) {
-            logger.info("Error fetching available params", error)
+            logger.error("Error fetching available params", error)
             throw new AvailableParamsError("Error fetching available params", error as Error)
         }
     }
@@ -439,16 +450,16 @@ export class ReclaimProofRequest {
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
             return link
         } catch (error) {
-            logger.info('Error creating Request Url:', error)
+            logger.error('Error creating Request Url:', error)
             throw error
         }
     }
 
     async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
         if (!this.sessionId) {
-            const message = "Session can't be started due to undefined value of sessionId";
-            logger.info(message);
-            throw new SessionNotStartedError(message);
+            const message = "Session can't be started due to undefined value of statusUrl and sessionId"
+            logger.warn(message)
+            throw new SessionNotStartedError(message)
         }
 
         logger.info('Starting session');

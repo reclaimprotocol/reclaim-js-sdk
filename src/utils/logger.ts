@@ -1,21 +1,22 @@
 // Define the possible log levels
-export type LogLevel = 'info' | 'warn' | 'error' | 'silent';
+export type LogLevel = 'info' | 'warn' | 'error' ;
+export type  ExtendedLog = LogLevel | 'all'
 
 // Define a simple logger class
 class SimpleLogger {
-  private level: LogLevel = 'info';
+  private level: ExtendedLog = 'info';
 
-  setLevel(level: LogLevel) {
+  setLevel(level: LogLevel | 'all') {
     this.level = level;
   }
 
   private shouldLog(messageLevel: LogLevel): boolean {
-    const levels: LogLevel[] = ['error', 'warn', 'info', 'silent'];
+    const levels: ExtendedLog[] = ['error', 'warn', 'info', 'all'];
     return levels.indexOf(this.level) >= levels.indexOf(messageLevel);
   }
 
   private log(level: LogLevel, message: string, ...args: any[]) {
-    if (this.shouldLog(level) && this.level !== 'silent') {
+    if (this.shouldLog(level)) {
       const logFunction = this.getLogFunction(level);
       console.log('current level', this.level);
       logFunction(`[${level.toUpperCase()}]`, message, ...args);
@@ -31,7 +32,11 @@ class SimpleLogger {
       case 'info':
         return console.info;
       default:
-        return () => {}; // No-op for 'silent'
+        return (message: string, ...optionalParams: any[]) => {
+          console.info('info',message, ...optionalParams);
+          console.warn('warn',message, ...optionalParams);
+          console.error('error',message, ...optionalParams);
+        };
     }
   }
 
@@ -52,7 +57,7 @@ class SimpleLogger {
 const logger = new SimpleLogger();
 
 // Function to set the log level
-export function setLogLevel(level: LogLevel) {
+export function setLogLevel(level: LogLevel | 'all') {
   logger.setLevel(level);
 }
 
