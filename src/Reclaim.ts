@@ -165,6 +165,16 @@ export class ReclaimProofRequest {
                         { paramName: 'log', input: options.log }
                     ], 'the constructor')
                 }
+                if (options.useAppClip) {
+                    validateFunctionParams([
+                        { paramName: 'useAppClip', input: options.useAppClip }
+                    ], 'the constructor')
+                }
+                if (options.device) {
+                    validateFunctionParams([
+                        { paramName: 'device', input: options.device, isString: true }
+                    ], 'the constructor')
+                }
 
             }
 
@@ -433,11 +443,28 @@ export class ReclaimProofRequest {
                 sdkVersion: this.sdkVersion,
                 jsonProofResponse: this.jsonProofResponse
             }
-
-            const link = await createLinkWithTemplateData(templateData)
-            logger.info('Request Url created successfully: ' + link)
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
-            return link
+            if (this.options?.useAppClip) {
+                let template = encodeURIComponent(JSON.stringify(templateData));
+                template = replaceAll(template, '(', '%28');
+                template = replaceAll(template, ')', '%29');
+
+                // check if the app is running on iOS or Android
+                const isIos = this.options?.device === 'ios';
+                if (!isIos) {
+                    const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
+                    logger.info('Instant App Url created successfully: ' + instantAppUrl);
+                    return instantAppUrl;
+                } else {
+                    const appClipUrl = `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+                    logger.info('App Clip Url created successfully: ' + appClipUrl);
+                    return appClipUrl;
+                }
+            } else {
+                const link = await createLinkWithTemplateData(templateData)
+                logger.info('Request Url created successfully: ' + link)
+                return link
+            }
         } catch (error) {
             logger.info('Error creating Request Url:', error)
             throw error
