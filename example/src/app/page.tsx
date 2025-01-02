@@ -34,9 +34,8 @@ export default function Home() {
       const proofRequest = await ReclaimProofRequest.init(
         process.env.NEXT_PUBLIC_RECLAIM_APP_ID!,
         process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET!,
-        '5eb7f8b3-cbe8-4001-848e-cb161e53fe60', // providerId
-        // Uncomment the following line to enable logging and AI providers
-        // { log: true, acceptAiProviders: true }
+        process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_ID!,
+        { log: true }
       )
       setReclaimProofRequest(proofRequest)
 
@@ -44,13 +43,13 @@ export default function Home() {
       proofRequest.addContext('0x00000000000', 'Example context message')
 
       // Set parameters for the proof request (if needed)
-      // proofRequest.setParams({ email: "test@example.com", userName: "testUser" })
+      // proofRequest.setParams({ key: "value" })
 
       // Set a redirect URL (if needed)
-      // proofRequest.setRedirectUrl('https://example.com/redirect')
+      // proofRequest.setRedirectUrl('your-redirect-url')
 
       // Set a custom app callback URL (if needed)
-      // proofRequest.setAppCallbackUrl('https://your-website.com/callback')
+      // proofRequest.setAppCallbackUrl('your-callback-url')
 
       // Uncomment the following line to log the proof request and to get the Json String
       // console.log('Proof request initialized:', proofRequest.toJsonString())
@@ -76,15 +75,19 @@ export default function Home() {
 
       // Start the verification session
       await reclaimProofRequest.startSession({
-        onSuccess: async (proof: Proof | string | undefined) => {
+        onSuccess: async (proof: Proof | Proof[] | string | undefined) => {
           if (proof && typeof proof === 'string') {
             // When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof
             console.log('SDK Message:', proof)
             setExtracted(proof)
           } else if (proof && typeof proof !== 'string') {
             // When using the default callback url, we get a proof
-            console.log('Proof received:', proof?.claimData.context)
-            setExtracted(JSON.stringify(proof?.claimData.context))
+            console.log('Proof received:', proof)
+            if (Array.isArray(proof)) {
+              setExtracted(JSON.stringify(proof.map(p => p.claimData.context)))
+            } else {
+              setExtracted(JSON.stringify(proof?.claimData.context))
+            }
           }
         },
         onError: (error: Error) => {

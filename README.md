@@ -88,7 +88,12 @@ function App() {
             setProofs(proofs)
           } else if (proofs && typeof proofs !== 'string') {
             // When using the default callback url, we get a proof
-            console.log('Proof received:', proofs?.claimData.context)
+            if (Array.isArray(proofs)) {
+              // when using the cascading providers, providers having more than one proof will return an array of proofs
+              console.log(JSON.stringify(proofs.map(p => p.claimData.context)))
+            } else {
+              console.log('Proof received:', proofs?.claimData.context)
+            }
             setProofs(proofs)
           }
       },
