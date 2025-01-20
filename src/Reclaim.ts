@@ -41,8 +41,21 @@ const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
 
+// Implementation
+export async function verifyProof(proofOrProofs: Proof | Proof[]): Promise<boolean> {
+    // If input is an array of proofs
+    if (Array.isArray(proofOrProofs)) {
+        for (const proof of proofOrProofs) {
+            const isVerified = await verifyProof(proof);
+            if (!isVerified) {
+                return false;
+            }
+        }
+        return true;
+    }
 
-export async function verifyProof(proof: Proof): Promise<boolean> {
+    // Single proof verification logic
+    const proof = proofOrProofs;
     if (!proof.signatures.length) {
         throw new SignatureNotFoundError('No signatures')
     }
@@ -492,14 +505,17 @@ export class ReclaimProofRequest {
 
                 if (isDefaultCallbackUrl) {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
-                        const proof = statusUrlResponse.session.proofs[0];
-                        const verified = await verifyProof(proof);
+                        const proofs = statusUrlResponse.session.proofs;
+                        const verified = await verifyProof(proofs);
                         if (!verified) {
-                            logger.info(`Proof not verified: ${JSON.stringify(proof)}`);
+                            logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
                             throw new ProofNotVerifiedError();
                         }
-                        if (onSuccess) {
-                            onSuccess(proof);
+                        // check if the proofs array has only one proof then send the proofs in onSuccess 
+                        if (proofs.length === 1) {
+                            onSuccess(proofs[0]);
+                        } else {
+                            onSuccess(proofs);
                         }
                         this.clearInterval();
                     }
