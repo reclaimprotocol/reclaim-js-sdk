@@ -139,6 +139,8 @@ export class ReclaimProofRequest {
     private timeStamp: string;
     private sdkVersion: string;
     private jsonProofResponse: boolean = false;
+    private lastFailureTime?: number;
+    private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
 
     // Private constructor
     private constructor(applicationId: string, providerId: string, options?: ProofRequestOptions) {
@@ -497,8 +499,21 @@ export class ReclaimProofRequest {
                 const statusUrlResponse = await fetchStatusUrl(this.sessionId);
 
                 if (!statusUrlResponse.session) return;
+
+                // Reset failure time if status is not PROOF_GENERATION_FAILED
+                if (statusUrlResponse.session.statusV2 !== SessionStatus.PROOF_GENERATION_FAILED) {
+                    this.lastFailureTime = undefined;
+                }
+
+                // Check for failure timeout
                 if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_GENERATION_FAILED) {
-                    throw new ProviderFailedError();
+                    const currentTime = Date.now();
+                    if (!this.lastFailureTime) {
+                        this.lastFailureTime = currentTime;
+                    } else if (currentTime - this.lastFailureTime >= this.FAILURE_TIMEOUT) {
+                        throw new ProviderFailedError('Proof generation failed - timeout reached');
+                    }
+                    return; // Continue monitoring if under timeout
                 }
 
                 const isDefaultCallbackUrl = this.getAppCallbackUrl() === `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`;
