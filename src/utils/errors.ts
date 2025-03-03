@@ -1,3 +1,15 @@
+/**
+ * Creates a custom error class that extends the built-in Error class.
+ *
+ * The generated class accepts an optional error message and an optional inner error. When an inner error is provided, its name and message are appended to the main message (formatted as "caused by <innerError.name>: <innerError.message>"), and its stack trace is appended to the error's stack.
+ *
+ * @param name - The name assigned to the custom error class.
+ * @returns A new error class with enhanced error message construction.
+ *
+ * @example
+ * const TimeoutError = createErrorClass("TimeoutError");
+ * throw new TimeoutError("Operation timed out", originalError);
+ */
 function createErrorClass(name: string) {
     return class extends Error {
         constructor(message?: string, public innerError?: Error) {
