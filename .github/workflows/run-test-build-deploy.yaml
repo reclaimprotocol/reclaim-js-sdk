@@ -48,12 +48,6 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-
   publish:
     needs: test_and_build
     runs-on: ubuntu-latest
@@ -74,12 +68,6 @@ jobs:
         with:
           name: dist
           path: dist/
-
-      - name: Download coverage report
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
 
       - name: Configure Git
         run: |
