@@ -1,7 +1,12 @@
 function createErrorClass(name: string) {
     return class extends Error {
         constructor(message?: string, public innerError?: Error) {
-            super(message);
+            // Include inner error message in the main message if available
+            const fullMessage = innerError 
+                ? `${message || ''} caused by ${innerError.name}: ${innerError.message}`
+                : message;
+                
+            super(fullMessage);
             this.name = name;
             if (innerError) {
                 this.stack += `\nCaused by: ${innerError.stack}`;
