@@ -309,14 +309,14 @@ export class ReclaimProofRequest {
                 throw new NoProviderParamsError('No params present in the provider config.');
             }
 
-            const paramsToSet = Object.keys(params)
-            for (const param of paramsToSet) {
-                if (!currentParams.includes(param)) {
-                    throw new InvalidParamError(
-                        `Cannot set parameter ${param} for provider ${this.providerId}. Available parameters: ${currentParams}`
-                    );
-                }
-            }
+            // const paramsToSet = Object.keys(params)
+            // for (const param of paramsToSet) {
+            //     if (!currentParams.includes(param)) {
+            //         throw new InvalidParamError(
+            //             `Cannot set parameter ${param} for provider ${this.providerId}. Available parameters: ${currentParams}`
+            //         );
+            //     }
+            // }
             this.requestedProof.parameters = { ...requestedProof.parameters, ...params }
         } catch (error) {
             logger.info('Error Setting Params:', error);
