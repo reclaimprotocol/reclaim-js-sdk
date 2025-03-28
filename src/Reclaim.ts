@@ -14,7 +14,7 @@ import {
     replaceAll,
     scheduleIntervalEndingTask
 } from './utils/helper'
-import { constants } from './utils/constants'
+import { constants, setBackendBaseUrl } from './utils/constants'
 import {
     AddContextError,
     AvailableParamsError,
@@ -153,6 +153,11 @@ export class ReclaimProofRequest {
         } else {
             loggerModule.setLogLevel('silent');
         }
+
+        if (options?.envUrl) {
+            setBackendBaseUrl(options.envUrl);
+        }
+        
         this.options = options;
         // Fetch sdk version from package.json
         this.sdkVersion = 'js-' + sdkVersion;
@@ -188,6 +193,11 @@ export class ReclaimProofRequest {
                 if (options.device) {
                     validateFunctionParams([
                         { paramName: 'device', input: options.device, isString: true }
+                    ], 'the constructor')
+                }
+                if (options.envUrl) {
+                    validateFunctionParams([
+                        { paramName: 'envUrl', input: options.envUrl, isString: true }
                     ], 'the constructor')
                 }
 

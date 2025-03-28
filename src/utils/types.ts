@@ -34,6 +34,7 @@ export type ProofRequestOptions = {
   acceptAiProviders?: boolean;
   useAppClip?: boolean;
   device?: string;
+  envUrl?: string;
 };
 
 // Session and response types

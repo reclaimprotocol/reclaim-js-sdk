@@ -1,5 +1,9 @@
 // Base URL for the backend API
-export const BACKEND_BASE_URL = "https://api.reclaimprotocol.org";
+export let BACKEND_BASE_URL = "https://api.reclaimprotocol.org";
+
+export function setBackendBaseUrl(url: string) {
+    BACKEND_BASE_URL = url;
+}
 
 // Constant values used throughout the application
 export const constants = {
