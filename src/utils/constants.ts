@@ -7,12 +7,15 @@ export function setBackendBaseUrl(url: string) {
 
 // Constant values used throughout the application
 export const constants = {
-
     // Default callback URL for Reclaim protocol
-    DEFAULT_RECLAIM_CALLBACK_URL: `${BACKEND_BASE_URL}/api/sdk/callback?callbackId=`,
+    get DEFAULT_RECLAIM_CALLBACK_URL() {
+        return `${BACKEND_BASE_URL}/api/sdk/callback?callbackId=`;
+    },
 
     // Default status URL for Reclaim sessions
-    DEFAULT_RECLAIM_STATUS_URL: `${BACKEND_BASE_URL}/api/sdk/session/`,
+    get DEFAULT_RECLAIM_STATUS_URL() {
+        return `${BACKEND_BASE_URL}/api/sdk/session/`;
+    },
 
     // URL for sharing Reclaim templates
     RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template='
