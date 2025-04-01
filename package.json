@@ -2,8 +2,11 @@
   "name": "@reclaimprotocol/js-sdk",
   "version": "2.3.2",
   "description": "Designed to request proofs from the Reclaim protocol and manage the flow of claims and witness interactions.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "keywords": [
     "reclaim",
     "protocol",
@@ -22,23 +25,39 @@
   "files": [
     "dist"
   ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
   "tsup": {
     "entry": [
       "src/index.ts"
     ],
+    "format": ["esm", "cjs"],
     "splitting": false,
     "sourcemap": true,
-    "clean": true
+    "clean": true,
+    "dts": true
   },
   "scripts": {
     "build": "sh scripts/build.sh",
     "release": "release-it",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "lint:release": "bunx publint --strict && attw --pack",
     "commitlint": "commitlint --edit"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/reclaimprotocol/reclaim-js-sdk"
+    "url": "git+https://github.com/reclaimprotocol/reclaim-js-sdk.git"
   },
   "author": "ali <ali@creatoros.co>",
   "license": "See License in <https://github.com/reclaimprotocol/.github/blob/main/LICENSE>",
@@ -69,6 +88,7 @@
     }
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.16.4",
     "@bconnorwhite/bob": "^2.9.5",
     "@commitlint/cli": "^17.7.1",
     "@commitlint/config-conventional": "^17.7.0",
@@ -76,6 +96,7 @@
     "@types/qs": "^6.9.11",
     "@types/url-parse": "^1.4.11",
     "@types/uuid": "^9.0.7",
+    "publint": "^0.2.11",
     "release-it": "^15.0.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3"
