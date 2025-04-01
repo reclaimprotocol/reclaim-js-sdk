@@ -1,4 +1,4 @@
-import type { Context, Proof, ProviderClaimData, ProviderData, RequestedProof } from './interfaces';
+import type { Context, Proof, ProviderClaimData } from './interfaces';
 import type { ParsedQs } from 'qs';
 
 // Claim-related types
@@ -40,7 +40,6 @@ export type ProofRequestOptions = {
 // Session and response types
 export type InitSessionResponse = {
   sessionId: string;
-  provider: ProviderData;
 };
 
 export interface UpdateSessionResponse {
@@ -67,9 +66,9 @@ export type ProofPropertiesJSON = {
   providerId: string;
   sessionId: string;
   context: Context;
-  requestedProof: RequestedProof;
   signature: string;
   redirectUrl?: string;
+  parameters: { [key: string]: string };
   timeStamp: string;
   appCallbackUrl?: string;
   options?: ProofRequestOptions;
@@ -85,7 +84,7 @@ export type TemplateData = {
   timestamp: string;
   callbackUrl: string;
   context: string;
-  parameters: { [key: string]: string | string };
+  parameters: { [key: string]: string };
   redirectUrl: string;
   acceptAiProviders: boolean;
   sdkVersion: string;

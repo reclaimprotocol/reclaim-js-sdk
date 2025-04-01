@@ -1,11 +1,12 @@
-import type { Proof, RequestedProof, Context, ProviderData } from './utils/interfaces'
+import type { Proof, Context } from './utils/interfaces'
 import { getIdentifierFromClaimInfo } from './witness'
 import type {
     SignedClaim,
     ProofRequestOptions,
     StartSessionParams,
     ProofPropertiesJSON,
-    TemplateData
+    TemplateData,
+    InitSessionResponse
 } from './utils/types'
 import { SessionStatus } from './utils/types'
 import { ethers } from 'ethers'
@@ -17,13 +18,10 @@ import {
 import { constants, setBackendBaseUrl } from './utils/constants'
 import {
     AddContextError,
-    AvailableParamsError,
-    BuildProofRequestError,
     GetAppCallbackUrlError,
     GetStatusUrlError,
     InitError,
     InvalidParamError,
-    NoProviderParamsError,
     ProofNotVerifiedError,
     ProofSubmissionFailedError,
     ProviderFailedError,
@@ -33,9 +31,9 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError
 } from './utils/errors'
-import { validateContext, validateFunctionParams, validateRequestedProof, validateSignature, validateURL } from './utils/validationUtils'
+import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
-import { assertValidSignedClaim, createLinkWithTemplateData, generateRequestedProof, getFilledParameters, getWitnessesForClaim } from './utils/proofUtils'
+import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
 import loggerModule from './utils/logger';
 const logger = loggerModule.logger
 
@@ -132,8 +130,8 @@ export class ReclaimProofRequest {
     private sessionId: string;
     private options?: ProofRequestOptions;
     private context: Context = { contextAddress: '0x0', contextMessage: 'sample context' };
-    private requestedProof?: RequestedProof;
     private providerId: string;
+    private parameters: { [key: string]: string };
     private redirectUrl?: string;
     private intervals: Map<string, NodeJS.Timer> = new Map();
     private timeStamp: string;
@@ -148,6 +146,7 @@ export class ReclaimProofRequest {
         this.timeStamp = Date.now().toString();
         this.applicationId = applicationId;
         this.sessionId = "";
+        this.parameters = {};
         if (options?.log) {
             loggerModule.setLogLevel('info');
         } else {
@@ -208,10 +207,8 @@ export class ReclaimProofRequest {
             const signature = await proofRequestInstance.generateSignature(appSecret)
             proofRequestInstance.setSignature(signature)
 
-            const data = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature);
+            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature);
             proofRequestInstance.sessionId = data.sessionId
-
-            await proofRequestInstance.buildProofRequest(data.provider)
 
             return proofRequestInstance
         } catch (error) {
@@ -227,7 +224,7 @@ export class ReclaimProofRequest {
                 providerId,
                 sessionId,
                 context,
-                requestedProof,
+                parameters,
                 signature,
                 redirectUrl,
                 timeStamp,
@@ -246,7 +243,6 @@ export class ReclaimProofRequest {
                 { input: sdkVersion, paramName: 'sdkVersion', isString: true },
             ], 'fromJsonString');
 
-            validateRequestedProof(requestedProof);
 
             if (redirectUrl) {
                 validateURL(redirectUrl, 'fromJsonString');
@@ -260,6 +256,10 @@ export class ReclaimProofRequest {
                 validateContext(context);
             }
 
+            if (parameters) {
+                validateParameters(parameters);
+            }
+
             if (jsonProofResponse !== undefined) {
                 validateFunctionParams([
                     { input: jsonProofResponse, paramName: 'jsonProofResponse' }
@@ -269,7 +269,7 @@ export class ReclaimProofRequest {
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
-            proofRequestInstance.requestedProof = requestedProof
+            proofRequestInstance.parameters = parameters;
             proofRequestInstance.appCallbackUrl = appCallbackUrl
             proofRequestInstance.redirectUrl = redirectUrl
             proofRequestInstance.timeStamp = timeStamp
@@ -309,25 +309,8 @@ export class ReclaimProofRequest {
 
     setParams(params: { [key: string]: string }): void {
         try {
-            const requestedProof = this.getRequestedProof();
-            if (!requestedProof || !this.requestedProof) {
-                throw new BuildProofRequestError('Requested proof is not present.');
-            }
-
-            const currentParams = this.availableParams()
-            if (!currentParams) {
-                throw new NoProviderParamsError('No params present in the provider config.');
-            }
-
-            // const paramsToSet = Object.keys(params)
-            // for (const param of paramsToSet) {
-            //     if (!currentParams.includes(param)) {
-            //         throw new InvalidParamError(
-            //             `Cannot set parameter ${param} for provider ${this.providerId}. Available parameters: ${currentParams}`
-            //         );
-            //     }
-            // }
-            this.requestedProof.parameters = { ...requestedProof.parameters, ...params }
+            validateParameters(params);
+            this.parameters = { ...this.parameters, ...params }
         } catch (error) {
             logger.info('Error Setting Params:', error);
             throw new SetParamsError("Error setting params", error as Error)
@@ -386,39 +369,6 @@ export class ReclaimProofRequest {
         }
     }
 
-    private async buildProofRequest(provider: ProviderData): Promise<RequestedProof> {
-        try {
-            this.requestedProof = generateRequestedProof(provider);
-            return this.requestedProof;
-        } catch (err: Error | unknown) {
-            logger.info(err instanceof Error ? err.message : String(err));
-            throw new BuildProofRequestError('Something went wrong while generating proof request', err as Error);
-        }
-    }
-
-    private getRequestedProof(): RequestedProof {
-        if (!this.requestedProof) {
-            throw new BuildProofRequestError('RequestedProof is not present in the instance.')
-        }
-        return this.requestedProof
-    }
-
-    private availableParams(): string[] {
-        try {
-            const requestedProofs = this.getRequestedProof();
-            let availableParamsStore = Object.keys(requestedProofs.parameters)
-            availableParamsStore = availableParamsStore.concat(requestedProofs.url
-                .split(/{{(.*?)}}/)
-                .filter((_: string, i: number) => i % 2))
-
-            return [...new Set(availableParamsStore)];
-
-        } catch (error) {
-            logger.info("Error fetching available params", error)
-            throw new AvailableParamsError("Error fetching available params", error as Error)
-        }
-    }
-
     private clearInterval(): void {
         if (this.sessionId && this.intervals.has(this.sessionId)) {
             clearInterval(this.intervals.get(this.sessionId) as NodeJS.Timeout)
@@ -433,8 +383,8 @@ export class ReclaimProofRequest {
             providerId: this.providerId,
             sessionId: this.sessionId,
             context: this.context,
-            requestedProof: this.requestedProof,
             appCallbackUrl: this.appCallbackUrl,
+            parameters: this.parameters,
             signature: this.signature,
             redirectUrl: this.redirectUrl,
             timeStamp: this.timeStamp,
@@ -451,7 +401,6 @@ export class ReclaimProofRequest {
         }
 
         try {
-            const requestedProof = this.getRequestedProof()
             validateSignature(this.providerId, this.signature, this.applicationId, this.timeStamp)
 
             const templateData: TemplateData = {
@@ -462,7 +411,7 @@ export class ReclaimProofRequest {
                 timestamp: this.timeStamp,
                 callbackUrl: this.getAppCallbackUrl(),
                 context: JSON.stringify(this.context),
-                parameters: getFilledParameters(requestedProof),
+                parameters: this.parameters,
                 redirectUrl: this.redirectUrl ?? '',
                 acceptAiProviders: this.options?.acceptAiProviders ?? false,
                 sdkVersion: this.sdkVersion,
