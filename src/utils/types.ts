@@ -77,6 +77,7 @@ export type ProofPropertiesJSON = {
   parameters: { [key: string]: string };
   timeStamp: string;
   appCallbackUrl?: string;
+  claimCreationType?: ClaimCreationType;
   options?: ProofRequestOptions;
   sdkVersion: string;
   jsonProofResponse?: boolean;

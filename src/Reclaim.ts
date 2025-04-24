@@ -231,6 +231,7 @@ export class ReclaimProofRequest {
                 redirectUrl,
                 timeStamp,
                 appCallbackUrl,
+                claimCreationType,
                 options,
                 sdkVersion,
                 jsonProofResponse
@@ -260,6 +261,12 @@ export class ReclaimProofRequest {
 
             if (parameters) {
                 validateParameters(parameters);
+            }
+
+            if (claimCreationType) {
+                validateFunctionParams([
+                    { input: claimCreationType, paramName: 'claimCreationType' }
+                ], 'fromJsonString');
             }
 
             if (jsonProofResponse !== undefined) {
@@ -390,6 +397,7 @@ export class ReclaimProofRequest {
             sessionId: this.sessionId,
             context: this.context,
             appCallbackUrl: this.appCallbackUrl,
+            claimCreationType: this.claimCreationType,
             parameters: this.parameters,
             signature: this.signature,
             redirectUrl: this.redirectUrl,
