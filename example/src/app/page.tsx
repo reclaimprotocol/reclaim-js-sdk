@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { ReclaimProofRequest } from '@reclaimprotocol/js-sdk'
+import { ReclaimProofRequest, ClaimCreationType } from '@reclaimprotocol/js-sdk'
 import { Proof } from '@reclaimprotocol/js-sdk'
 import { useQRCode } from 'next-qrcode'
 import Link from 'next/link'
@@ -50,6 +50,9 @@ export default function Home() {
 
       // Set a custom app callback URL (if needed)
       // proofRequest.setAppCallbackUrl('your-callback-url')
+
+      // Set the claim creation type (only if you want to create a claim on mechain)
+      // proofRequest.setClaimCreationType(ClaimCreationType.ON_ME_CHAIN)
 
       // Uncomment the following line to log the proof request and to get the Json String
       // console.log('Proof request initialized:', proofRequest.toJsonString())

@@ -1,12 +1,13 @@
 import type { Proof, Context } from './utils/interfaces'
 import { getIdentifierFromClaimInfo } from './witness'
-import type {
+import {
     SignedClaim,
     ProofRequestOptions,
     StartSessionParams,
     ProofPropertiesJSON,
     TemplateData,
-    InitSessionResponse
+    InitSessionResponse,
+    ClaimCreationType,
 } from './utils/types'
 import { SessionStatus } from './utils/types'
 import { ethers } from 'ethers'
@@ -130,6 +131,7 @@ export class ReclaimProofRequest {
     private sessionId: string;
     private options?: ProofRequestOptions;
     private context: Context = { contextAddress: '0x0', contextMessage: 'sample context' };
+    private claimCreationType?: ClaimCreationType = ClaimCreationType.STANDALONE;
     private providerId: string;
     private parameters: { [key: string]: string };
     private redirectUrl?: string;
@@ -229,6 +231,7 @@ export class ReclaimProofRequest {
                 redirectUrl,
                 timeStamp,
                 appCallbackUrl,
+                claimCreationType,
                 options,
                 sdkVersion,
                 jsonProofResponse
@@ -258,6 +261,12 @@ export class ReclaimProofRequest {
 
             if (parameters) {
                 validateParameters(parameters);
+            }
+
+            if (claimCreationType) {
+                validateFunctionParams([
+                    { input: claimCreationType, paramName: 'claimCreationType' }
+                ], 'fromJsonString');
             }
 
             if (jsonProofResponse !== undefined) {
@@ -292,6 +301,10 @@ export class ReclaimProofRequest {
     setRedirectUrl(url: string): void {
         validateURL(url, 'setRedirectUrl');
         this.redirectUrl = url;
+    }
+
+    setClaimCreationType(claimCreationType: ClaimCreationType): void {
+        this.claimCreationType = claimCreationType;
     }
 
     addContext(address: string, message: string): void {
@@ -384,6 +397,7 @@ export class ReclaimProofRequest {
             sessionId: this.sessionId,
             context: this.context,
             appCallbackUrl: this.appCallbackUrl,
+            claimCreationType: this.claimCreationType,
             parameters: this.parameters,
             signature: this.signature,
             redirectUrl: this.redirectUrl,
@@ -480,10 +494,12 @@ export class ReclaimProofRequest {
                 if (isDefaultCallbackUrl) {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
-                        const verified = await verifyProof(proofs);
-                        if (!verified) {
-                            logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
-                            throw new ProofNotVerifiedError();
+                        if (this.claimCreationType === ClaimCreationType.STANDALONE) {
+                            const verified = await verifyProof(proofs);
+                            if (!verified) {
+                                logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
+                                throw new ProofNotVerifiedError();
+                            }
                         }
                         // check if the proofs array has only one proof then send the proofs in onSuccess 
                         if (proofs.length === 1) {
