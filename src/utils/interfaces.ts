@@ -6,7 +6,7 @@ export interface Proof {
   witnesses: WitnessData[];
   extractedParameterValues: any;
   publicData?: { [key: string]: string };
-  taskId?: string;
+  taskId?: number;
 }
 
 export interface WitnessData {
