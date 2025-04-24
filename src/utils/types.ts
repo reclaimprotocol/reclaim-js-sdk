@@ -37,6 +37,12 @@ export type ProofRequestOptions = {
   envUrl?: string;
 };
 
+// Claim creation type enum
+export enum ClaimCreationType {
+  STANDALONE = 'createClaim',
+  ON_ME_CHAIN = 'createClaimOnMechain'
+}
+
 // Session and response types
 export type InitSessionResponse = {
   sessionId: string;
