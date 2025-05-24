@@ -35,6 +35,7 @@ import {
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
+import { userAgentIsAndroid, userAgentIsIOS } from './utils/device'
 import loggerModule from './utils/logger';
 const logger = loggerModule.logger
 
@@ -174,6 +175,14 @@ export class ReclaimProofRequest {
                 { paramName: 'appSecret', input: appSecret, isString: true }
             ], 'the constructor')
 
+            if (options && !options.device) {
+                if (userAgentIsIOS) {
+                    options.device = "ios";
+                } else if (userAgentIsAndroid) {
+                    options.device = "android";
+                }
+             }
+
             // check if options is provided and validate each property of options
             if (options) {
                 if (options.acceptAiProviders) {
@@ -185,6 +194,9 @@ export class ReclaimProofRequest {
                     validateFunctionParams([
                         { paramName: 'log', input: options.log }
                     ], 'the constructor')
+                }
+                if (options.useAppClip === undefined) {
+                    options.useAppClip = true;
                 }
                 if (options.useAppClip) {
                     validateFunctionParams([
