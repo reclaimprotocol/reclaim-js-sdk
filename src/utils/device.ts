@@ -1,9 +1,19 @@
-// * There isn't a uniform/universal way to detect if the user is browsing a webpage from a mobile device, but this seems to work most of the time and might be enough for our case.
-const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+const navigatorDefined = typeof navigator !== 'undefined';
 const windowDefined = typeof window !== 'undefined';
+
+const userAgent = navigatorDefined ? navigator.userAgent.toLowerCase() : '';
+const userAgentData = navigatorDefined ? (navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData : undefined;
 
 export const userAgentIsAndroid = userAgent.includes("android");
 
-const isIPadOS13Plus = windowDefined && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+const isIpad =
+  windowDefined &&
+  navigatorDefined &&
+  (userAgentData?.platform === 'iPad' || userAgent.includes('ipad'));
 
-export const userAgentIsIOS = /iphone|ipad|ipod/i.test(userAgent) || isIPadOS13Plus;
+export const userAgentIsIOS =
+  /iphone|ipod/i.test(userAgent) || isIpad;
+
+export const userAgentIsMobile =
+  /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent) ||
+  (windowDefined && 'orientation' in window);

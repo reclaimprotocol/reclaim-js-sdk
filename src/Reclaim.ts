@@ -175,7 +175,11 @@ export class ReclaimProofRequest {
                 { paramName: 'appSecret', input: appSecret, isString: true }
             ], 'the constructor')
 
-            if (options && !options.device) {
+            if (!options) {
+                options = {};
+            }
+
+            if (!options.device) {
                 if (userAgentIsIOS) {
                     options.device = "ios";
                 } else if (userAgentIsAndroid) {
