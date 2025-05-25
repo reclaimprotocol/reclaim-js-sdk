@@ -43,6 +43,14 @@ export enum ClaimCreationType {
   ON_ME_CHAIN = 'createClaimOnMechain'
 }
 
+// Device type enum 
+export enum DeviceType {
+    ANDROID = 'android',
+    IOS = 'ios',
+    IPAD = 'ipad'
+}
+
+
 // Session and response types
 export type InitSessionResponse = {
   sessionId: string;

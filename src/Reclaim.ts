@@ -9,7 +9,7 @@ import {
     InitSessionResponse,
     ClaimCreationType,
 } from './utils/types'
-import { SessionStatus } from './utils/types'
+import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
 import canonicalize from 'canonicalize'
 import {
@@ -150,6 +150,23 @@ export class ReclaimProofRequest {
         this.applicationId = applicationId;
         this.sessionId = "";
         this.parameters = {};
+        
+        if (!options) {
+            options = {};
+        }
+
+        if (!options.device) {
+            if (userAgentIsIOS) {
+                options.device = DeviceType.IOS;
+            } else if (userAgentIsAndroid) {
+                options.device = DeviceType.ANDROID;
+            }
+        }
+
+        if (options.useAppClip === undefined) {
+            options.useAppClip = true;
+        }
+
         if (options?.log) {
             loggerModule.setLogLevel('info');
         } else {
@@ -174,18 +191,6 @@ export class ReclaimProofRequest {
                 { paramName: 'providerId', input: providerId, isString: true },
                 { paramName: 'appSecret', input: appSecret, isString: true }
             ], 'the constructor')
-
-            if (!options) {
-                options = {};
-            }
-
-            if (!options.device) {
-                if (userAgentIsIOS) {
-                    options.device = "ios";
-                } else if (userAgentIsAndroid) {
-                    options.device = "android";
-                }
-             }
 
             // check if options is provided and validate each property of options
             if (options) {
