@@ -19,5 +19,3 @@ export const userAgentIsIOS =
 export const userAgentIsMobile =
     new RegExp(`${DeviceType.ANDROID}|webos|${DeviceType.IOS}|${DeviceType.IPAD}|ipod|blackberry|iemobile|opera mini`, 'i').test(userAgent) ||
     (windowDefined && 'orientation' in window);
-
-export { DeviceType };
