@@ -9,7 +9,7 @@ import {
     InitSessionResponse,
     ClaimCreationType,
 } from './utils/types'
-import { SessionStatus } from './utils/types'
+import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
 import canonicalize from 'canonicalize'
 import {
@@ -35,6 +35,7 @@ import {
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
+import { userAgentIsAndroid, userAgentIsIOS } from './utils/device'
 import loggerModule from './utils/logger';
 const logger = loggerModule.logger
 
@@ -149,6 +150,23 @@ export class ReclaimProofRequest {
         this.applicationId = applicationId;
         this.sessionId = "";
         this.parameters = {};
+        
+        if (!options) {
+            options = {};
+        }
+
+        if (!options.device) {
+            if (userAgentIsIOS) {
+                options.device = DeviceType.IOS;
+            } else if (userAgentIsAndroid) {
+                options.device = DeviceType.ANDROID;
+            }
+        }
+
+        if (options.useAppClip === undefined) {
+            options.useAppClip = true;
+        }
+
         if (options?.log) {
             loggerModule.setLogLevel('info');
         } else {
@@ -185,6 +203,9 @@ export class ReclaimProofRequest {
                     validateFunctionParams([
                         { paramName: 'log', input: options.log }
                     ], 'the constructor')
+                }
+                if (options.useAppClip === undefined) {
+                    options.useAppClip = true;
                 }
                 if (options.useAppClip) {
                     validateFunctionParams([
