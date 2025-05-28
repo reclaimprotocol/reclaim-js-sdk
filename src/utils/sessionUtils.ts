@@ -22,14 +22,16 @@ export async function initSession(
   providerId: string,
   appId: string,
   timestamp: string,
-  signature: string
+  signature: string,
+  versionNumber?: string,
+  allowAiVersions?: boolean
 ): Promise<InitSessionResponse> {
   logger.info(`Initializing session for providerId: ${providerId}, appId: ${appId}`);
   try {
     const response = await fetch(`${BACKEND_BASE_URL}/api/sdk/init/session/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providerId, appId, timestamp, signature })
+      body: JSON.stringify({ providerId, appId, timestamp, signature, versionNumber, allowAiVersions })
     });
 
     const res = await response.json();

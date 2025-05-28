@@ -148,6 +148,16 @@ export function validateOptions(options: ProofRequestOptions): void {
     logger.info(`Options validation failed: Provided log in options is not valid`);
     throw new InvalidParamError(`The provided log in options is not valid`);
   }
+
+  if (options.providerVersion && typeof options.providerVersion !== 'string') {
+    logger.info(`Options validation failed: Provided providerVersion in options is not valid`);
+    throw new InvalidParamError(`The provided providerVersion in options is not valid`);
+  }
+
+  if (options.allowAiVersions && typeof options.allowAiVersions !== 'boolean') {
+    logger.info(`Options validation failed: Provided allowAiVersions in options is not valid`);
+    throw new InvalidParamError(`The provided allowAiVersions in options is not valid`);
+  }
 }
 
 

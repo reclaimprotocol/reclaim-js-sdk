@@ -35,6 +35,8 @@ export type ProofRequestOptions = {
   useAppClip?: boolean;
   device?: string;
   envUrl?: string;
+  providerVersion?: string;
+  allowAiVersions?: boolean;
 };
 
 // Claim creation type enum
@@ -104,6 +106,8 @@ export type TemplateData = {
   acceptAiProviders: boolean;
   sdkVersion: string;
   jsonProofResponse?: boolean;
+  providerVersion?: string;
+  allowAiVersions?: boolean;
 };
 
 // Add the new StatusUrlResponse type

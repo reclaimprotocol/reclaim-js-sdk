@@ -222,7 +222,16 @@ export class ReclaimProofRequest {
                         { paramName: 'envUrl', input: options.envUrl, isString: true }
                     ], 'the constructor')
                 }
-
+                if (options.providerVersion) {
+                    validateFunctionParams([
+                        { paramName: 'providerVersion', input: options.providerVersion, isString: true }
+                    ], 'the constructor')
+                }
+                if (options.allowAiVersions) {
+                    validateFunctionParams([
+                        { paramName: 'allowAiVersions', input: options.allowAiVersions }
+                    ], 'the constructor')
+                }
             }
 
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options)
@@ -230,7 +239,7 @@ export class ReclaimProofRequest {
             const signature = await proofRequestInstance.generateSignature(appSecret)
             proofRequestInstance.setSignature(signature)
 
-            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature);
+            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion, options?.allowAiVersions);
             proofRequestInstance.sessionId = data.sessionId
 
             return proofRequestInstance
@@ -293,6 +302,18 @@ export class ReclaimProofRequest {
             if (jsonProofResponse !== undefined) {
                 validateFunctionParams([
                     { input: jsonProofResponse, paramName: 'jsonProofResponse' }
+                ], 'fromJsonString');
+            }
+
+            if (options?.providerVersion) {
+                validateFunctionParams([
+                    { input: options.providerVersion, paramName: 'providerVersion', isString: true }
+                ], 'fromJsonString');
+            }
+
+            if (options?.allowAiVersions !== undefined) {
+                validateFunctionParams([
+                    { input: options.allowAiVersions, paramName: 'allowAiVersions' }
                 ], 'fromJsonString');
             }
 
@@ -447,6 +468,8 @@ export class ReclaimProofRequest {
                 callbackUrl: this.getAppCallbackUrl(),
                 context: JSON.stringify(this.context),
                 parameters: this.parameters,
+                providerVersion: this.options?.providerVersion ?? '',
+                allowAiVersions: this.options?.allowAiVersions ?? false,
                 redirectUrl: this.redirectUrl ?? '',
                 acceptAiProviders: this.options?.acceptAiProviders ?? false,
                 sdkVersion: this.sdkVersion,
