@@ -139,6 +139,7 @@ export class ReclaimProofRequest {
     private intervals: Map<string, NodeJS.Timer> = new Map();
     private timeStamp: string;
     private sdkVersion: string;
+    private resolvedProviderVersion?: string;
     private jsonProofResponse: boolean = false;
     private lastFailureTime?: number;
     private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
@@ -241,6 +242,7 @@ export class ReclaimProofRequest {
 
             const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion, options?.allowAiVersions);
             proofRequestInstance.sessionId = data.sessionId
+            proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
 
             return proofRequestInstance
         } catch (error) {
@@ -264,7 +266,8 @@ export class ReclaimProofRequest {
                 claimCreationType,
                 options,
                 sdkVersion,
-                jsonProofResponse
+                jsonProofResponse,
+                resolvedProviderVersion
             }: ProofPropertiesJSON = JSON.parse(jsonString)
 
             validateFunctionParams([
@@ -317,6 +320,12 @@ export class ReclaimProofRequest {
                 ], 'fromJsonString');
             }
 
+            if (resolvedProviderVersion) {
+                validateFunctionParams([
+                    { input: resolvedProviderVersion, paramName: 'resolvedProviderVersion', isString: true }
+                ], 'fromJsonString');
+            }
+
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
@@ -326,6 +335,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.timeStamp = timeStamp
             proofRequestInstance.signature = signature
             proofRequestInstance.sdkVersion = sdkVersion;
+            proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -446,7 +456,8 @@ export class ReclaimProofRequest {
             timeStamp: this.timeStamp,
             options: this.options,
             sdkVersion: this.sdkVersion,
-            jsonProofResponse: this.jsonProofResponse
+            jsonProofResponse: this.jsonProofResponse,
+            resolvedProviderVersion: this.resolvedProviderVersion ?? ''
         })
     }
 
@@ -469,6 +480,7 @@ export class ReclaimProofRequest {
                 context: JSON.stringify(this.context),
                 parameters: this.parameters,
                 providerVersion: this.options?.providerVersion ?? '',
+                resolvedProviderVersion: this.resolvedProviderVersion ?? '',
                 allowAiVersions: this.options?.allowAiVersions ?? false,
                 redirectUrl: this.redirectUrl ?? '',
                 acceptAiProviders: this.options?.acceptAiProviders ?? false,

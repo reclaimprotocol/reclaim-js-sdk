@@ -56,6 +56,7 @@ export enum DeviceType {
 // Session and response types
 export type InitSessionResponse = {
   sessionId: string;
+  resolvedProviderVersion: string;
 };
 
 export interface UpdateSessionResponse {
@@ -90,6 +91,7 @@ export type ProofPropertiesJSON = {
   claimCreationType?: ClaimCreationType;
   options?: ProofRequestOptions;
   sdkVersion: string;
+  resolvedProviderVersion: string;
   jsonProofResponse?: boolean;
 };
 
@@ -99,6 +101,7 @@ export type TemplateData = {
   applicationId: string;
   signature: string;
   timestamp: string;
+  resolvedProviderVersion: string;
   callbackUrl: string;
   context: string;
   parameters: { [key: string]: string };
