@@ -1,3 +1,5 @@
+import { ClaimInfo, OnchainSignedClaim, SignedClaim } from "./types";
+
 // Proof-related interfaces
 export interface Proof {
   identifier: string;
@@ -12,6 +14,11 @@ export interface Proof {
 export interface WitnessData {
   id: string;
   url: string;
+}
+
+export interface OnchainProof {
+  claimInfo: ClaimInfo,
+  signedClaim: OnchainSignedClaim
 }
 
 export interface ProviderClaimData {

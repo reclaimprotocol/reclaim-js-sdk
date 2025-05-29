@@ -8,11 +8,16 @@ export type ClaimInfo = Pick<ProviderClaimData, 'context' | 'provider' | 'parame
 
 export type AnyClaimInfo = ClaimInfo | { identifier: ClaimID };
 
-export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'> & AnyClaimInfo;
+export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch' | 'identifier' > & AnyClaimInfo;
 
 export type SignedClaim = {
   claim: CompleteClaimData;
   signatures: Uint8Array[];
+};
+
+export type OnchainSignedClaim = {
+  claim: CompleteClaimData;
+  signatures: string[];
 };
 
 // Request and session-related types

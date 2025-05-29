@@ -1,4 +1,4 @@
-import type { Proof, Context } from './utils/interfaces'
+import type { Proof, Context, OnchainProof, ProviderClaimData } from './utils/interfaces'
 import { getIdentifierFromClaimInfo } from './witness'
 import {
     SignedClaim,
@@ -8,6 +8,9 @@ import {
     TemplateData,
     InitSessionResponse,
     ClaimCreationType,
+    ClaimInfo,
+    CompleteClaimData,
+    OnchainSignedClaim,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -104,23 +107,71 @@ export async function verifyProof(proofOrProofs: Proof | Proof[]): Promise<boole
     return true
 }
 
-export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim: any } {
-    const claimInfoBuilder = new Map([
-        ['context', proof.claimData.context],
-        ['parameters', proof.claimData.parameters],
-        ['provider', proof.claimData.provider],
-    ]);
-    const claimInfo = Object.fromEntries(claimInfoBuilder);
-    const claimBuilder = new Map<string, number | string>([
-        ['epoch', proof.claimData.epoch],
-        ['identifier', proof.claimData.identifier],
-        ['owner', proof.claimData.owner],
-        ['timestampS', proof.claimData.timestampS],
-    ]);
-    const signedClaim = {
-        claim: Object.fromEntries(claimBuilder),
-        signatures: proof.signatures,
-    };
+// Reverses on-chain proofs 
+export function transformFromOnchain(onchainProof: OnchainProof): Proof {
+    
+    const claimData: ProviderClaimData = {
+        provider: '',
+        parameters: '',
+        owner: '',
+        timestampS: 0,
+        context: '',
+        identifier: '',
+        epoch: 0
+    }
+    
+    let proof: Proof = {
+        identifier: '',
+        claimData,
+        signatures: [],
+        witnesses: [],
+        extractedParameterValues: undefined
+    }
+
+    proof.signatures = onchainProof.signedClaim.signatures
+    proof.identifier = onchainProof.signedClaim.claim.identifier
+
+    proof.claimData = {
+        provider: onchainProof.claimInfo.provider,
+        parameters: onchainProof.claimInfo.parameters,
+        context: onchainProof.claimInfo.context,
+        owner: onchainProof.signedClaim.claim.owner,
+        timestampS: onchainProof.signedClaim.claim.timestampS,
+        epoch: onchainProof.signedClaim.claim.epoch,
+        identifier: onchainProof.signedClaim.claim.identifier,
+    }
+
+    proof.witnesses = [
+        {
+            "id": "0x244897572368eadf65bfbc5aec98d8e5443a9072",
+            "url": "wss://attestor.reclaimprotocol.org/ws"
+        }
+    ]
+
+    return proof    
+}
+
+// Transforms proofs for on-chain verification
+export function transformForOnchain(proof: Proof): OnchainProof {
+
+    const claimInfo: ClaimInfo = {
+        context: proof.claimData.context,
+        provider: proof.claimData.provider,
+        parameters: proof.claimData.parameters
+    }
+
+    const claim : CompleteClaimData = {
+        owner: proof.claimData.owner,
+        epoch: proof.claimData.epoch,
+        identifier: proof.claimData.identifier,
+        timestampS: proof.claimData.timestampS
+    }
+
+    const signedClaim: OnchainSignedClaim = {
+        claim,
+        signatures: proof.signatures
+    }
+    
     return { claimInfo, signedClaim };
 }
 
