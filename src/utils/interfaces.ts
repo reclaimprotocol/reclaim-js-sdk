@@ -9,6 +9,20 @@ export interface Proof {
   taskId?: number;
 }
 
+// Extension Interactions
+export const RECLAIM_EXTENSION_ACTIONS = {
+  CHECK_EXTENSION: 'RECLAIM_EXTENSION_CHECK',
+  EXTENSION_RESPONSE: 'RECLAIM_EXTENSION_RESPONSE',
+  START_VERIFICATION: 'RECLAIM_START_VERIFICATION',
+  STATUS_UPDATE: 'RECLAIM_STATUS_UPDATE',
+};
+
+export interface ExtensionMessage {
+  action: string;
+  messageId: string;
+  data?: any;
+}
+
 export interface WitnessData {
   id: string;
   url: string;

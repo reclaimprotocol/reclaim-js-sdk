@@ -32,8 +32,7 @@ export type OnError = (error: Error) => void;
 export type ProofRequestOptions = {
   log?: boolean;
   acceptAiProviders?: boolean;
-  useAppClip?: boolean;
-  device?: string;
+  useBrowserExtension?: boolean;
   envUrl?: string;
 };
 
@@ -47,7 +46,8 @@ export enum ClaimCreationType {
 export enum DeviceType {
     ANDROID = 'android',
     IOS = 'ios',
-    IPAD = 'ipad'
+    DESKTOP = 'desktop',
+    MOBILE = 'mobile'
 }
 
 

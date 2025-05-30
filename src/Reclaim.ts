@@ -1,4 +1,4 @@
-import type { Proof, Context } from './utils/interfaces'
+import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage } from './utils/interfaces'
 import { getIdentifierFromClaimInfo } from './witness'
 import {
     SignedClaim,
@@ -35,8 +35,9 @@ import {
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
-import { userAgentIsAndroid, userAgentIsIOS } from './utils/device'
+import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
+import { getDeviceType, getMobileDeviceType, isMobileDevice } from './utils/device'
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
@@ -124,6 +125,21 @@ export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim
     return { claimInfo, signedClaim };
 }
 
+// create a empty template data object to assign to templateData
+const emptyTemplateData: TemplateData = {
+    sessionId: '',
+    providerId: '',
+    applicationId: '',
+    signature: '',
+    timestamp: '',
+    callbackUrl: '',
+    context: '',
+    parameters: {},
+    redirectUrl: '',
+    acceptAiProviders: false,
+    sdkVersion: '',
+    jsonProofResponse: false
+}
 export class ReclaimProofRequest {
     // Private class properties
     private applicationId: string;
@@ -141,6 +157,7 @@ export class ReclaimProofRequest {
     private sdkVersion: string;
     private jsonProofResponse: boolean = false;
     private lastFailureTime?: number;
+    private templateData: TemplateData;
     private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
 
     // Private constructor
@@ -149,23 +166,15 @@ export class ReclaimProofRequest {
         this.timeStamp = Date.now().toString();
         this.applicationId = applicationId;
         this.sessionId = "";
+        // keep template data as empty object  
+        this.templateData = emptyTemplateData;
         this.parameters = {};
         
         if (!options) {
             options = {};
         }
 
-        if (!options.device) {
-            if (userAgentIsIOS) {
-                options.device = DeviceType.IOS;
-            } else if (userAgentIsAndroid) {
-                options.device = DeviceType.ANDROID;
-            }
-        }
-
-        if (options.useAppClip === undefined) {
-            options.useAppClip = true;
-        }
+        options.useBrowserExtension = options.useBrowserExtension ?? true;
 
         if (options?.log) {
             loggerModule.setLogLevel('info');
@@ -204,17 +213,9 @@ export class ReclaimProofRequest {
                         { paramName: 'log', input: options.log }
                     ], 'the constructor')
                 }
-                if (options.useAppClip === undefined) {
-                    options.useAppClip = true;
-                }
-                if (options.useAppClip) {
+                if (options.useBrowserExtension) {
                     validateFunctionParams([
-                        { paramName: 'useAppClip', input: options.useAppClip }
-                    ], 'the constructor')
-                }
-                if (options.device) {
-                    validateFunctionParams([
-                        { paramName: 'device', input: options.device, isString: true }
+                        { paramName: 'useBrowserExtension', input: options.useBrowserExtension }
                     ], 'the constructor')
                 }
                 if (options.envUrl) {
@@ -453,13 +454,13 @@ export class ReclaimProofRequest {
                 jsonProofResponse: this.jsonProofResponse
             }
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
-            if (this.options?.useAppClip) {
+            if (isMobileDevice()) {
                 let template = encodeURIComponent(JSON.stringify(templateData));
                 template = replaceAll(template, '(', '%28');
                 template = replaceAll(template, ')', '%29');
 
                 // check if the app is running on iOS or Android
-                const isIos = this.options?.device === 'ios';
+                const isIos = getMobileDeviceType() === DeviceType.IOS;
                 if (!isIos) {
                     const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
                     logger.info('Instant App Url created successfully: ' + instantAppUrl);
@@ -470,13 +471,174 @@ export class ReclaimProofRequest {
                     return appClipUrl;
                 }
             } else {
-                const link = await createLinkWithTemplateData(templateData)
-                logger.info('Request Url created successfully: ' + link)
-                return link
+                const extensionAvailable = await this.isBrowserExtensionAvailable();
+                // Desktop flow
+                if (this.options?.useBrowserExtension && extensionAvailable) {
+                    logger.info('Triggering browser extension flow');
+                    this.triggerBrowserExtensionFlow();
+                    return "extension-flow-initiated"
+                } else {
+                    const link = await createLinkWithTemplateData(templateData)
+                    logger.info('Request Url created successfully: ' + link);
+                    return link;
+                }
             }
         } catch (error) {
             logger.info('Error creating Request Url:', error)
             throw error
+        }
+    }
+
+    async triggerReclaimFlow(): Promise<void> {
+        if (!this.signature) {
+            throw new SignatureNotFoundError('Signature is not set.')
+        }
+
+        try {
+            validateSignature(this.providerId, this.signature, this.applicationId, this.timeStamp)
+            const templateData: TemplateData = {
+                sessionId: this.sessionId,
+                providerId: this.providerId,
+                applicationId: this.applicationId,
+                signature: this.signature,
+                timestamp: this.timeStamp,
+                callbackUrl: this.getAppCallbackUrl(),
+                context: JSON.stringify(this.context),
+                parameters: this.parameters,
+                redirectUrl: this.redirectUrl ?? '',
+                acceptAiProviders: this.options?.acceptAiProviders ?? false,
+                sdkVersion: this.sdkVersion,
+                jsonProofResponse: this.jsonProofResponse
+            }
+
+            this.templateData = templateData;
+            
+            logger.info('Triggering Reclaim flow');
+            
+            // Get device type
+            const deviceType = getDeviceType();
+            
+            if (deviceType === DeviceType.DESKTOP) {
+                const extensionAvailable = await this.isBrowserExtensionAvailable();
+                // Desktop flow
+                if (this.options?.useBrowserExtension && extensionAvailable) {
+                    logger.info('Triggering browser extension flow');
+                    this.triggerBrowserExtensionFlow();
+                    return;
+                } else {
+                    // Show QR code popup modal
+                    logger.info('Browser extension not available, showing QR code modal');
+                    await this.showQRCodeModal();
+                }
+            } else if (deviceType === DeviceType.MOBILE) {
+                // Mobile flow
+                const mobileDeviceType = getMobileDeviceType();
+                
+                if (mobileDeviceType === DeviceType.ANDROID) {
+                    // Redirect to instant app URL
+                    logger.info('Redirecting to Android instant app');
+                    await this.redirectToInstantApp();
+                } else if (mobileDeviceType === DeviceType.IOS) {
+                    // Redirect to app clip URL
+                    logger.info('Redirecting to iOS app clip');
+                    await this.redirectToAppClip();
+                }
+            }
+        } catch (error) {
+            logger.info('Error triggering Reclaim flow:', error);
+            throw error;
+        }
+    }
+
+
+    async isBrowserExtensionAvailable(timeout = 200): Promise<boolean> {
+        try {
+            return new Promise<boolean>((resolve) => {
+                const messageId = `reclaim-check-${Date.now()}`;
+                
+                const timeoutId = setTimeout(() => {
+                    window.removeEventListener('message', messageListener);
+                    resolve(false);
+                }, timeout);
+                
+                const messageListener = (event: MessageEvent) => {
+                    if (event.data?.action === RECLAIM_EXTENSION_ACTIONS.EXTENSION_RESPONSE && 
+                        event.data?.messageId === messageId) {
+                        clearTimeout(timeoutId);
+                        window.removeEventListener('message', messageListener);
+                        resolve(!!event.data.installed);
+                    }
+                };
+                
+                window.addEventListener('message', messageListener);
+                const message: ExtensionMessage = {
+                    action: RECLAIM_EXTENSION_ACTIONS.CHECK_EXTENSION,
+                    messageId: messageId
+                }
+                window.postMessage(message, '*');
+            });
+        } catch (error) {
+            logger.info('Error checking Reclaim extension installed:', error);
+            return false;
+        }
+    }
+
+    private triggerBrowserExtensionFlow(): void {
+        const message: ExtensionMessage = {
+            action: RECLAIM_EXTENSION_ACTIONS.START_VERIFICATION,
+            messageId: this.sessionId,
+            data: this.templateData
+        }
+        window.postMessage(message, '*');
+        logger.info('Browser extension flow triggered');
+    }
+
+    private async showQRCodeModal(): Promise<void> {
+        try {
+            const requestUrl = await createLinkWithTemplateData(this.templateData);
+            const modal = new QRCodeModal();
+            await modal.show(requestUrl);
+        } catch (error) {
+            logger.info('Error showing QR code modal:', error);
+            throw error;
+        }
+    }
+
+    private async redirectToInstantApp(): Promise<void> {
+        try {
+            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED);
+
+            let template = encodeURIComponent(JSON.stringify(this.templateData));
+            template = replaceAll(template, '(', '%28');
+            template = replaceAll(template, ')', '%29');
+
+            const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
+            logger.info('Redirecting to Android instant app: ' + instantAppUrl);
+            
+            // Redirect to instant app
+            window.location.href = instantAppUrl;
+        } catch (error) {
+            logger.info('Error redirecting to instant app:', error);
+            throw error;
+        }
+    }
+
+    private async redirectToAppClip(): Promise<void> {
+        try {
+            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED);
+
+            let template = encodeURIComponent(JSON.stringify(this.templateData));
+            template = replaceAll(template, '(', '%28');
+            template = replaceAll(template, ')', '%29');
+
+            const appClipUrl = `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+            logger.info('Redirecting to iOS app clip: ' + appClipUrl);
+            
+            // Redirect to app clip
+            window.location.href = appClipUrl;
+        } catch (error) {
+            logger.info('Error redirecting to app clip:', error);
+            throw error;
         }
     }
 
