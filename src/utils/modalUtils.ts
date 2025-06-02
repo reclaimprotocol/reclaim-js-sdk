@@ -1,5 +1,6 @@
 import loggerModule from './logger';
 import { ModalOptions } from './types';
+import { constants } from './constants';
 const logger = loggerModule.logger;
 
 export class QRCodeModal {
@@ -14,7 +15,7 @@ export class QRCodeModal {
         this.options = {
             title: 'Verify with Reclaim',
             description: 'Scan the QR code with your mobile device to complete verification',
-            extensionUrl: 'https://chrome.google.com/webstore/detail/reclaim-protocol/hfcnhpjgimdliffdbdcdkpkkkdlhgfkb',
+            extensionUrl: constants.CHROME_EXTENSION_URL,
             darkTheme: false,
             ...options
         };
@@ -235,7 +236,7 @@ export class QRCodeModal {
         try {
             // Simple QR code generation using a public API
             // In production, you might want to use a proper QR code library
-            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
+            const qrCodeUrl = `${constants.QR_CODE_API_URL}?size=200x200&data=${encodeURIComponent(text)}`;
             
             const container = document.getElementById(containerId);
             const styles = this.getThemeStyles();
