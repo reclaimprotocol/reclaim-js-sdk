@@ -158,6 +158,7 @@ export class ReclaimProofRequest {
     private jsonProofResponse: boolean = false;
     private lastFailureTime?: number;
     private templateData: TemplateData;
+    private extensionID: string = "reclaim-extension";
     private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
 
     // Private constructor
@@ -169,7 +170,7 @@ export class ReclaimProofRequest {
         // keep template data as empty object  
         this.templateData = emptyTemplateData;
         this.parameters = {};
-        
+
         if (!options) {
             options = {};
         }
@@ -182,10 +183,18 @@ export class ReclaimProofRequest {
             loggerModule.setLogLevel('silent');
         }
 
+        if (options.useAppClip === undefined) {
+            options.useAppClip = true;
+        }
+
         if (options?.envUrl) {
             setBackendBaseUrl(options.envUrl);
         }
-        
+
+        if (options.extensionID) {
+            this.extensionID = options.extensionID;
+        }
+
         this.options = options;
         // Fetch sdk version from package.json
         this.sdkVersion = 'js-' + sdkVersion;
@@ -213,9 +222,24 @@ export class ReclaimProofRequest {
                         { paramName: 'log', input: options.log }
                     ], 'the constructor')
                 }
+                if (options.useAppClip) {
+                    validateFunctionParams([
+                        { paramName: 'useAppClip', input: options.useAppClip }
+                    ], 'the constructor')
+                }
+                if (options.device) {
+                    validateFunctionParams([
+                        { paramName: 'device', input: options.device, isString: true }
+                    ], 'the constructor')
+                }
                 if (options.useBrowserExtension) {
                     validateFunctionParams([
                         { paramName: 'useBrowserExtension', input: options.useBrowserExtension }
+                    ], 'the constructor')
+                }
+                if (options.extensionID) {
+                    validateFunctionParams([
+                        { paramName: 'extensionID', input: options.extensionID, isString: true }
                     ], 'the constructor')
                 }
                 if (options.envUrl) {
@@ -454,7 +478,7 @@ export class ReclaimProofRequest {
                 jsonProofResponse: this.jsonProofResponse
             }
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
-            if (isMobileDevice()) {
+            if (this.options?.useAppClip) {
                 let template = encodeURIComponent(JSON.stringify(templateData));
                 template = replaceAll(template, '(', '%28');
                 template = replaceAll(template, ')', '%29');
@@ -471,17 +495,9 @@ export class ReclaimProofRequest {
                     return appClipUrl;
                 }
             } else {
-                const extensionAvailable = await this.isBrowserExtensionAvailable();
-                // Desktop flow
-                if (this.options?.useBrowserExtension && extensionAvailable) {
-                    logger.info('Triggering browser extension flow');
-                    this.triggerBrowserExtensionFlow();
-                    return "extension-flow-initiated"
-                } else {
-                    const link = await createLinkWithTemplateData(templateData)
-                    logger.info('Request Url created successfully: ' + link);
-                    return link;
-                }
+                const link = await createLinkWithTemplateData(templateData)
+                logger.info('Request Url created successfully: ' + link);
+                return link;
             }
         } catch (error) {
             logger.info('Error creating Request Url:', error)
@@ -517,7 +533,8 @@ export class ReclaimProofRequest {
             
             // Get device type
             const deviceType = getDeviceType();
-            
+            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
+
             if (deviceType === DeviceType.DESKTOP) {
                 const extensionAvailable = await this.isBrowserExtensionAvailable();
                 // Desktop flow
@@ -573,6 +590,7 @@ export class ReclaimProofRequest {
                 window.addEventListener('message', messageListener);
                 const message: ExtensionMessage = {
                     action: RECLAIM_EXTENSION_ACTIONS.CHECK_EXTENSION,
+                    extensionID: this.extensionID,
                     messageId: messageId
                 }
                 window.postMessage(message, '*');
@@ -587,7 +605,8 @@ export class ReclaimProofRequest {
         const message: ExtensionMessage = {
             action: RECLAIM_EXTENSION_ACTIONS.START_VERIFICATION,
             messageId: this.sessionId,
-            data: this.templateData
+            data: this.templateData,
+            extensionID: this.extensionID
         }
         window.postMessage(message, '*');
         logger.info('Browser extension flow triggered');
@@ -606,8 +625,6 @@ export class ReclaimProofRequest {
 
     private async redirectToInstantApp(): Promise<void> {
         try {
-            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED);
-
             let template = encodeURIComponent(JSON.stringify(this.templateData));
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
@@ -625,8 +642,6 @@ export class ReclaimProofRequest {
 
     private async redirectToAppClip(): Promise<void> {
         try {
-            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED);
-
             let template = encodeURIComponent(JSON.stringify(this.templateData));
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');

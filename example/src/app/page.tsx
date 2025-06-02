@@ -1,19 +1,18 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { ReclaimProofRequest, ClaimCreationType } from '@reclaimprotocol/js-sdk'
+import { ReclaimProofRequest } from '@reclaimprotocol/js-sdk'
 import { Proof } from '@reclaimprotocol/js-sdk'
-import { useQRCode } from 'next-qrcode'
-import Link from 'next/link'
 
 export default function Home() {
-  const [verificationReqUrl, setVerificationReqUrl] = useState<string | undefined>('')
-  const [extracted, setExtracted] = useState<any>(null)
-  const { Canvas } = useQRCode()
+  const [isLoading, setIsLoading] = useState(false)
+  const [proofData, setProofData] = useState<Proof[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [reclaimProofRequest, setReclaimProofRequest] = useState<ReclaimProofRequest | null>(null)
 
   useEffect(() => {
     // Initialize the ReclaimProofRequest when the component mounts
     initializeReclaimProofRequest()
+    // verifyProofData()
   }, [])
 
   async function initializeReclaimProofRequest() {
@@ -35,115 +34,219 @@ export default function Home() {
         process.env.NEXT_PUBLIC_RECLAIM_APP_ID!,
         process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET!,
         process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_ID!,
-        { log: true }
+        // Uncomment the following line to enable logging and AI providers
+        {
+          log: true,
+        }
       )
       setReclaimProofRequest(proofRequest)
 
-      // Add context to the proof request (optional)
-      proofRequest.addContext('0x00000000000', 'Example context message')
+      // // // Add context to the proof request (optional)
+      // proofRequest.addContext("0x48796C654F7574707574", "test")
 
       // Set parameters for the proof request (if needed)
-      // proofRequest.setParams({ key: "value" })
+      // proofRequest.setParams({ email: "test@example.com", userName: "testUser" })
 
       // Set a redirect URL (if needed)
-      // proofRequest.setRedirectUrl('your-redirect-url')
+      // proofRequest.setRedirectUrl('https://example.com/redirect')
 
       // Set a custom app callback URL (if needed)
-      // proofRequest.setAppCallbackUrl('your-callback-url')
-
-      // Set the claim creation type (only if you want to create a claim on mechain)
-      // proofRequest.setClaimCreationType(ClaimCreationType.ON_ME_CHAIN)
+      // proofRequest.setAppCallbackUrl('https://webhook.site/fd6cf442-0ea7-4427-8cb8-cb4dbe8884d2')
 
       // Uncomment the following line to log the proof request and to get the Json String
       // console.log('Proof request initialized:', proofRequest.toJsonString())
     } catch (error) {
       console.error('Error initializing ReclaimProofRequest:', error)
+      setError('Failed to initialize Reclaim. Please try again.')
     }
   }
 
-  async function startVerificationSession() {
+  async function startClaimProcess() {
     if (!reclaimProofRequest) {
-      console.error('ReclaimProofRequest not initialized')
+      setError('Reclaim not initialized. Please refresh the page.')
       return
     }
 
+    setIsLoading(true)
+    setError(null)
+    
     try {
-      // Generate the request URL for QR code
-      const requestUrl = await reclaimProofRequest.getRequestUrl()
-      setVerificationReqUrl(requestUrl)
-
-      // Get the status URL for checking proof status
-      const statusUrl = reclaimProofRequest.getStatusUrl()
-      console.log('Status URL:', statusUrl)
-
       // Start the verification session
+      await reclaimProofRequest.triggerReclaimFlow()
+      
       await reclaimProofRequest.startSession({
         onSuccess: async (proof: Proof | Proof[] | string | undefined) => {
+          setIsLoading(false)
+          
           if (proof && typeof proof === 'string') {
-            // When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof
             console.log('SDK Message:', proof)
-            setExtracted(proof)
+            setError('Received string response instead of proof object.')
           } else if (proof && typeof proof !== 'string') {
-            // When using the default callback url, we get a proof
             console.log('Proof received:', proof)
             if (Array.isArray(proof)) {
-              setExtracted(JSON.stringify(proof.map(p => p.claimData.context)))
+              setProofData(proof)
             } else {
-              setExtracted(JSON.stringify(proof?.claimData.context))
+              setProofData([proof])
             }
           }
         },
         onError: (error: Error) => {
           console.error('Error in proof generation:', error)
+          setIsLoading(false)
+          setError(`Error: ${error.message}`)
         }
       })
     } catch (error) {
       console.error('Error starting verification session:', error)
+      setIsLoading(false)
+      setError('Failed to start verification. Please try again.')
+    }
+  }
+
+  // Function to extract provider URL from parameters
+  const getProviderUrl = (proof: Proof) => {
+    try {
+      const parameters = JSON.parse(proof.claimData.parameters);
+      return parameters.url || "Unknown Provider";
+    } catch (e) {
+      return proof.claimData.provider || "Unknown Provider";
+    }
+  }
+
+  // Function to beautify and display extracted parameters
+  const renderExtractedParameters = (proof: Proof) => {
+    try {
+      const context = JSON.parse(proof.claimData.context)
+      const extractedParams = context.extractedParameters || {}
+      
+      return (
+        <>
+          <p className="text-sm font-medium text-gray-500 mb-2">Extracted Parameters</p>
+          {Object.entries(extractedParams).length > 0 ? (
+            <div className="space-y-2">
+              {Object.entries(extractedParams).map(([key, value]) => (
+                <div key={key} className="bg-gray-50 p-2 rounded">
+                  <div className="flex flex-col">
+                    <span className="font-medium">{key}:</span>
+                    <span className="font-mono break-all">{String(value)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 bg-gray-50 p-2 rounded">No parameters extracted</p>
+          )}
+        </>
+      )
+    } catch (e) {
+      return <p className="text-red-500 bg-gray-50 p-2 rounded">Failed to parse parameters</p>
     }
   }
 
   return (
-    <main className='flex min-h-screen flex-col items-center justify-between p-24'>
-      <div className='max-w-5xl gap-2 w-full items-center justify-between font-mono text-sm lg:flex lg:flex-col lg:gap-10'>
-        <h1 className='text-2xl font-bold mb-4'>Reclaim SDK Demo</h1>
-        {!verificationReqUrl && (
-          <button 
-            onClick={startVerificationSession}
-            className='bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded'
-          >
-            Create Claim QR Code
-          </button>
-        )}
-        {verificationReqUrl && (
-          <div>
-            <p className='mb-2'>Scan this QR code to start the verification process:</p>
-            <Link href={verificationReqUrl} target='_blank'>
-              <Canvas
-                text={verificationReqUrl}
-                options={{
-                  errorCorrectionLevel: 'M',
-                  margin: 3,
-                  scale: 4,
-                  width: 200,
-                  color: {
-                    dark: '#000000ff',
-                    light: '#ffffffff'
-                  }
-                }}
-              />
-            </Link>
+    <main className='flex min-h-screen flex-col items-center p-8 bg-gray-50'>
+      <div className='max-w-4xl w-full mx-auto'>
+        <h1 className='text-3xl font-bold mb-8 text-center'>Reclaim BrowserSDK</h1>
+        
+        {!proofData && !isLoading && (
+          <div className="text-center">
+            <p className="mb-6 text-gray-700">
+              Click the button below to start the claim process using your browser extension.
+            </p>
+            <button 
+              onClick={startClaimProcess}
+              className='bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-md'
+              disabled={!reclaimProofRequest}
+            >
+              Start Claim Process
+            </button>
           </div>
         )}
-        {extracted && (
-          <div className='mt-4'>
-            <h2 className='text-xl font-semibold mb-2'>Extracted Data:</h2>
-            <pre className='bg-gray-100 p-4 rounded'>{extracted}</pre>
+        
+        {isLoading && (
+          <div className="text-center py-10">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+            <p className="mt-4 text-gray-700">Processing your claim...</p>
           </div>
         )}
-        {!extracted && verificationReqUrl && (
-          <div className='mt-4'>
-            <p>Waiting for proof generation...</p>
-            {/* Add a loading spinner here if desired */}
+        
+        {error && (
+          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-600">
+            {error}
+          </div>
+        )}
+        
+        {proofData && proofData.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-semibold mb-6 text-center">Verification Successful</h2>
+            
+            {proofData.map((proof, index) => (
+              <div key={index} className="mb-8 bg-white p-8 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-xl font-medium">Proof #{index + 1}</h3>
+                  <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">Verified</span>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Provider</p>
+                    <p className="font-medium break-all">{getProviderUrl(proof)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Timestamp</p>
+                    <p>{new Date(proof.claimData.timestampS * 1000).toLocaleString()}</p>
+                  </div>
+                </div>
+                
+                {/* Extracted parameters section */}
+                <div className="mt-5 pt-4 border-t border-gray-100">
+                  {renderExtractedParameters(proof)}
+                </div>
+                
+                {/* Witnesses section */}
+                {proof.witnesses && proof.witnesses.length > 0 && (
+                  <div className="mt-5 pt-4 border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-500 mb-2">Attested by</p>
+                    <div className="space-y-2">
+                      {proof.witnesses.map((witness, widx) => (
+                        <div key={widx} className="bg-gray-50 p-2 rounded">
+                          <p className="text-sm font-mono break-all">{witness.id}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Signatures section */}
+                {proof.signatures && proof.signatures.length > 0 && (
+                  <div className="mt-5 pt-4 border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-500 mb-2">Signatures</p>
+                    <div className="space-y-2">
+                      {proof.signatures.map((signature, sidx) => (
+                        <div key={sidx} className="bg-gray-50 p-2 rounded">
+                          <p className="text-sm font-mono break-all">{signature}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Identifier (full) */}
+                <div className="mt-5 pt-4 border-t border-gray-100">
+                  <p className="text-sm font-medium text-gray-500 mb-2">Proof Identifier</p>
+                  <p className="text-sm text-gray-600 font-mono break-all bg-gray-50 p-2 rounded">
+                    {proof.identifier}
+                  </p>
+                </div>
+              </div>
+            ))}
+            
+            <button 
+              onClick={() => setProofData(null)}
+              className="mt-4 px-6 py-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors font-medium shadow-sm w-full md:w-auto"
+            >
+              Start New Claim
+            </button>
           </div>
         )}
       </div>

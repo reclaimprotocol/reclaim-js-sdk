@@ -32,8 +32,11 @@ export type OnError = (error: Error) => void;
 export type ProofRequestOptions = {
   log?: boolean;
   acceptAiProviders?: boolean;
-  useBrowserExtension?: boolean;
+  useAppClip?: boolean;
+  device?: string;
   envUrl?: string;
+  useBrowserExtension?: boolean;
+  extensionID?: string;
 };
 
 // Claim creation type enum

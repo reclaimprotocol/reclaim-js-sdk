@@ -21,6 +21,7 @@ export interface ExtensionMessage {
   action: string;
   messageId: string;
   data?: any;
+  extensionID?: string;
 }
 
 export interface WitnessData {
