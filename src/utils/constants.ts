@@ -18,5 +18,11 @@ export const constants = {
     },
 
     // URL for sharing Reclaim templates
-    RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template='
+    RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template=',
+
+    // Chrome extension URL for Reclaim Protocol
+    CHROME_EXTENSION_URL: 'https://chromewebstore.google.com/',
+
+    // QR Code API base URL
+    QR_CODE_API_URL: 'https://api.qrserver.com/v1/create-qr-code/'
 };

@@ -35,6 +35,17 @@ export type ProofRequestOptions = {
   useAppClip?: boolean;
   device?: string;
   envUrl?: string;
+  useBrowserExtension?: boolean;
+  extensionID?: string;
+};
+
+// Modal customization options
+export type ModalOptions = {
+  title?: string;
+  description?: string;
+  extensionUrl?: string;
+  darkTheme?: boolean;
+  onClose?: () => void;
 };
 
 // Claim creation type enum
@@ -47,7 +58,8 @@ export enum ClaimCreationType {
 export enum DeviceType {
     ANDROID = 'android',
     IOS = 'ios',
-    IPAD = 'ipad'
+    DESKTOP = 'desktop',
+    MOBILE = 'mobile'
 }
 
 
