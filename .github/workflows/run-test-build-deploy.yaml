@@ -69,22 +69,8 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Configure Git
-        run: |
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor }}@users.noreply.github.com"
-          git remote set-url origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-
       - name: Version and publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            npm version ${{ github.event.inputs.release_type }} -m "Bump version to %s [skip ci]"
-          else
-            npm version patch -m "Bump version to %s [skip ci]"
-          fi
           npm publish
-
-      - name: Push changes
-        run: git push --follow-tags
