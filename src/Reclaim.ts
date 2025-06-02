@@ -8,6 +8,7 @@ import {
     TemplateData,
     InitSessionResponse,
     ClaimCreationType,
+    ModalOptions,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -159,6 +160,7 @@ export class ReclaimProofRequest {
     private lastFailureTime?: number;
     private templateData: TemplateData;
     private extensionID: string = "reclaim-extension";
+    private modalOptions?: ModalOptions;
     private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
 
     // Private constructor
@@ -351,6 +353,39 @@ export class ReclaimProofRequest {
 
     setClaimCreationType(claimCreationType: ClaimCreationType): void {
         this.claimCreationType = claimCreationType;
+    }
+
+    setModalOptions(options: ModalOptions): void {
+        try {
+            // Validate modal options
+            if (options.title !== undefined) {
+                validateFunctionParams([
+                    { input: options.title, paramName: 'title', isString: true }
+                ], 'setModalOptions');
+            }
+            
+            if (options.description !== undefined) {
+                validateFunctionParams([
+                    { input: options.description, paramName: 'description', isString: true }
+                ], 'setModalOptions');
+            }
+            
+            if (options.extensionUrl !== undefined) {
+                validateURL(options.extensionUrl, 'setModalOptions');
+            }
+            
+            if (options.darkTheme !== undefined) {
+                validateFunctionParams([
+                    { input: options.darkTheme, paramName: 'darkTheme' }
+                ], 'setModalOptions');
+            }
+
+            this.modalOptions = { ...this.modalOptions, ...options };
+            logger.info('Modal options set successfully');
+        } catch (error) {
+            logger.info('Error setting modal options:', error);
+            throw new SetParamsError('Error setting modal options', error as Error);
+        }
     }
 
     addContext(address: string, message: string): void {
@@ -615,7 +650,7 @@ export class ReclaimProofRequest {
     private async showQRCodeModal(): Promise<void> {
         try {
             const requestUrl = await createLinkWithTemplateData(this.templateData);
-            const modal = new QRCodeModal();
+            const modal = new QRCodeModal(this.modalOptions);
             await modal.show(requestUrl);
         } catch (error) {
             logger.info('Error showing QR code modal:', error);

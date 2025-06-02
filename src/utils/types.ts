@@ -39,6 +39,15 @@ export type ProofRequestOptions = {
   extensionID?: string;
 };
 
+// Modal customization options
+export type ModalOptions = {
+  title?: string;
+  description?: string;
+  extensionUrl?: string;
+  darkTheme?: boolean;
+  onClose?: () => void;
+};
+
 // Claim creation type enum
 export enum ClaimCreationType {
   STANDALONE = 'createClaim',
