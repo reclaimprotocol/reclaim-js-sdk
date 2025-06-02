@@ -143,7 +143,126 @@ Let's break down what's happening in this code:
 
 5. When the verification is successful, we display the proof data on the page.
 
-## Step 5: Run your application
+## Step 5: New Streamlined Flow with Browser Extension Support
+
+The Reclaim SDK now provides a simplified `triggerReclaimFlow()` method that automatically handles the verification process across different platforms and devices. This method intelligently chooses the best verification method based on the user's environment.
+
+### Using triggerReclaimFlow()
+
+Replace the `handleCreateClaim` function in your React component with this simpler approach:
+
+```javascript
+async function handleCreateClaim() {
+  if (!reclaimProofRequest) {
+    console.error('Reclaim Proof Request not initialized')
+    return
+  }
+
+  try {
+    // Start the verification process automatically
+    await reclaimProofRequest.triggerReclaimFlow()
+    
+    // Listen for the verification results
+    await reclaimProofRequest.startSession({
+      onSuccess: (proofs) => {
+        if (proofs && typeof proofs === 'string') {
+          console.log('SDK Message:', proofs)
+          setProofs(proofs)
+        } else if (proofs && typeof proofs !== 'string') {
+          if (Array.isArray(proofs)) {
+            console.log(JSON.stringify(proofs.map(p => p.claimData.context)))
+          } else {
+            console.log('Proof received:', proofs?.claimData.context)
+          }
+          setProofs(proofs)
+        }
+      },
+      onFailure: (error) => {
+        console.error('Verification failed', error)
+      }
+    })
+  } catch (error) {
+    console.error('Error triggering Reclaim flow:', error)
+  }
+}
+```
+
+### How triggerReclaimFlow() Works
+
+The `triggerReclaimFlow()` method automatically detects the user's environment and chooses the optimal verification method:
+
+#### On Desktop Browsers:
+1. **Browser Extension First**: If the Reclaim browser extension is installed, it will use the extension for a seamless in-browser verification experience.
+2. **QR Code Fallback**: If the extension is not available, it automatically displays a QR code modal for mobile scanning.
+
+#### On Mobile Devices:
+1. **iOS Devices**: Automatically redirects to the Reclaim App Clip for native iOS verification.
+2. **Android Devices**: Automatically redirects to the Reclaim Instant App for native Android verification.
+
+### Browser Extension Support
+
+The SDK now includes built-in support for the Reclaim browser extension, providing users with a seamless verification experience without leaving their current browser tab.
+
+#### Features:
+- **Automatic Detection**: The SDK automatically detects if the Reclaim browser extension is installed
+- **Seamless Integration**: No additional setup required - the extension integration works out of the box
+- **Fallback Support**: If the extension is not available, the SDK gracefully falls back to QR code or mobile app flows
+
+#### Manual Extension Detection:
+
+You can also manually check if the browser extension is available:
+
+```javascript
+const isExtensionAvailable = await reclaimProofRequest.isBrowserExtensionAvailable()
+if (isExtensionAvailable) {
+  console.log('Reclaim browser extension is installed')
+} else {
+  console.log('Browser extension not available, will use alternative flow')
+}
+```
+
+#### Configuring Browser Extension Options:
+
+You can customize the browser extension behavior during SDK initialization:
+
+```javascript
+const proofRequest = await ReclaimProofRequest.init(
+  APP_ID,
+  APP_SECRET,
+  PROVIDER_ID,
+  {
+    useBrowserExtension: true, // Enable/disable browser extension (default: true)
+    extensionID: 'custom-extension-id', // Use custom extension ID if needed
+    // ... other options
+  }
+)
+```
+
+### Modal Customization
+
+When the QR code modal is displayed (fallback on desktop), you can customize its appearance:
+
+```javascript
+// Set modal options before triggering the flow
+reclaimProofRequest.setModalOptions({
+  title: 'Custom Verification Title',
+  description: 'Scan this QR code with your mobile device to verify your account',
+  darkTheme: true, // Enable dark theme
+  extensionUrl: 'https://custom-extension-url.com' // Custom extension download URL
+})
+
+await reclaimProofRequest.triggerReclaimFlow()
+```
+
+### Benefits of the New Flow:
+
+1. **Platform Adaptive**: Automatically chooses the best verification method for each platform
+2. **User-Friendly**: Provides the most seamless experience possible for each user
+3. **Simplified Integration**: Single method call handles all verification scenarios
+4. **Extension Support**: Leverages browser extension for desktop users when available
+5. **Mobile Optimized**: Native app experiences on mobile devices
+
+## Step 6: Run your application
 
 Start your development server:
 
@@ -194,7 +313,53 @@ The Reclaim SDK offers several advanced options to customize your integration:
    reclaimProofRequest.setAppCallbackUrl('https://example.com/callback', true)
    ```
 
-5. **Exporting and Importing SDK Configuration**:
+5. **Modal Customization for Desktop Users**:
+   Customize the appearance and behavior of the QR code modal shown to desktop users:
+   ```javascript
+   reclaimProofRequest.setModalOptions({
+     title: 'Verify Your Account',
+     description: 'Scan the QR code with your mobile device or install our browser extension',
+     darkTheme: false, // Enable dark theme (default: false)
+     extensionUrl: 'https://chrome.google.com/webstore/detail/reclaim' // Custom extension URL
+   })
+   ```
+
+6. **Browser Extension Configuration**:
+   Configure browser extension behavior and detection:
+   ```javascript
+   // Check if browser extension is available
+   const isExtensionAvailable = await reclaimProofRequest.isBrowserExtensionAvailable()
+   
+   // Trigger the verification flow with automatic platform detection
+   await reclaimProofRequest.triggerReclaimFlow()
+   
+   // Initialize with browser extension options
+   const proofRequest = await ReclaimProofRequest.init(
+     APP_ID,
+     APP_SECRET,
+     PROVIDER_ID,
+     {
+       useBrowserExtension: true, // Enable browser extension support (default: true)
+       extensionID: 'custom-extension-id', // Custom extension identifier
+       useAppClip: true, // Enable mobile app clips (default: true)
+       log: true // Enable logging for debugging
+     }
+   )
+   ```
+
+7. **Platform-Specific Flow Control**:
+   The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
+   ```javascript
+   // Traditional approach with manual QR code handling
+   const requestUrl = await reclaimProofRequest.getRequestUrl()
+   // Display your own QR code implementation
+   
+   // Or use the new streamlined approach
+   await reclaimProofRequest.triggerReclaimFlow()
+   // Automatically handles platform detection and optimal user experience
+   ```
+
+8. **Exporting and Importing SDK Configuration**:
    You can export the entire Reclaim SDK configuration as a JSON string and use it to initialize the SDK with the same configuration on a different service or backend:
    ```javascript
    // On the client-side or initial service
@@ -217,7 +382,6 @@ For production applications, it's recommended to handle proofs on your backend:
    ```javascript
    reclaimProofRequest.setCallbackUrl('https://your-backend.com/receive-proofs')
    ```
-
 
 These options allow you to securely process proofs and status updates on your server.
 
