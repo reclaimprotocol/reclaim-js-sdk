@@ -139,6 +139,8 @@ const emptyTemplateData: TemplateData = {
     redirectUrl: '',
     acceptAiProviders: false,
     sdkVersion: '',
+    providerVersion: '',
+    resolvedProviderVersion: '',
     jsonProofResponse: false
 }
 export class ReclaimProofRequest {
@@ -151,6 +153,7 @@ export class ReclaimProofRequest {
     private context: Context = { contextAddress: '0x0', contextMessage: 'sample context' };
     private claimCreationType?: ClaimCreationType = ClaimCreationType.STANDALONE;
     private providerId: string;
+    private resolvedProviderVersion?: string;
     private parameters: { [key: string]: string };
     private redirectUrl?: string;
     private intervals: Map<string, NodeJS.Timer> = new Map();
@@ -219,6 +222,11 @@ export class ReclaimProofRequest {
                         { paramName: 'acceptAiProviders', input: options.acceptAiProviders }
                     ], 'the constructor')
                 }
+                if (options.providerVersion) {
+                    validateFunctionParams([
+                        { paramName: 'providerVersion', input: options.providerVersion, isString: true }
+                    ], 'the constructor')
+                }
                 if (options.log) {
                     validateFunctionParams([
                         { paramName: 'log', input: options.log }
@@ -257,8 +265,9 @@ export class ReclaimProofRequest {
             const signature = await proofRequestInstance.generateSignature(appSecret)
             proofRequestInstance.setSignature(signature)
 
-            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature);
+            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion);
             proofRequestInstance.sessionId = data.sessionId
+            proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
 
             return proofRequestInstance
         } catch (error) {
@@ -282,7 +291,8 @@ export class ReclaimProofRequest {
                 claimCreationType,
                 options,
                 sdkVersion,
-                jsonProofResponse
+                jsonProofResponse,
+                resolvedProviderVersion
             }: ProofPropertiesJSON = JSON.parse(jsonString)
 
             validateFunctionParams([
@@ -323,6 +333,19 @@ export class ReclaimProofRequest {
                 ], 'fromJsonString');
             }
 
+
+            if (options?.providerVersion) {
+                validateFunctionParams([
+                    { input: options.providerVersion, paramName: 'providerVersion', isString: true }
+                ], 'fromJsonString');
+            }
+
+            if (resolvedProviderVersion) {
+                validateFunctionParams([
+                    { input: resolvedProviderVersion, paramName: 'resolvedProviderVersion', isString: true }
+                ], 'fromJsonString');
+            }
+
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
@@ -332,6 +355,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.timeStamp = timeStamp
             proofRequestInstance.signature = signature
             proofRequestInstance.sdkVersion = sdkVersion;
+            proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -485,7 +509,8 @@ export class ReclaimProofRequest {
             timeStamp: this.timeStamp,
             options: this.options,
             sdkVersion: this.sdkVersion,
-            jsonProofResponse: this.jsonProofResponse
+            jsonProofResponse: this.jsonProofResponse,
+            resolvedProviderVersion: this.resolvedProviderVersion ?? ''
         })
     }
 
@@ -501,6 +526,8 @@ export class ReclaimProofRequest {
             const templateData: TemplateData = {
                 sessionId: this.sessionId,
                 providerId: this.providerId,
+                providerVersion: this.options?.providerVersion ?? '',
+                resolvedProviderVersion: this.resolvedProviderVersion ?? '',
                 applicationId: this.applicationId,
                 signature: this.signature,
                 timestamp: this.timeStamp,
@@ -511,6 +538,7 @@ export class ReclaimProofRequest {
                 acceptAiProviders: this.options?.acceptAiProviders ?? false,
                 sdkVersion: this.sdkVersion,
                 jsonProofResponse: this.jsonProofResponse
+
             }
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
             if (this.options?.useAppClip) {
@@ -555,6 +583,8 @@ export class ReclaimProofRequest {
                 timestamp: this.timeStamp,
                 callbackUrl: this.getAppCallbackUrl(),
                 context: JSON.stringify(this.context),
+                providerVersion: this.options?.providerVersion ?? '',
+                resolvedProviderVersion: this.resolvedProviderVersion ?? '',
                 parameters: this.parameters,
                 redirectUrl: this.redirectUrl ?? '',
                 acceptAiProviders: this.options?.acceptAiProviders ?? false,

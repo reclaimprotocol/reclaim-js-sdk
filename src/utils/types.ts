@@ -31,12 +31,14 @@ export type OnError = (error: Error) => void;
 
 export type ProofRequestOptions = {
   log?: boolean;
+  versionNumber?: string;
   acceptAiProviders?: boolean;
   useAppClip?: boolean;
   device?: string;
   envUrl?: string;
   useBrowserExtension?: boolean;
   extensionID?: string;
+  providerVersion?: string;
 };
 
 // Modal customization options
@@ -66,6 +68,7 @@ export enum DeviceType {
 // Session and response types
 export type InitSessionResponse = {
   sessionId: string;
+  resolvedProviderVersion: string;
 };
 
 export interface UpdateSessionResponse {
@@ -101,6 +104,7 @@ export type ProofPropertiesJSON = {
   options?: ProofRequestOptions;
   sdkVersion: string;
   jsonProofResponse?: boolean;
+  resolvedProviderVersion: string;
 };
 
 export type TemplateData = {
@@ -116,6 +120,8 @@ export type TemplateData = {
   acceptAiProviders: boolean;
   sdkVersion: string;
   jsonProofResponse?: boolean;
+  providerVersion?: string;
+  resolvedProviderVersion: string;
 };
 
 // Add the new StatusUrlResponse type
