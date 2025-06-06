@@ -31,7 +31,6 @@ export type OnError = (error: Error) => void;
 
 export type ProofRequestOptions = {
   log?: boolean;
-  versionNumber?: string;
   acceptAiProviders?: boolean;
   useAppClip?: boolean;
   device?: string;
