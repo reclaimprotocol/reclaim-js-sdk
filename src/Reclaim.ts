@@ -456,6 +456,14 @@ export class ReclaimProofRequest {
         }
     }
 
+    // getter for SessionId
+    getSessionId(): string {
+        if (!this.sessionId) {
+            throw new SessionNotStartedError("SessionId is not set");
+        }
+        return this.sessionId;
+    }
+
     // Private helper methods
     private setSignature(signature: string): void {
         try {
