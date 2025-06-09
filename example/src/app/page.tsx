@@ -146,12 +146,12 @@ export default function Home() {
   return (
     <main className='flex min-h-screen flex-col items-center p-8 bg-gray-50'>
       <div className='max-w-4xl w-full mx-auto'>
-        <h1 className='text-3xl font-bold mb-8 text-center'>Reclaim BrowserSDK</h1>
+        <h1 className='text-3xl font-bold mb-8 text-center'>Reclaim SDK</h1>
         
         {!proofData && !isLoading && (
           <div className="text-center">
             <p className="mb-6 text-gray-700">
-              Click the button below to start the claim process using your browser extension.
+              Click the button below to start the claim process.
             </p>
             <button 
               onClick={startClaimProcess}
