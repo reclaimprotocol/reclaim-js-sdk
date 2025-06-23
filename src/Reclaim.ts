@@ -387,20 +387,26 @@ export class ReclaimProofRequest {
                     { input: options.title, paramName: 'title', isString: true }
                 ], 'setModalOptions');
             }
-            
+
             if (options.description !== undefined) {
                 validateFunctionParams([
                     { input: options.description, paramName: 'description', isString: true }
                 ], 'setModalOptions');
             }
-            
+
             if (options.extensionUrl !== undefined) {
                 validateURL(options.extensionUrl, 'setModalOptions');
             }
-            
+
             if (options.darkTheme !== undefined) {
                 validateFunctionParams([
                     { input: options.darkTheme, paramName: 'darkTheme' }
+                ], 'setModalOptions');
+            }
+
+            if (options.countdownMinutes !== undefined) {
+                validateFunctionParams([
+                    { input: options.countdownMinutes, paramName: 'countdownMinutes' }
                 ], 'setModalOptions');
             }
 
@@ -601,9 +607,9 @@ export class ReclaimProofRequest {
             }
 
             this.templateData = templateData;
-            
+
             logger.info('Triggering Reclaim flow');
-            
+
             // Get device type
             const deviceType = getDeviceType();
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
@@ -623,7 +629,7 @@ export class ReclaimProofRequest {
             } else if (deviceType === DeviceType.MOBILE) {
                 // Mobile flow
                 const mobileDeviceType = getMobileDeviceType();
-                
+
                 if (mobileDeviceType === DeviceType.ANDROID) {
                     // Redirect to instant app URL
                     logger.info('Redirecting to Android instant app');
@@ -645,21 +651,21 @@ export class ReclaimProofRequest {
         try {
             return new Promise<boolean>((resolve) => {
                 const messageId = `reclaim-check-${Date.now()}`;
-                
+
                 const timeoutId = setTimeout(() => {
                     window.removeEventListener('message', messageListener);
                     resolve(false);
                 }, timeout);
-                
+
                 const messageListener = (event: MessageEvent) => {
-                    if (event.data?.action === RECLAIM_EXTENSION_ACTIONS.EXTENSION_RESPONSE && 
+                    if (event.data?.action === RECLAIM_EXTENSION_ACTIONS.EXTENSION_RESPONSE &&
                         event.data?.messageId === messageId) {
                         clearTimeout(timeoutId);
                         window.removeEventListener('message', messageListener);
                         resolve(!!event.data.installed);
                     }
                 };
-                
+
                 window.addEventListener('message', messageListener);
                 const message: ExtensionMessage = {
                     action: RECLAIM_EXTENSION_ACTIONS.CHECK_EXTENSION,
@@ -704,7 +710,7 @@ export class ReclaimProofRequest {
 
             const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
-            
+
             // Redirect to instant app
             window.location.href = instantAppUrl;
         } catch (error) {
@@ -721,7 +727,7 @@ export class ReclaimProofRequest {
 
             const appClipUrl = `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
-            
+
             // Redirect to app clip
             window.location.href = appClipUrl;
         } catch (error) {

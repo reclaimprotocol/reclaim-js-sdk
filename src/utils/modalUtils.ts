@@ -17,6 +17,7 @@ export class QRCodeModal {
             description: 'Scan the QR code with your mobile device to complete verification',
             extensionUrl: constants.CHROME_EXTENSION_URL,
             darkTheme: false,
+            countdownMinutes: 1,  // default to 1 minute
             ...options
         };
     }
@@ -69,7 +70,7 @@ export class QRCodeModal {
 
     private getThemeStyles() {
         const isDark = this.options.darkTheme;
-        
+
         return {
             modalBackground: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.5)',
             cardBackground: isDark ? '#1f2937' : 'white',
@@ -84,7 +85,7 @@ export class QRCodeModal {
             buttonHoverBackground: isDark ? '#4b5563' : '#e5e7eb',
             countdownColor: isDark ? '#6b7280' : '#9ca3af',
             progressBackground: isDark ? '#4b5563' : '#e5e7eb',
-            progressGradient: isDark 
+            progressGradient: isDark
                 ? 'linear-gradient(90deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%)'
                 : 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%)',
             linkColor: isDark ? '#60a5fa' : '#2563eb',
@@ -95,7 +96,7 @@ export class QRCodeModal {
 
     private createModalHTML(): string {
         const styles = this.getThemeStyles();
-        
+
         return `
             <div id="${this.modalId}" style="
                 position: fixed;
@@ -237,10 +238,10 @@ export class QRCodeModal {
             // Simple QR code generation using a public API
             // In production, you might want to use a proper QR code library
             const qrCodeUrl = `${constants.QR_CODE_API_URL}?size=200x200&data=${encodeURIComponent(text)}`;
-            
+
             const container = document.getElementById(containerId);
             const styles = this.getThemeStyles();
-            
+
             if (container) {
                 container.innerHTML = `
                     <img src="${qrCodeUrl}" 
@@ -260,7 +261,7 @@ export class QRCodeModal {
             // Fallback to text link
             const container = document.getElementById(containerId);
             const styles = this.getThemeStyles();
-            
+
             if (container) {
                 container.innerHTML = `
                     <div style="padding: 20px; color: ${styles.textColor}; font-size: 14px;">
@@ -276,7 +277,7 @@ export class QRCodeModal {
     private addEventListeners(): void {
         const closeButton = document.getElementById('reclaim-close-modal');
         const modal = document.getElementById(this.modalId);
-        
+
         const closeModal = () => {
             this.close();
         };
@@ -305,41 +306,43 @@ export class QRCodeModal {
     }
 
     private startAutoCloseTimer(): void {
-        this.countdownSeconds = 60;
-        
+        this.countdownSeconds = (this.options.countdownMinutes || 1) * 60; // default to 1 minute
+
         // Update countdown display immediately
         this.updateCountdownDisplay();
-        
+
         // Start countdown timer (updates every second)
         this.countdownTimer = setInterval(() => {
             this.countdownSeconds--;
             this.updateCountdownDisplay();
-            
+
             if (this.countdownSeconds <= 0) {
                 this.close();
             }
         }, 1000);
 
-        // Set auto-close timer for 1 minute
+        // Set auto-close timer for the number of minutes specified in the options in milliseconds
+        const autoCloseMs = (this.options.countdownMinutes || 1) * 60 * 1000;
         this.autoCloseTimer = setTimeout(() => {
             this.close();
-        }, 60000);
+        }, autoCloseMs);
     }
 
     private updateCountdownDisplay(): void {
         const countdownElement = document.getElementById('reclaim-countdown');
         const progressBar = document.getElementById('reclaim-progress-bar');
-        
+
         if (countdownElement) {
             const minutes = Math.floor(this.countdownSeconds / 60);
             const seconds = this.countdownSeconds % 60;
             const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
             countdownElement.textContent = `Auto-close in ${timeString}`;
         }
-        
+
         if (progressBar) {
             // Calculate progress percentage (reverse: starts at 100%, goes to 0%)
-            const progressPercentage = (this.countdownSeconds / 60) * 100;
+            const totalSeconds = (this.options.countdownMinutes || 1) * 60;
+            const progressPercentage = (this.countdownSeconds / totalSeconds) * 100;
             progressBar.style.width = `${progressPercentage}%`;
         }
     }
