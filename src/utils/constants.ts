@@ -21,7 +21,7 @@ export const constants = {
     RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template=',
 
     // Chrome extension URL for Reclaim Protocol
-    CHROME_EXTENSION_URL: 'https://chromewebstore.google.com/',
+    CHROME_EXTENSION_URL: 'https://chromewebstore.google.com/detail/reclaim-extension/oafieibbbcepkmenknelhmgaoahamdeh',
 
     // QR Code API base URL
     QR_CODE_API_URL: 'https://api.qrserver.com/v1/create-qr-code/'

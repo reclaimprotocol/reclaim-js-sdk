@@ -46,7 +46,7 @@ export type ModalOptions = {
   description?: string;
   extensionUrl?: string;
   darkTheme?: boolean;
-  countdownMinutes?: number;
+  modalPopupTimer?: number;
   onClose?: () => void;
 };
 

@@ -404,9 +404,9 @@ export class ReclaimProofRequest {
                 ], 'setModalOptions');
             }
 
-            if (options.countdownMinutes !== undefined) {
+            if (options.modalPopupTimer !== undefined) {
                 validateFunctionParams([
-                    { input: options.countdownMinutes, paramName: 'countdownMinutes' }
+                    { input: options.modalPopupTimer, paramName: 'modalPopupTimer' }
                 ], 'setModalOptions');
             }
 

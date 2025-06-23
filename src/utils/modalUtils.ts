@@ -17,7 +17,7 @@ export class QRCodeModal {
             description: 'Scan the QR code with your mobile device to complete verification',
             extensionUrl: constants.CHROME_EXTENSION_URL,
             darkTheme: false,
-            countdownMinutes: 1,  // default to 1 minute
+            modalPopupTimer: 1,  // default to 1 minute
             ...options
         };
     }
@@ -306,7 +306,7 @@ export class QRCodeModal {
     }
 
     private startAutoCloseTimer(): void {
-        this.countdownSeconds = (this.options.countdownMinutes || 1) * 60; // default to 1 minute
+        this.countdownSeconds = (this.options.modalPopupTimer || 1) * 60; // default to 1 minute
 
         // Update countdown display immediately
         this.updateCountdownDisplay();
@@ -322,7 +322,7 @@ export class QRCodeModal {
         }, 1000);
 
         // Set auto-close timer for the number of minutes specified in the options in milliseconds
-        const autoCloseMs = (this.options.countdownMinutes || 1) * 60 * 1000;
+        const autoCloseMs = (this.options.modalPopupTimer || 1) * 60 * 1000;
         this.autoCloseTimer = setTimeout(() => {
             this.close();
         }, autoCloseMs);
@@ -341,7 +341,7 @@ export class QRCodeModal {
 
         if (progressBar) {
             // Calculate progress percentage (reverse: starts at 100%, goes to 0%)
-            const totalSeconds = (this.options.countdownMinutes || 1) * 60;
+            const totalSeconds = (this.options.modalPopupTimer || 1) * 60;
             const progressPercentage = (this.countdownSeconds / totalSeconds) * 100;
             progressBar.style.width = `${progressPercentage}%`;
         }
