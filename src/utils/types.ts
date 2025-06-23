@@ -46,6 +46,7 @@ export type ModalOptions = {
   description?: string;
   extensionUrl?: string;
   darkTheme?: boolean;
+  modalPopupTimer?: number;
   onClose?: () => void;
 };
 
@@ -57,10 +58,10 @@ export enum ClaimCreationType {
 
 // Device type enum 
 export enum DeviceType {
-    ANDROID = 'android',
-    IOS = 'ios',
-    DESKTOP = 'desktop',
-    MOBILE = 'mobile'
+  ANDROID = 'android',
+  IOS = 'ios',
+  DESKTOP = 'desktop',
+  MOBILE = 'mobile'
 }
 
 
