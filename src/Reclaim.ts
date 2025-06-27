@@ -396,17 +396,38 @@ export class ReclaimProofRequest {
 
             if (options.extensionUrl !== undefined) {
                 validateURL(options.extensionUrl, 'setModalOptions');
+                validateFunctionParams([
+                    { input: options.extensionUrl, paramName: 'extensionUrl', isString: true }
+                ], 'setModalOptions');
             }
 
             if (options.darkTheme !== undefined) {
+                // check if the darkTheme is a boolean
+                if (typeof options.darkTheme !== 'boolean') {
+                    throw new InvalidParamError('darkTheme prop must be a boolean');
+                }
                 validateFunctionParams([
                     { input: options.darkTheme, paramName: 'darkTheme' }
                 ], 'setModalOptions');
             }
 
             if (options.modalPopupTimer !== undefined) {
+                // check if the modalPopupTimer is a positive whole number
+                if (typeof options.modalPopupTimer !== 'number' || options.modalPopupTimer <= 0 || !Number.isInteger(options.modalPopupTimer)) {
+                    throw new InvalidParamError('modalPopupTimer prop must be a valid time in minutes');
+                }
                 validateFunctionParams([
                     { input: options.modalPopupTimer, paramName: 'modalPopupTimer' }
+                ], 'setModalOptions');
+            }
+
+            if (options.showExtensionInstallButton !== undefined) {
+                // check if the showExtensionInstallButton is a boolean
+                if (typeof options.showExtensionInstallButton !== 'boolean') {
+                    throw new InvalidParamError('showExtensionInstallButton prop must be a boolean');
+                }
+                validateFunctionParams([
+                    { input: options.showExtensionInstallButton, paramName: 'showExtensionInstallButton' }
                 ], 'setModalOptions');
             }
 

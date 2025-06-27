@@ -18,6 +18,7 @@ export class QRCodeModal {
             extensionUrl: constants.CHROME_EXTENSION_URL,
             darkTheme: false,
             modalPopupTimer: 1,  // default to 1 minute
+            showExtensionInstallButton: true, // default to true
             ...options
         };
     }
@@ -166,6 +167,7 @@ export class QRCodeModal {
                         display: inline-block;
                     "></div>
                     
+                    ${this.options.showExtensionInstallButton ? `
                     <div style="
                         margin-bottom: 24px;
                         padding: 16px;
@@ -202,7 +204,7 @@ export class QRCodeModal {
                            onmouseout="this.style.backgroundColor='${styles.extensionButtonBackground}'">
                             Install Extension
                         </a>
-                    </div>
+                    </div>` : ''}
                     
                     <div style="margin-top: 16px;">
                         <div id="reclaim-countdown" style="
