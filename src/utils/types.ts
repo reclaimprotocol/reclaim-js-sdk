@@ -47,6 +47,7 @@ export type ModalOptions = {
   extensionUrl?: string;
   darkTheme?: boolean;
   modalPopupTimer?: number;
+  showExtensionInstallButton?: boolean;
   onClose?: () => void;
 };
 
