@@ -18,7 +18,7 @@ export class QRCodeModal {
             extensionUrl: constants.CHROME_EXTENSION_URL,
             darkTheme: false,
             modalPopupTimer: 1,  // default to 1 minute
-            showExtensionInstallButton: true, // default to true
+            showExtensionInstallButton: false, // default to false
             ...options
         };
     }
