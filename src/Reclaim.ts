@@ -164,6 +164,7 @@ export class ReclaimProofRequest {
     private templateData: TemplateData;
     private extensionID: string = "reclaim-extension";
     private modalOptions?: ModalOptions;
+    private modal?: QRCodeModal;
     private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
 
     // Private constructor
@@ -715,8 +716,8 @@ export class ReclaimProofRequest {
     private async showQRCodeModal(): Promise<void> {
         try {
             const requestUrl = await createLinkWithTemplateData(this.templateData);
-            const modal = new QRCodeModal(this.modalOptions);
-            await modal.show(requestUrl);
+            this.modal = new QRCodeModal(this.modalOptions);
+            await this.modal.show(requestUrl);
         } catch (error) {
             logger.info('Error showing QR code modal:', error);
             throw error;
@@ -801,11 +802,13 @@ export class ReclaimProofRequest {
                         }
                         // check if the proofs array has only one proof then send the proofs in onSuccess 
                         if (proofs.length === 1) {
+                            
                             onSuccess(proofs[0]);
                         } else {
                             onSuccess(proofs);
                         }
                         this.clearInterval();
+                        this.modal?.close();
                     }
                 } else {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
@@ -816,6 +819,7 @@ export class ReclaimProofRequest {
                             onSuccess('Proof submitted successfully to the custom callback url');
                         }
                         this.clearInterval();
+                        this.modal?.close();
                     }
                 }
             } catch (e) {
@@ -823,11 +827,19 @@ export class ReclaimProofRequest {
                     onError(e as Error);
                 }
                 this.clearInterval();
+                this.modal?.close();
             }
         }, 3000);
 
         this.intervals.set(this.sessionId, interval);
         scheduleIntervalEndingTask(this.sessionId, this.intervals, onError);
+    }
+
+    closeModal(): void {
+        if (this.modal) {
+            this.modal.close();
+            logger.info('Modal closed by user');
+        }
     }
 }
 

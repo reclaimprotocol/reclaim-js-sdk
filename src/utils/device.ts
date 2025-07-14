@@ -23,30 +23,22 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
     }
 
     let mobileScore = 0;
-    const CONFIDENCE_THRESHOLD = 3; // Need at least 3 indicators for mobile
+    const CONFIDENCE_THRESHOLD = 2; // Adjusted threshold since we removed screen size checks
 
-    // Method 1: Touch capability detection (weight: 2)
+    // Method 1: Touch capability detection (weight: 3 - increased weight)
     const isTouchDevice = 'ontouchstart' in window || 
                          (navigatorDefined && navigator.maxTouchPoints > 0);
     if (isTouchDevice) {
-        mobileScore += 2;
+        mobileScore += 3;
     }
 
-    // Method 2: Screen size analysis (weight: 2)
-    const screenWidth = window.innerWidth || window.screen?.width || 0;
-    const screenHeight = window.innerHeight || window.screen?.height || 0;
-    const hasSmallScreen = screenWidth <= 768 || screenHeight <= 768;
-    if (hasSmallScreen) {
-        mobileScore += 2;
-    }
-
-    // Method 3: User agent detection (weight: 3)
+    // Method 2: User agent detection (weight: 3)
     const mobileUserAgentPattern = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i;
     if (mobileUserAgentPattern.test(userAgent)) {
         mobileScore += 3;
     }
 
-    // Method 4: Mobile-specific APIs (weight: 2)
+    // Method 3: Mobile-specific APIs (weight: 2)
     const hasMobileAPIs = 'orientation' in window || 
                          'DeviceMotionEvent' in window ||
                          'DeviceOrientationEvent' in window;
@@ -54,34 +46,43 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
         mobileScore += 2;
     }
 
-    // Method 5: Device pixel ratio (weight: 1)
+    // Method 4: Device pixel ratio for mobile devices (weight: 1)
     const hasHighDPI = windowDefined && window.devicePixelRatio > 1.5;
-    if (hasHighDPI && hasSmallScreen) {
+    if (hasHighDPI && isTouchDevice) {
         mobileScore += 1;
     }
 
-    // Method 6: Viewport meta tag presence (weight: 1)
-    const hasViewportMeta = document.querySelector('meta[name="viewport"]') !== null;
-    if (hasViewportMeta && hasSmallScreen) {
-        mobileScore += 1;
+    // Method 5: Mobile-specific browser features (weight: 2)
+    const hasMobileFeatures = 'ontouchstart' in document.documentElement ||
+                             'onorientationchange' in window ||
+                             navigator.maxTouchPoints > 1;
+    if (hasMobileFeatures) {
+        mobileScore += 2;
     }
 
-    // Method 7: Check for desktop-specific indicators (negative weight)
-    const hasLargeScreen = screenWidth > 1024 && screenHeight > 768;
+    // Method 6: Check for desktop-specific indicators (negative weight)
     const hasKeyboard = 'keyboard' in navigator;
     const hasPointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
     
-    if (hasLargeScreen && !isTouchDevice) {
+    if (hasPointer && !isTouchDevice) {
         mobileScore -= 2;
     }
-    if (hasPointer && !isTouchDevice) {
-        mobileScore -= 1;
+
+    // Method 7: Battery API (mobile-specific feature)
+    if ('getBattery' in navigator || 'battery' in navigator) {
+        mobileScore += 1;
     }
 
     // Method 8: Special case for iPad Pro and similar devices
     const isPadWithKeyboard = userAgent.includes('macintosh') && isTouchDevice;
     if (isPadWithKeyboard) {
         mobileScore += 2;
+    }
+
+    // Method 9: Check for mobile-specific viewport behavior
+    const hasViewportMeta = document.querySelector('meta[name="viewport"]') !== null;
+    if (hasViewportMeta && isTouchDevice) {
+        mobileScore += 1;
     }
 
     return mobileScore >= CONFIDENCE_THRESHOLD ? DeviceType.MOBILE : DeviceType.DESKTOP;
