@@ -577,7 +577,8 @@ export class ReclaimProofRequest {
 
             }
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
-            if (this.options?.useAppClip) {
+            const deviceType = getDeviceType();
+            if (this.options?.useAppClip && deviceType === DeviceType.MOBILE) {
                 let template = encodeURIComponent(JSON.stringify(templateData));
                 template = replaceAll(template, '(', '%28');
                 template = replaceAll(template, ')', '%29');
