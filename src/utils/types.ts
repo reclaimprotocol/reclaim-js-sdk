@@ -1,5 +1,4 @@
 import type { Context, Proof, ProviderClaimData } from './interfaces';
-import type { ParsedQs } from 'qs';
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
