@@ -730,8 +730,7 @@ export class ReclaimProofRequest {
             let template = encodeURIComponent(JSON.stringify(this.templateData));
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
-            const url = `https://share.reclaimprotocol.org/verify/?template=${template}`;
-            const instantAppUrl = `intent://details?id=org.reclaimprotocol.app&launch=true&url=${url}&referrer=Z#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;`;
+            const instantAppUrl = `intent://details?id=org.reclaimprotocol.app&launch=true&template=${template}&referrer=Z#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;`;
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
             // Redirect to instant app
