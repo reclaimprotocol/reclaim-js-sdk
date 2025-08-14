@@ -50,6 +50,9 @@ export type ModalOptions = {
   onClose?: () => void;
 };
 
+// JSON-safe modal options (excludes non-serializable functions)
+export type SerializableModalOptions = Omit<ModalOptions, 'onClose'>;
+
 // Claim creation type enum
 export enum ClaimCreationType {
   STANDALONE = 'createClaim',
@@ -105,6 +108,7 @@ export type ProofPropertiesJSON = {
   sdkVersion: string;
   jsonProofResponse?: boolean;
   resolvedProviderVersion: string;
+  modalOptions?: SerializableModalOptions;
 };
 
 export type TemplateData = {
