@@ -33,7 +33,7 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError
 } from './utils/errors'
-import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL } from './utils/validationUtils'
+import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
@@ -293,7 +293,8 @@ export class ReclaimProofRequest {
                 options,
                 sdkVersion,
                 jsonProofResponse,
-                resolvedProviderVersion
+                resolvedProviderVersion,
+                modalOptions
             }: ProofPropertiesJSON = JSON.parse(jsonString)
 
             validateFunctionParams([
@@ -305,6 +306,9 @@ export class ReclaimProofRequest {
                 { input: sdkVersion, paramName: 'sdkVersion', isString: true },
             ], 'fromJsonString');
 
+            if (modalOptions) {
+                validateModalOptions(modalOptions, 'fromJsonString', 'modalOptions.');
+            }
 
             if (redirectUrl) {
                 validateURL(redirectUrl, 'fromJsonString');
@@ -357,6 +361,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.signature = signature
             proofRequestInstance.sdkVersion = sdkVersion;
             proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
+            proofRequestInstance.modalOptions = modalOptions;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -383,54 +388,7 @@ export class ReclaimProofRequest {
     setModalOptions(options: ModalOptions): void {
         try {
             // Validate modal options
-            if (options.title !== undefined) {
-                validateFunctionParams([
-                    { input: options.title, paramName: 'title', isString: true }
-                ], 'setModalOptions');
-            }
-
-            if (options.description !== undefined) {
-                validateFunctionParams([
-                    { input: options.description, paramName: 'description', isString: true }
-                ], 'setModalOptions');
-            }
-
-            if (options.extensionUrl !== undefined) {
-                validateURL(options.extensionUrl, 'setModalOptions');
-                validateFunctionParams([
-                    { input: options.extensionUrl, paramName: 'extensionUrl', isString: true }
-                ], 'setModalOptions');
-            }
-
-            if (options.darkTheme !== undefined) {
-                // check if the darkTheme is a boolean
-                if (typeof options.darkTheme !== 'boolean') {
-                    throw new InvalidParamError('darkTheme prop must be a boolean');
-                }
-                validateFunctionParams([
-                    { input: options.darkTheme, paramName: 'darkTheme' }
-                ], 'setModalOptions');
-            }
-
-            if (options.modalPopupTimer !== undefined) {
-                // check if the modalPopupTimer is a positive whole number
-                if (typeof options.modalPopupTimer !== 'number' || options.modalPopupTimer <= 0 || !Number.isInteger(options.modalPopupTimer)) {
-                    throw new InvalidParamError('modalPopupTimer prop must be a valid time in minutes');
-                }
-                validateFunctionParams([
-                    { input: options.modalPopupTimer, paramName: 'modalPopupTimer' }
-                ], 'setModalOptions');
-            }
-
-            if (options.showExtensionInstallButton !== undefined) {
-                // check if the showExtensionInstallButton is a boolean
-                if (typeof options.showExtensionInstallButton !== 'boolean') {
-                    throw new InvalidParamError('showExtensionInstallButton prop must be a boolean');
-                }
-                validateFunctionParams([
-                    { input: options.showExtensionInstallButton, paramName: 'showExtensionInstallButton' }
-                ], 'setModalOptions');
-            }
+            validateModalOptions(options, 'setModalOptions');
 
             this.modalOptions = { ...this.modalOptions, ...options };
             logger.info('Modal options set successfully');
@@ -531,7 +489,7 @@ export class ReclaimProofRequest {
     }
 
     // Public methods
-    toJsonString(options?: ProofRequestOptions): string {
+    toJsonString(): string {
         return JSON.stringify({
             applicationId: this.applicationId,
             providerId: this.providerId,
@@ -546,7 +504,8 @@ export class ReclaimProofRequest {
             options: this.options,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
-            resolvedProviderVersion: this.resolvedProviderVersion ?? ''
+            resolvedProviderVersion: this.resolvedProviderVersion ?? '',
+            modalOptions: this.modalOptions
         })
     }
 

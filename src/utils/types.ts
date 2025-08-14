@@ -105,6 +105,7 @@ export type ProofPropertiesJSON = {
   sdkVersion: string;
   jsonProofResponse?: boolean;
   resolvedProviderVersion: string;
+  modalOptions?: ModalOptions;
 };
 
 export type TemplateData = {
