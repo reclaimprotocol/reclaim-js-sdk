@@ -505,7 +505,15 @@ export class ReclaimProofRequest {
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
             resolvedProviderVersion: this.resolvedProviderVersion ?? '',
-            modalOptions: this.modalOptions
+            modalOptions: this.modalOptions ? {
+                title: this.modalOptions.title,
+                description: this.modalOptions.description,
+                extensionUrl: this.modalOptions.extensionUrl,
+                darkTheme: this.modalOptions.darkTheme,
+                modalPopupTimer: this.modalOptions.modalPopupTimer,
+                showExtensionInstallButton: this.modalOptions.showExtensionInstallButton
+                // onClose is intentionally excluded as functions cannot be serialized
+            } : undefined
         })
     }
 
