@@ -553,7 +553,8 @@ export class ReclaimProofRequest {
                 // check if the app is running on iOS or Android
                 const isIos = getMobileDeviceType() === DeviceType.IOS;
                 if (!isIos) {
-                    const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
+                    // const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
+                    const instantAppUrl = `intent://details?id=org.reclaimprotocol.app&launch=true&template=${template}&referrer=Z#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;`
                     logger.info('Instant App Url created successfully: ' + instantAppUrl);
                     return instantAppUrl;
                 } else {
@@ -698,7 +699,7 @@ export class ReclaimProofRequest {
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
 
-            const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
+            const instantAppUrl = `intent://details?id=org.reclaimprotocol.app&launch=true&template=${template}&referrer=Z#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;`;
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
             // Redirect to instant app
@@ -770,7 +771,7 @@ export class ReclaimProofRequest {
                         }
                         // check if the proofs array has only one proof then send the proofs in onSuccess 
                         if (proofs.length === 1) {
-                            
+
                             onSuccess(proofs[0]);
                         } else {
                             onSuccess(proofs);
