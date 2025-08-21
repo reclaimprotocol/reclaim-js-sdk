@@ -4,11 +4,11 @@ const navigatorDefined = typeof navigator !== 'undefined';
 const windowDefined = typeof window !== 'undefined';
 
 const userAgent = navigatorDefined ? navigator.userAgent.toLowerCase() : '';
-const userAgentData = navigatorDefined ? (navigator as Navigator & { 
-    userAgentData?: { 
+const userAgentData = navigatorDefined ? (navigator as Navigator & {
+    userAgentData?: {
         platform: string;
         brands?: { brand: string; version: string }[];
-    } 
+    }
 }).userAgentData : undefined;
 
 /**
@@ -17,69 +17,76 @@ const userAgentData = navigatorDefined ? (navigator as Navigator & {
  * @returns {DeviceType.DESKTOP | DeviceType.MOBILE} The detected device type
  */
 export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
-    // Early return for server-side rendering - assume desktop
-    if (!navigatorDefined || !windowDefined) {
+    const navigatorDefined = typeof navigator !== "undefined";
+    const windowDefined = typeof window !== "undefined";
+    const documentDefined = typeof document !== "undefined";
+    const userAgent = navigatorDefined ? (navigator.userAgent || "").toLowerCase() : "";
+
+    // Early return for SSR
+    if (!navigatorDefined || !windowDefined || !documentDefined) {
         return DeviceType.DESKTOP;
     }
 
     let mobileScore = 0;
-    const CONFIDENCE_THRESHOLD = 2; // Adjusted threshold since we removed screen size checks
+    const CONFIDENCE_THRESHOLD = 4; // stricter to avoid touch-laptop false positives
 
-    // Method 1: Touch capability detection (weight: 3 - increased weight)
-    const isTouchDevice = 'ontouchstart' in window || 
-                         (navigatorDefined && navigator.maxTouchPoints > 0);
+    // 1) Touch capability (weight: 3)
+    const isTouchDevice = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
     if (isTouchDevice) {
         mobileScore += 3;
     }
 
-    // Method 2: User agent detection (weight: 3)
-    const mobileUserAgentPattern = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i;
+    // 2) User agent (weight: 3)
+    const mobileUserAgentPattern = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
     if (mobileUserAgentPattern.test(userAgent)) {
         mobileScore += 3;
     }
 
-    // Method 3: Mobile-specific APIs (weight: 2)
-    const hasMobileAPIs = 'orientation' in window || 
-                         'DeviceMotionEvent' in window ||
-                         'DeviceOrientationEvent' in window;
+    // 3) Client Hints: navigator.userAgentData.mobile (weight: 3)
+    const uaDataMobile = (navigator as any)?.userAgentData?.mobile;
+    if (uaDataMobile === true) mobileScore += 3;
+
+
+    // 4) Mobile-specific APIs (weight: 2)
+    const hasMobileAPIs = ("orientation" in window) ||
+        ("DeviceMotionEvent" in window) ||
+        ("DeviceOrientationEvent" in window);
     if (hasMobileAPIs) {
         mobileScore += 2;
     }
 
-    // Method 4: Device pixel ratio for mobile devices (weight: 1)
-    const hasHighDPI = windowDefined && window.devicePixelRatio > 1.5;
+    // 5) Device pixel ratio for mobile devices (weight: 1)
+    const hasHighDPI = window.devicePixelRatio > 1.5;
     if (hasHighDPI && isTouchDevice) {
         mobileScore += 1;
     }
 
-    // Method 5: Mobile-specific browser features (weight: 2)
-    const hasMobileFeatures = 'ontouchstart' in document.documentElement ||
-                             'onorientationchange' in window ||
-                             navigator.maxTouchPoints > 1;
+    // 6) Mobile-specific browser features (weight: 2)
+    const hasMobileFeatures = ("ontouchstart" in document.documentElement) ||
+        ("onorientationchange" in window) ||
+        (navigator.maxTouchPoints > 1);
     if (hasMobileFeatures) {
         mobileScore += 2;
     }
 
-    // Method 6: Check for desktop-specific indicators (negative weight)
-    const hasKeyboard = 'keyboard' in navigator;
-    const hasPointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
-    
-    if (hasPointer && !isTouchDevice) {
+    // 7) hasPointer: desktops usually have fine pointer (negative weight)
+    const hasFinePointer = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
+    if (hasFinePointer && !isTouchDevice) {
         mobileScore -= 2;
     }
 
-    // Method 7: Battery API (mobile-specific feature)
-    if ('getBattery' in navigator || 'battery' in navigator) {
+    // 8) Battery API (mobile-leaning signal) (weight: 1)
+    if (("getBattery" in navigator) || ("battery" in navigator)) {
         mobileScore += 1;
     }
 
-    // Method 8: Special case for iPad Pro and similar devices
-    const isPadWithKeyboard = userAgent.includes('macintosh') && isTouchDevice;
+    // 9) isPadWithKeyboard (iPadOS reports "Macintosh" + touch) (weight: 2)
+    const isPadWithKeyboard = userAgent.includes("macintosh") && isTouchDevice;
     if (isPadWithKeyboard) {
         mobileScore += 2;
     }
 
-    // Method 9: Check for mobile-specific viewport behavior
+    // 10) Mobile-specific viewport behavior (weight: 1)
     const hasViewportMeta = document.querySelector('meta[name="viewport"]') !== null;
     if (hasViewportMeta && isTouchDevice) {
         mobileScore += 1;

@@ -37,6 +37,8 @@ export type ProofRequestOptions = {
   useBrowserExtension?: boolean;
   extensionID?: string;
   providerVersion?: string;
+  customSharePageUrl?: string;
+  customAppClipUrl?: string
 };
 
 // Modal customization options
