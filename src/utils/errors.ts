@@ -36,5 +36,5 @@ export const AddContextError = createErrorClass('AddContextError');
 export const SetSignatureError = createErrorClass('SetSignatureError');
 export const GetAppCallbackUrlError = createErrorClass("GetAppCallbackUrlError");
 export const StatusUrlError = createErrorClass('StatusUrlError');
-export const InavlidParametersError = createErrorClass('InavlidParametersError');
+export const InvalidParametersError = createErrorClass('InvalidParametersError');
 export const ProofSubmissionFailedError = createErrorClass('ProofSubmissionFailedError');
