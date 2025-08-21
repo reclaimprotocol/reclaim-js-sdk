@@ -41,14 +41,14 @@ export async function getShortenedUrl(url: string): Promise<string> {
 /**
  * Creates a link with embedded template data
  * @param templateData - The data to be embedded in the link
+ * @param sharePagePath - The path to the share page (optional)
  * @returns A promise that resolves to the created link (shortened if possible)
  */
-export async function createLinkWithTemplateData(templateData: TemplateData): Promise<string> {
+export async function createLinkWithTemplateData(templateData: TemplateData, sharePagePath?: string): Promise<string> {
   let template = encodeURIComponent(JSON.stringify(templateData))
   template = replaceAll(template, '(', '%28')
   template = replaceAll(template, ')', '%29')
-
-  const fullLink = `${constants.RECLAIM_SHARE_URL}${template}`
+  const fullLink = sharePagePath ? `${sharePagePath}/?template=${template}` : `${constants.RECLAIM_SHARE_URL}/verifier/?template=${template}`
   try {
     const shortenedLink = await getShortenedUrl(fullLink)
     return shortenedLink;

@@ -163,6 +163,8 @@ export class ReclaimProofRequest {
     private lastFailureTime?: number;
     private templateData: TemplateData;
     private extensionID: string = "reclaim-extension";
+    private customSharePageUrl?: string;
+    private customAppClipUrl?: string;
     private modalOptions?: ModalOptions;
     private modal?: QRCodeModal;
     private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
@@ -199,6 +201,14 @@ export class ReclaimProofRequest {
 
         if (options.extensionID) {
             this.extensionID = options.extensionID;
+        }
+
+        if (options?.customSharePageUrl) {
+            this.customSharePageUrl = options.customSharePageUrl;
+        }
+
+        if(options?.customAppClipUrl){
+            this.customAppClipUrl = options.customAppClipUrl;
         }
 
         this.options = options;
@@ -258,7 +268,16 @@ export class ReclaimProofRequest {
                         { paramName: 'envUrl', input: options.envUrl, isString: true }
                     ], 'the constructor')
                 }
-
+                if (options.customSharePageUrl) {
+                    validateFunctionParams([
+                        { paramName: 'customSharePageUrl', input: options.customSharePageUrl, isString: true }
+                    ], 'the constructor')
+                }
+                if (options.customAppClipUrl) {
+                    validateFunctionParams([
+                        { paramName: 'customAppClipUrl', input: options.customAppClipUrl, isString: true }
+                    ], 'the constructor')
+                }
             }
 
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options)
@@ -488,6 +507,16 @@ export class ReclaimProofRequest {
         }
     }
 
+    private buildSharePageUrl(template: string): string {
+        const baseUrl = 'https://share.reclaimprotocol.org/verify';
+        
+        if (this.customSharePageUrl) {
+            return `${this.customSharePageUrl}/?template=${template}`;
+        }
+        
+        return `${baseUrl}/?template=${template}`;
+    }
+
     // Public methods
     toJsonString(): string {
         return JSON.stringify({
@@ -553,17 +582,16 @@ export class ReclaimProofRequest {
                 // check if the app is running on iOS or Android
                 const isIos = getMobileDeviceType() === DeviceType.IOS;
                 if (!isIos) {
-                    // const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
-                    const instantAppUrl = `intent://details?id=org.reclaimprotocol.app&launch=true&template=${template}&referrer=Z#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;`
+                    const instantAppUrl = this.buildSharePageUrl(template);
                     logger.info('Instant App Url created successfully: ' + instantAppUrl);
                     return instantAppUrl;
                 } else {
-                    const appClipUrl = `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+                    const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
                     logger.info('App Clip Url created successfully: ' + appClipUrl);
                     return appClipUrl;
                 }
             } else {
-                const link = await createLinkWithTemplateData(templateData)
+                const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl)
                 logger.info('Request Url created successfully: ' + link);
                 return link;
             }
@@ -684,7 +712,7 @@ export class ReclaimProofRequest {
 
     private async showQRCodeModal(): Promise<void> {
         try {
-            const requestUrl = await createLinkWithTemplateData(this.templateData);
+            const requestUrl = await createLinkWithTemplateData(this.templateData, this.customSharePageUrl);
             this.modal = new QRCodeModal(this.modalOptions);
             await this.modal.show(requestUrl);
         } catch (error) {
@@ -699,7 +727,7 @@ export class ReclaimProofRequest {
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
 
-            const instantAppUrl = `intent://details?id=org.reclaimprotocol.app&launch=true&template=${template}&referrer=Z#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;`;
+            const instantAppUrl = this.buildSharePageUrl(template);
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
             // Redirect to instant app
@@ -716,7 +744,7 @@ export class ReclaimProofRequest {
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
 
-            const appClipUrl = `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+            const appClipUrl =  this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
 
             // Redirect to app clip
