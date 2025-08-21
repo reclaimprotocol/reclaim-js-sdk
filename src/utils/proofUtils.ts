@@ -48,7 +48,7 @@ export async function createLinkWithTemplateData(templateData: TemplateData, sha
   let template = encodeURIComponent(JSON.stringify(templateData))
   template = replaceAll(template, '(', '%28')
   template = replaceAll(template, ')', '%29')
-  const fullLink = sharePagePath ? `${sharePagePath}/?template=${template}` : `${constants.RECLAIM_SHARE_URL}/verifier/?template=${template}`
+  const fullLink = sharePagePath ? `${sharePagePath}/?template=${template}` : `${constants.RECLAIM_SHARE_URL}{template}`
   try {
     const shortenedLink = await getShortenedUrl(fullLink)
     return shortenedLink;
