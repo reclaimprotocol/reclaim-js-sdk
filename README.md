@@ -35,7 +35,7 @@ Install the Reclaim Protocol SDK and a QR code generator:
 npm install @reclaimprotocol/js-sdk react-qr-code
 ```
 
-**Current SDK Version**: 4.3.0
+**Current SDK Version**: 4.4.0
 
 ## Step 3: Set up your React component
 
@@ -354,7 +354,24 @@ The Reclaim SDK offers several advanced options to customize your integration:
    )
    ```
 
-7. **Platform-Specific Flow Control**:
+7. **Custom Share Page and App Clip URLs**:
+   You can customize the share page and app clip URLs for your app: 
+
+  ```javascript
+  const proofRequest = await ReclaimProofRequest.init(
+  APP_ID,
+  APP_SECRET,
+  PROVIDER_ID,
+  {
+    customSharePageUrl: 'https://your-custom-domain.com/verify', // Custom share page URL
+    customAppClipUrl: 'https://appclip.apple.com/id?p=your.custom.app.clip', // Custom iOS App Clip URL
+    // ... other options
+  }
+  )
+  ```
+
+
+8. **Platform-Specific Flow Control**:
    The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
    ```javascript
    // Traditional approach with manual QR code handling
@@ -366,7 +383,7 @@ The Reclaim SDK offers several advanced options to customize your integration:
    // Automatically handles platform detection and optimal user experience
    ```
 
-8. **Exporting and Importing SDK Configuration**:
+9. **Exporting and Importing SDK Configuration**:
    You can export the entire Reclaim SDK configuration as a JSON string and use it to initialize the SDK with the same configuration on a different service or backend:
    ```javascript
    // On the client-side or initial service
@@ -381,7 +398,7 @@ The Reclaim SDK offers several advanced options to customize your integration:
    ```
    This allows you to generate request URLs and other details from your backend or a different service while maintaining the same configuration.
 
-9. **Utility Methods**:
+10. **Utility Methods**:
    Additional utility methods for managing your proof requests:
    ```javascript
    // Get the current session ID
