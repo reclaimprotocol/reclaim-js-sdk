@@ -63,7 +63,7 @@ export async function verifyProof(proofOrProofs: Proof | Proof[],allowAiWitness?
     }
 
     try {
-        // check if witness array exist and first element is manual-verify
+        // check if witness array exist and first element is ai-witness
         let witnesses = []
         if (proof.witnesses.length && proof.witnesses[0]?.url === 'ai-witness' && allowAiWitness === true) {
             witnesses.push(proof.witnesses[0].id)
