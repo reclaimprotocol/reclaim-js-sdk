@@ -44,11 +44,11 @@ const logger = loggerModule.logger
 const sdkVersion = require('../package.json').version;
 
 // Implementation
-export async function verifyProof(proofOrProofs: Proof | Proof[]): Promise<boolean> {
+export async function verifyProof(proofOrProofs: Proof | Proof[],allowAiWitness?: boolean): Promise<boolean> {
     // If input is an array of proofs
     if (Array.isArray(proofOrProofs)) {
         for (const proof of proofOrProofs) {
-            const isVerified = await verifyProof(proof);
+            const isVerified = await verifyProof(proof,allowAiWitness);
             if (!isVerified) {
                 return false;
             }
@@ -63,9 +63,9 @@ export async function verifyProof(proofOrProofs: Proof | Proof[]): Promise<boole
     }
 
     try {
-        // check if witness array exist and first element is manual-verify
+        // check if witness array exist and first element is ai-witness
         let witnesses = []
-        if (proof.witnesses.length && proof.witnesses[0]?.url === 'manual-verify') {
+        if (proof.witnesses.length && proof.witnesses[0]?.url === 'ai-witness' && allowAiWitness === true) {
             witnesses.push(proof.witnesses[0].id)
         } else {
             witnesses = await getWitnessesForClaim(
@@ -811,7 +811,8 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
                         throw new ProofSubmissionFailedError();
                     }
-                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED) {
+                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED || 
+                        statusUrlResponse.session.statusV2 === SessionStatus.AI_PROOF_SUBMITTED) {
                         if (onSuccess) {
                             onSuccess('Proof submitted successfully to the custom callback url');
                         }
