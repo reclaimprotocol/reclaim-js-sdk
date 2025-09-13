@@ -11,80 +11,143 @@ const userAgentData = navigatorDefined ? (navigator as Navigator & {
     } 
 }).userAgentData : undefined;
 
+// Cache for device detection results
+let cachedDeviceType: DeviceType.DESKTOP | DeviceType.MOBILE | null = null;
+let cachedMobileType: DeviceType.ANDROID | DeviceType.IOS | null = null;
+
+/**
+ * Safe wrapper for window.matchMedia
+ */
+function safeMatchMedia(query: string): boolean {
+    try {
+        return window.matchMedia?.(query)?.matches || false;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Safe wrapper for CSS.supports
+ */
+function safeCSSSupports(property: string, value: string): boolean {
+    try {
+        return CSS?.supports?.(property, value) || false;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Safe wrapper for document.querySelector
+ */
+function safeQuerySelector(selector: string): boolean {
+    try {
+        return document?.querySelector?.(selector) !== null;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Highly accurate device type detection - returns only 'desktop' or 'mobile'
  * Uses multiple detection methods and scoring system for maximum accuracy
  * @returns {DeviceType.DESKTOP | DeviceType.MOBILE} The detected device type
  */
 export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
+    // Return cached result if available
+    if (cachedDeviceType !== null) {
+        return cachedDeviceType;
+    }
+
     // Early return for server-side rendering - assume desktop
     if (!navigatorDefined || !windowDefined) {
         return DeviceType.DESKTOP;
     }
 
     let mobileScore = 0;
-    const CONFIDENCE_THRESHOLD = 3; // Need at least 3 indicators for mobile
-
-    // Method 1: Touch capability detection (weight: 2)
-    const isTouchDevice = 'ontouchstart' in window || 
-                         (navigatorDefined && navigator.maxTouchPoints > 0);
-    if (isTouchDevice) {
-        mobileScore += 2;
-    }
-
-    // Method 2: Screen size analysis (weight: 2)
+    const CONFIDENCE_THRESHOLD = 3; // Need at least 3 points to be considered mobile
+    
+    // ====== Device Characteristics ======
+    
+    // Screen dimensions
     const screenWidth = window.innerWidth || window.screen?.width || 0;
     const screenHeight = window.innerHeight || window.screen?.height || 0;
     const hasSmallScreen = screenWidth <= 768 || screenHeight <= 768;
+    const hasLargeScreen = screenWidth > 1024 && screenHeight > 768;
+    
+    // Touch capabilities
+    const hasTouch = 'ontouchstart' in window || 
+                    (navigatorDefined && navigator.maxTouchPoints > 0);
+    const hasPreciseMouse = safeMatchMedia('(pointer: fine)');
+    const canHover = safeMatchMedia('(hover: hover)');
+    const hasMouseAndTouch = hasTouch && hasPreciseMouse; // Touchscreen laptop
+    
+    // ====== Mobile Indicators (Add Points) ======
+    
+    // Touch without mouse = likely mobile (+2 points)
+    // Touch with mouse = touchscreen laptop (+1 point)
+    if (hasTouch && !hasMouseAndTouch) {
+        mobileScore += 2;
+    } else if (hasMouseAndTouch) {
+        mobileScore += 1;
+    }
+    
+    // Small screen is mobile indicator (+2 points)
     if (hasSmallScreen) {
         mobileScore += 2;
     }
-
-    // Method 3: User agent detection (weight: 3)
-    const mobileUserAgentPattern = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i;
-    if (mobileUserAgentPattern.test(userAgent)) {
+    
+    // Mobile user agent is strong indicator (+3 points)
+    const hasMobileUserAgent = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(userAgent);
+    if (hasMobileUserAgent) {
         mobileScore += 3;
     }
-
-    // Method 4: Mobile-specific APIs (weight: 2)
+    
+    // Mobile APIs only count if combined with other mobile signs (+2 points)
     const hasMobileAPIs = 'orientation' in window || 
                          'DeviceMotionEvent' in window ||
                          'DeviceOrientationEvent' in window;
-    if (hasMobileAPIs) {
+    if (hasMobileAPIs && (hasSmallScreen || hasMobileUserAgent)) {
         mobileScore += 2;
     }
-
-    // Method 5: Device pixel ratio (weight: 1)
-    const hasHighDPI = windowDefined && window.devicePixelRatio > 1.5;
+    
+    // High DPI with small screen = mobile (+1 point)
+    const hasHighDPI = window.devicePixelRatio > 1.5;
     if (hasHighDPI && hasSmallScreen) {
         mobileScore += 1;
     }
-
-    // Method 6: Viewport meta tag presence (weight: 1)
-    const hasViewportMeta = document.querySelector('meta[name="viewport"]') !== null;
+    
+    // Viewport meta tag with small screen = mobile optimized (+1 point)
+    const hasViewportMeta = safeQuerySelector('meta[name="viewport"]');
     if (hasViewportMeta && hasSmallScreen) {
         mobileScore += 1;
     }
-
-    // Method 7: Check for desktop-specific indicators (negative weight)
-    const hasLargeScreen = screenWidth > 1024 && screenHeight > 768;
-    const hasKeyboard = 'keyboard' in navigator;
-    const hasPointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
     
-    if (hasLargeScreen && !isTouchDevice) {
-        mobileScore -= 2;
-    }
-    if (hasPointer && !isTouchDevice) {
-        mobileScore -= 1;
-    }
-
-    // Method 8: Special case for iPad Pro and similar devices
-    const isPadWithKeyboard = userAgent.includes('macintosh') && isTouchDevice;
-    if (isPadWithKeyboard) {
+    // iPad Pro special case: Mac user agent with touch (+2 points)
+    const isPadProInDesktopMode = userAgent.includes('macintosh') && hasTouch;
+    if (isPadProInDesktopMode) {
         mobileScore += 2;
     }
+    
+    // ====== Desktop Indicators (Subtract Points) ======
+    
+    // Large screen with mouse = desktop (-3 points)
+    if (hasLargeScreen && hasPreciseMouse) {
+        mobileScore -= 3;
+    } 
+    // Large screen without touch = desktop (-2 points)
+    else if (hasLargeScreen && !hasTouch) {
+        mobileScore -= 2;
+    }
+    
+    // Can hover with precise pointer = has real mouse (-2 points)
+    if (hasPreciseMouse && canHover) {
+        mobileScore -= 2;
+    }
 
-    return mobileScore >= CONFIDENCE_THRESHOLD ? DeviceType.MOBILE : DeviceType.DESKTOP;
+    // Cache and return the result
+    cachedDeviceType = mobileScore >= CONFIDENCE_THRESHOLD ? DeviceType.MOBILE : DeviceType.DESKTOP;
+    return cachedDeviceType;
 }
 
 /**
@@ -93,73 +156,69 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
  * @returns {DeviceType.ANDROID | DeviceType.IOS} The detected mobile device type
  */
 export function getMobileDeviceType(): DeviceType.ANDROID | DeviceType.IOS {
+    // Return cached result if available
+    if (cachedMobileType !== null) {
+        return cachedMobileType;
+    }
+
     // Early return for server-side rendering - default to Android
     if (!navigatorDefined || !windowDefined) {
         return DeviceType.ANDROID;
     }
 
     const ua = navigator.userAgent;
-
-    // Strategy 1: Direct iOS detection using comprehensive regex
-    const iosPattern = /iPad|iPhone|iPod/i;
-    if (iosPattern.test(ua)) {
-        return DeviceType.IOS;
+    
+    // ====== iOS Detection ======
+    
+    // Direct iOS device detection
+    const hasIOSDeviceName = /iPad|iPhone|iPod/i.test(ua);
+    if (hasIOSDeviceName) {
+        cachedMobileType = DeviceType.IOS;
+        return cachedMobileType;
     }
-
-    // Strategy 2: Direct Android detection
-    const androidPattern = /Android/i;
-    if (androidPattern.test(ua)) {
-        return DeviceType.ANDROID;
-    }
-
-    // Strategy 3: iPad Pro masquerading as Mac detection
+    
+    // iPad Pro detection (reports as Mac but has touch)
     const isMacWithTouch = /Macintosh|MacIntel/i.test(ua) && 'ontouchstart' in window;
-    if (isMacWithTouch) {
-        return DeviceType.IOS;
+    const isMacOSWithTouch = userAgentData?.platform === 'macOS' && 'ontouchstart' in window;
+    if (isMacWithTouch || isMacOSWithTouch) {
+        cachedMobileType = DeviceType.IOS;
+        return cachedMobileType;
     }
-
-    // Strategy 4: Modern iPad detection using userAgentData
-    if (userAgentData?.platform === 'macOS' && 'ontouchstart' in window) {
-        return DeviceType.IOS;
+    
+    // iOS-specific APIs
+    const hasIOSPermissionAPI = typeof (window as any).DeviceMotionEvent?.requestPermission === 'function';
+    const hasIOSTouchCallout = safeCSSSupports('-webkit-touch-callout', 'none');
+    if (hasIOSPermissionAPI || hasIOSTouchCallout) {
+        cachedMobileType = DeviceType.IOS;
+        return cachedMobileType;
     }
-
-    // Strategy 5: iOS-specific API detection
-    if (typeof (window as any).DeviceMotionEvent?.requestPermission === 'function') {
-        return DeviceType.IOS;
-    }
-
-    // Strategy 6: CSS property detection for iOS
-    if (typeof CSS !== 'undefined' && CSS.supports?.('-webkit-touch-callout', 'none')) {
-        return DeviceType.IOS;
-    }
-
-    // Strategy 7: WebKit without Chrome/Android indicates iOS Safari
+    
+    // Safari without Chrome (iOS WebKit)
     const isIOSWebKit = /WebKit/i.test(ua) && !/Chrome|CriOS|Android/i.test(ua);
     if (isIOSWebKit) {
-        return DeviceType.IOS;
+        cachedMobileType = DeviceType.IOS;
+        return cachedMobileType;
     }
-
-    // Strategy 8: Chrome detection for Android (when Android not explicitly found)
+    
+    // ====== Android Detection ======
+    
+    // Direct Android detection
+    const hasAndroidKeyword = /Android/i.test(ua);
+    if (hasAndroidKeyword) {
+        cachedMobileType = DeviceType.ANDROID;
+        return cachedMobileType;
+    }
+    
+    // Mobile Chrome (usually Android)
     const isChromeOnMobile = (window as any).chrome && /Mobile/i.test(ua);
-    if (isChromeOnMobile && !iosPattern.test(ua)) {
-        return DeviceType.ANDROID;
+    if (isChromeOnMobile) {
+        cachedMobileType = DeviceType.ANDROID;
+        return cachedMobileType;
     }
-
-    // Strategy 9: Check for mobile-specific patterns that indicate Android
-    const androidMobilePattern = /Mobile.*Android|Android.*Mobile/i;
-    if (androidMobilePattern.test(ua)) {
-        return DeviceType.ANDROID;
-    }
-
-    // Strategy 10: Fallback using existing regex patterns
-    const mobilePattern = /webos|blackberry|iemobile|opera mini/i;
-    if (mobilePattern.test(ua)) {
-        // These are typically Android-based or Android-like
-        return DeviceType.ANDROID;
-    }
-
+    
     // Default fallback - Android is more common globally
-    return DeviceType.ANDROID;
+    cachedMobileType = DeviceType.ANDROID;
+    return cachedMobileType;
 }
 
 /**
@@ -177,3 +236,14 @@ export function isMobileDevice(): boolean {
 export function isDesktopDevice(): boolean {
     return getDeviceType() === DeviceType.DESKTOP;
 }
+
+/**
+ * Clear cached device detection results (useful for testing)
+ */
+export function clearDeviceCache(): void {
+    cachedDeviceType = null;
+    cachedMobileType = null;
+}
+
+// Export safe wrappers for testing
+export { safeMatchMedia, safeCSSSupports, safeQuerySelector };

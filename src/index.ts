@@ -1,3 +1,11 @@
 export * from './Reclaim';
 export * from './utils/interfaces';
-export { ClaimCreationType, ModalOptions } from './utils/types';
+export { ClaimCreationType, ModalOptions, DeviceType } from './utils/types';
+// Export device detection utilities for debugging (optional)
+export { 
+    getDeviceType, 
+    getMobileDeviceType, 
+    isMobileDevice, 
+    isDesktopDevice,
+    clearDeviceCache 
+} from './utils/device';
