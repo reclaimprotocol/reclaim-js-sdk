@@ -33,7 +33,7 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError
 } from './utils/errors'
-import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL } from './utils/validationUtils'
+import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
@@ -44,11 +44,11 @@ const logger = loggerModule.logger
 const sdkVersion = require('../package.json').version;
 
 // Implementation
-export async function verifyProof(proofOrProofs: Proof | Proof[]): Promise<boolean> {
+export async function verifyProof(proofOrProofs: Proof | Proof[],allowAiWitness?: boolean): Promise<boolean> {
     // If input is an array of proofs
     if (Array.isArray(proofOrProofs)) {
         for (const proof of proofOrProofs) {
-            const isVerified = await verifyProof(proof);
+            const isVerified = await verifyProof(proof,allowAiWitness);
             if (!isVerified) {
                 return false;
             }
@@ -63,9 +63,9 @@ export async function verifyProof(proofOrProofs: Proof | Proof[]): Promise<boole
     }
 
     try {
-        // check if witness array exist and first element is manual-verify
+        // check if witness array exist and first element is ai-witness
         let witnesses = []
-        if (proof.witnesses.length && proof.witnesses[0]?.url === 'manual-verify') {
+        if (proof.witnesses.length && proof.witnesses[0]?.url === 'ai-witness' && allowAiWitness === true) {
             witnesses.push(proof.witnesses[0].id)
         } else {
             witnesses = await getWitnessesForClaim(
@@ -163,7 +163,10 @@ export class ReclaimProofRequest {
     private lastFailureTime?: number;
     private templateData: TemplateData;
     private extensionID: string = "reclaim-extension";
+    private customSharePageUrl?: string;
+    private customAppClipUrl?: string;
     private modalOptions?: ModalOptions;
+    private modal?: QRCodeModal;
     private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
 
     // Private constructor
@@ -198,6 +201,14 @@ export class ReclaimProofRequest {
 
         if (options.extensionID) {
             this.extensionID = options.extensionID;
+        }
+
+        if (options?.customSharePageUrl) {
+            this.customSharePageUrl = options.customSharePageUrl;
+        }
+
+        if(options?.customAppClipUrl){
+            this.customAppClipUrl = options.customAppClipUrl;
         }
 
         this.options = options;
@@ -257,7 +268,16 @@ export class ReclaimProofRequest {
                         { paramName: 'envUrl', input: options.envUrl, isString: true }
                     ], 'the constructor')
                 }
-
+                if (options.customSharePageUrl) {
+                    validateFunctionParams([
+                        { paramName: 'customSharePageUrl', input: options.customSharePageUrl, isString: true }
+                    ], 'the constructor')
+                }
+                if (options.customAppClipUrl) {
+                    validateFunctionParams([
+                        { paramName: 'customAppClipUrl', input: options.customAppClipUrl, isString: true }
+                    ], 'the constructor')
+                }
             }
 
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options)
@@ -292,7 +312,8 @@ export class ReclaimProofRequest {
                 options,
                 sdkVersion,
                 jsonProofResponse,
-                resolvedProviderVersion
+                resolvedProviderVersion,
+                modalOptions
             }: ProofPropertiesJSON = JSON.parse(jsonString)
 
             validateFunctionParams([
@@ -304,6 +325,9 @@ export class ReclaimProofRequest {
                 { input: sdkVersion, paramName: 'sdkVersion', isString: true },
             ], 'fromJsonString');
 
+            if (modalOptions) {
+                validateModalOptions(modalOptions, 'fromJsonString', 'modalOptions.');
+            }
 
             if (redirectUrl) {
                 validateURL(redirectUrl, 'fromJsonString');
@@ -356,6 +380,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.signature = signature
             proofRequestInstance.sdkVersion = sdkVersion;
             proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
+            proofRequestInstance.modalOptions = modalOptions;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -382,54 +407,7 @@ export class ReclaimProofRequest {
     setModalOptions(options: ModalOptions): void {
         try {
             // Validate modal options
-            if (options.title !== undefined) {
-                validateFunctionParams([
-                    { input: options.title, paramName: 'title', isString: true }
-                ], 'setModalOptions');
-            }
-
-            if (options.description !== undefined) {
-                validateFunctionParams([
-                    { input: options.description, paramName: 'description', isString: true }
-                ], 'setModalOptions');
-            }
-
-            if (options.extensionUrl !== undefined) {
-                validateURL(options.extensionUrl, 'setModalOptions');
-                validateFunctionParams([
-                    { input: options.extensionUrl, paramName: 'extensionUrl', isString: true }
-                ], 'setModalOptions');
-            }
-
-            if (options.darkTheme !== undefined) {
-                // check if the darkTheme is a boolean
-                if (typeof options.darkTheme !== 'boolean') {
-                    throw new InvalidParamError('darkTheme prop must be a boolean');
-                }
-                validateFunctionParams([
-                    { input: options.darkTheme, paramName: 'darkTheme' }
-                ], 'setModalOptions');
-            }
-
-            if (options.modalPopupTimer !== undefined) {
-                // check if the modalPopupTimer is a positive whole number
-                if (typeof options.modalPopupTimer !== 'number' || options.modalPopupTimer <= 0 || !Number.isInteger(options.modalPopupTimer)) {
-                    throw new InvalidParamError('modalPopupTimer prop must be a valid time in minutes');
-                }
-                validateFunctionParams([
-                    { input: options.modalPopupTimer, paramName: 'modalPopupTimer' }
-                ], 'setModalOptions');
-            }
-
-            if (options.showExtensionInstallButton !== undefined) {
-                // check if the showExtensionInstallButton is a boolean
-                if (typeof options.showExtensionInstallButton !== 'boolean') {
-                    throw new InvalidParamError('showExtensionInstallButton prop must be a boolean');
-                }
-                validateFunctionParams([
-                    { input: options.showExtensionInstallButton, paramName: 'showExtensionInstallButton' }
-                ], 'setModalOptions');
-            }
+            validateModalOptions(options, 'setModalOptions');
 
             this.modalOptions = { ...this.modalOptions, ...options };
             logger.info('Modal options set successfully');
@@ -529,8 +507,18 @@ export class ReclaimProofRequest {
         }
     }
 
+    private buildSharePageUrl(template: string): string {
+        const baseUrl = 'https://share.reclaimprotocol.org/verify';
+        
+        if (this.customSharePageUrl) {
+            return `${this.customSharePageUrl}/?template=${template}`;
+        }
+        
+        return `${baseUrl}/?template=${template}`;
+    }
+
     // Public methods
-    toJsonString(options?: ProofRequestOptions): string {
+    toJsonString(): string {
         return JSON.stringify({
             applicationId: this.applicationId,
             providerId: this.providerId,
@@ -545,7 +533,16 @@ export class ReclaimProofRequest {
             options: this.options,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
-            resolvedProviderVersion: this.resolvedProviderVersion ?? ''
+            resolvedProviderVersion: this.resolvedProviderVersion ?? '',
+            modalOptions: this.modalOptions ? {
+                title: this.modalOptions.title,
+                description: this.modalOptions.description,
+                extensionUrl: this.modalOptions.extensionUrl,
+                darkTheme: this.modalOptions.darkTheme,
+                modalPopupTimer: this.modalOptions.modalPopupTimer,
+                showExtensionInstallButton: this.modalOptions.showExtensionInstallButton
+                // onClose is intentionally excluded as functions cannot be serialized
+            } : undefined
         })
     }
 
@@ -576,7 +573,8 @@ export class ReclaimProofRequest {
 
             }
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
-            if (this.options?.useAppClip) {
+            const deviceType = getDeviceType();
+            if (this.options?.useAppClip && deviceType === DeviceType.MOBILE) {
                 let template = encodeURIComponent(JSON.stringify(templateData));
                 template = replaceAll(template, '(', '%28');
                 template = replaceAll(template, ')', '%29');
@@ -584,16 +582,16 @@ export class ReclaimProofRequest {
                 // check if the app is running on iOS or Android
                 const isIos = getMobileDeviceType() === DeviceType.IOS;
                 if (!isIos) {
-                    const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
+                    const instantAppUrl = this.buildSharePageUrl(template);
                     logger.info('Instant App Url created successfully: ' + instantAppUrl);
                     return instantAppUrl;
                 } else {
-                    const appClipUrl = `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+                    const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
                     logger.info('App Clip Url created successfully: ' + appClipUrl);
                     return appClipUrl;
                 }
             } else {
-                const link = await createLinkWithTemplateData(templateData)
+                const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl)
                 logger.info('Request Url created successfully: ' + link);
                 return link;
             }
@@ -714,9 +712,9 @@ export class ReclaimProofRequest {
 
     private async showQRCodeModal(): Promise<void> {
         try {
-            const requestUrl = await createLinkWithTemplateData(this.templateData);
-            const modal = new QRCodeModal(this.modalOptions);
-            await modal.show(requestUrl);
+            const requestUrl = await createLinkWithTemplateData(this.templateData, this.customSharePageUrl);
+            this.modal = new QRCodeModal(this.modalOptions);
+            await this.modal.show(requestUrl);
         } catch (error) {
             logger.info('Error showing QR code modal:', error);
             throw error;
@@ -729,7 +727,7 @@ export class ReclaimProofRequest {
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
 
-            const instantAppUrl = `https://share.reclaimprotocol.org/verify/?template=${template}`;
+            const instantAppUrl = this.buildSharePageUrl(template);
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
             // Redirect to instant app
@@ -746,7 +744,7 @@ export class ReclaimProofRequest {
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
 
-            const appClipUrl = `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+            const appClipUrl =  this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
 
             // Redirect to app clip
@@ -801,21 +799,25 @@ export class ReclaimProofRequest {
                         }
                         // check if the proofs array has only one proof then send the proofs in onSuccess 
                         if (proofs.length === 1) {
+
                             onSuccess(proofs[0]);
                         } else {
                             onSuccess(proofs);
                         }
                         this.clearInterval();
+                        this.modal?.close();
                     }
                 } else {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
                         throw new ProofSubmissionFailedError();
                     }
-                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED) {
+                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED || 
+                        statusUrlResponse.session.statusV2 === SessionStatus.AI_PROOF_SUBMITTED) {
                         if (onSuccess) {
                             onSuccess('Proof submitted successfully to the custom callback url');
                         }
                         this.clearInterval();
+                        this.modal?.close();
                     }
                 }
             } catch (e) {
@@ -823,11 +825,19 @@ export class ReclaimProofRequest {
                     onError(e as Error);
                 }
                 this.clearInterval();
+                this.modal?.close();
             }
         }, 3000);
 
         this.intervals.set(this.sessionId, interval);
         scheduleIntervalEndingTask(this.sessionId, this.intervals, onError);
+    }
+
+    closeModal(): void {
+        if (this.modal) {
+            this.modal.close();
+            logger.info('Modal closed by user');
+        }
     }
 }
 

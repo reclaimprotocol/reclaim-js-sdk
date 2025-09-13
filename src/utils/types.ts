@@ -1,5 +1,4 @@
 import type { Context, Proof, ProviderClaimData } from './interfaces';
-import type { ParsedQs } from 'qs';
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
@@ -38,6 +37,8 @@ export type ProofRequestOptions = {
   useBrowserExtension?: boolean;
   extensionID?: string;
   providerVersion?: string;
+  customSharePageUrl?: string;
+  customAppClipUrl?: string
 };
 
 // Modal customization options
@@ -50,6 +51,9 @@ export type ModalOptions = {
   showExtensionInstallButton?: boolean;
   onClose?: () => void;
 };
+
+// JSON-safe modal options (excludes non-serializable functions)
+export type SerializableModalOptions = Omit<ModalOptions, 'onClose'>;
 
 // Claim creation type enum
 export enum ClaimCreationType {
@@ -86,6 +90,7 @@ export enum SessionStatus {
   PROOF_GENERATION_SUCCESS = 'PROOF_GENERATION_SUCCESS',
   PROOF_GENERATION_FAILED = 'PROOF_GENERATION_FAILED',
   PROOF_SUBMITTED = 'PROOF_SUBMITTED',
+  AI_PROOF_SUBMITTED = 'AI_PROOF_SUBMITTED',
   PROOF_SUBMISSION_FAILED = 'PROOF_SUBMISSION_FAILED',
   PROOF_MANUAL_VERIFICATION_SUBMITED = 'PROOF_MANUAL_VERIFICATION_SUBMITED',
 };
@@ -106,6 +111,7 @@ export type ProofPropertiesJSON = {
   sdkVersion: string;
   jsonProofResponse?: boolean;
   resolvedProviderVersion: string;
+  modalOptions?: SerializableModalOptions;
 };
 
 export type TemplateData = {

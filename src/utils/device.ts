@@ -4,11 +4,11 @@ const navigatorDefined = typeof navigator !== 'undefined';
 const windowDefined = typeof window !== 'undefined';
 
 const userAgent = navigatorDefined ? navigator.userAgent.toLowerCase() : '';
-const userAgentData = navigatorDefined ? (navigator as Navigator & { 
-    userAgentData?: { 
+const userAgentData = navigatorDefined ? (navigator as Navigator & {
+    userAgentData?: {
         platform: string;
         brands?: { brand: string; version: string }[];
-    } 
+    }
 }).userAgentData : undefined;
 
 // Cache for device detection results

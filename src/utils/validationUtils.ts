@@ -3,7 +3,7 @@ import { InavlidParametersError, InvalidParamError, InvalidSignatureError } from
 import canonicalize from 'canonicalize'
 import { Context } from "./interfaces";
 import loggerModule from './logger';
-import { ProofRequestOptions } from "./types";
+import { ProofRequestOptions, ModalOptions } from "./types";
 const logger = loggerModule.logger;
 
 /**
@@ -152,6 +152,61 @@ export function validateOptions(options: ProofRequestOptions): void {
   if (options.providerVersion && typeof options.providerVersion !== 'string') {
     logger.info(`Options validation failed: Provided providerVersion in options is not valid`);
     throw new InvalidParamError(`The provided providerVersion in options is not valid`);
+  }
+}
+
+/**
+ * Validates the modalOptions object
+ * @param modalOptions - The modalOptions object to validate
+ * @param functionName - The name of the function calling this validation
+ * @param paramPrefix - Optional prefix for parameter names (e.g., 'modalOptions.')
+ * @throws InvalidParamError if the modalOptions object is not valid
+ */
+export function validateModalOptions(modalOptions: ModalOptions, functionName: string, paramPrefix: string = ''): void {
+  if (modalOptions.title !== undefined) {
+    validateFunctionParams([
+      { input: modalOptions.title, paramName: `${paramPrefix}title`, isString: true }
+    ], functionName);
+  }
+
+  if (modalOptions.description !== undefined) {
+    validateFunctionParams([
+      { input: modalOptions.description, paramName: `${paramPrefix}description`, isString: true }
+    ], functionName);
+  }
+
+  if (modalOptions.extensionUrl !== undefined) {
+    validateURL(modalOptions.extensionUrl, functionName);
+    validateFunctionParams([
+      { input: modalOptions.extensionUrl, paramName: `${paramPrefix}extensionUrl`, isString: true }
+    ], functionName);
+  }
+
+  if (modalOptions.darkTheme !== undefined) {
+    if (typeof modalOptions.darkTheme !== 'boolean') {
+      throw new InvalidParamError(`${paramPrefix}darkTheme prop must be a boolean`);
+    }
+    validateFunctionParams([
+      { input: modalOptions.darkTheme, paramName: `${paramPrefix}darkTheme` }
+    ], functionName);
+  }
+
+  if (modalOptions.modalPopupTimer !== undefined) {
+    if (typeof modalOptions.modalPopupTimer !== 'number' || modalOptions.modalPopupTimer <= 0 || !Number.isInteger(modalOptions.modalPopupTimer)) {
+      throw new InvalidParamError(`${paramPrefix}modalPopupTimer prop must be a valid time in minutes`);
+    }
+    validateFunctionParams([
+      { input: modalOptions.modalPopupTimer, paramName: `${paramPrefix}modalPopupTimer` }
+    ], functionName);
+  }
+
+  if (modalOptions.showExtensionInstallButton !== undefined) {
+    if (typeof modalOptions.showExtensionInstallButton !== 'boolean') {
+      throw new InvalidParamError(`${paramPrefix}showExtensionInstallButton prop must be a boolean`);
+    }
+    validateFunctionParams([
+      { input: modalOptions.showExtensionInstallButton, paramName: `${paramPrefix}showExtensionInstallButton` }
+    ], functionName);
   }
 }
 

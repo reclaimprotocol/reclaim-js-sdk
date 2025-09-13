@@ -35,13 +35,15 @@ Install the Reclaim Protocol SDK and a QR code generator:
 npm install @reclaimprotocol/js-sdk react-qr-code
 ```
 
+**Current SDK Version**: 4.4.0
+
 ## Step 3: Set up your React component
 
 Replace the contents of `src/App.js` with the following code:
 
 ```javascript
 import React, { useState, useEffect } from 'react'
-import { ReclaimProofRequest } from '@reclaimprotocol/js-sdk'
+import { ReclaimProofRequest, verifyProof, ClaimCreationType } from '@reclaimprotocol/js-sdk'
 import QRCode from 'react-qr-code'
 
 function App() {
@@ -240,15 +242,20 @@ const proofRequest = await ReclaimProofRequest.init(
 
 ### Modal Customization
 
-When the QR code modal is displayed (fallback on desktop), you can customize its appearance:
+When the QR code modal is displayed (fallback on desktop), you can customize its appearance and behavior:
 
 ```javascript
 // Set modal options before triggering the flow
 reclaimProofRequest.setModalOptions({
   title: 'Custom Verification Title',
   description: 'Scan this QR code with your mobile device to verify your account',
-  darkTheme: true, // Enable dark theme
-  extensionUrl: 'https://custom-extension-url.com' // Custom extension download URL
+  darkTheme: true, // Enable dark theme (default: false)
+  modalPopupTimer: 5, // Auto-close modal after 5 minutes (default: 1 minute)
+  showExtensionInstallButton: true, // Show extension install button (default: false)
+  extensionUrl: 'https://custom-extension-url.com', // Custom extension download URL
+  onClose: () => {
+    console.log('Modal was closed');
+  } // Callback when modal is closed
 })
 
 await reclaimProofRequest.triggerReclaimFlow()
@@ -347,7 +354,24 @@ The Reclaim SDK offers several advanced options to customize your integration:
    )
    ```
 
-7. **Platform-Specific Flow Control**:
+7. **Custom Share Page and App Clip URLs**:
+   You can customize the share page and app clip URLs for your app: 
+
+  ```javascript
+  const proofRequest = await ReclaimProofRequest.init(
+  APP_ID,
+  APP_SECRET,
+  PROVIDER_ID,
+  {
+    customSharePageUrl: 'https://your-custom-domain.com/verify', // Custom share page URL
+    customAppClipUrl: 'https://appclip.apple.com/id?p=your.custom.app.clip', // Custom iOS App Clip URL
+    // ... other options
+  }
+  )
+  ```
+
+
+8. **Platform-Specific Flow Control**:
    The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
    ```javascript
    // Traditional approach with manual QR code handling
@@ -359,7 +383,7 @@ The Reclaim SDK offers several advanced options to customize your integration:
    // Automatically handles platform detection and optimal user experience
    ```
 
-8. **Exporting and Importing SDK Configuration**:
+9. **Exporting and Importing SDK Configuration**:
    You can export the entire Reclaim SDK configuration as a JSON string and use it to initialize the SDK with the same configuration on a different service or backend:
    ```javascript
    // On the client-side or initial service
@@ -374,6 +398,14 @@ The Reclaim SDK offers several advanced options to customize your integration:
    ```
    This allows you to generate request URLs and other details from your backend or a different service while maintaining the same configuration.
 
+10. **Utility Methods**:
+   Additional utility methods for managing your proof requests:
+   ```javascript
+   // Get the current session ID
+   const sessionId = reclaimProofRequest.getSessionId()
+   console.log('Current session ID:', sessionId)
+   ```
+
 ## Handling Proofs on Your Backend
 
 For production applications, it's recommended to handle proofs on your backend:
@@ -384,6 +416,86 @@ For production applications, it's recommended to handle proofs on your backend:
    ```
 
 These options allow you to securely process proofs and status updates on your server.
+
+## Proof Verification
+
+The SDK provides a `verifyProof` function to manually verify proofs. This is useful when you need to validate proofs outside of the normal flow:
+
+```javascript
+import { verifyProof } from '@reclaimprotocol/js-sdk'
+
+// Verify a single proof
+const isValid = await verifyProof(proof)
+if (isValid) {
+  console.log('Proof is valid')
+} else {
+  console.log('Proof is invalid')
+}
+
+// Verify multiple proofs
+const areValid = await verifyProof([proof1, proof2, proof3])
+if (areValid) {
+  console.log('All proofs are valid')
+} else {
+  console.log('One or more proofs are invalid')
+}
+```
+
+The `verifyProof` function:
+- Accepts either a single proof or an array of proofs
+- Returns a boolean indicating if the proof(s) are valid
+- Verifies signatures, witness integrity, and claim data
+- Handles both standalone and blockchain-based proofs
+
+## Error Handling
+
+The SDK provides specific error types for different failure scenarios. Here's how to handle them:
+
+```javascript
+import { ReclaimProofRequest } from '@reclaimprotocol/js-sdk'
+
+try {
+  const proofRequest = await ReclaimProofRequest.init(
+    APP_ID,
+    APP_SECRET,
+    PROVIDER_ID
+  )
+  
+  await proofRequest.startSession({
+    onSuccess: (proof) => {
+      console.log('Proof received:', proof)
+    },
+    onError: (error) => {
+      // Handle different error types
+      if (error.name === 'ProofNotVerifiedError') {
+        console.error('Proof verification failed')
+      } else if (error.name === 'ProviderFailedError') {
+        console.error('Provider failed to generate proof')
+      } else if (error.name === 'SessionNotStartedError') {
+        console.error('Session could not be started')
+      } else {
+        console.error('Unknown error:', error.message)
+      }
+    }
+  })
+} catch (error) {
+  // Handle initialization errors
+  if (error.name === 'InitError') {
+    console.error('Failed to initialize SDK:', error.message)
+  } else if (error.name === 'InvalidParamError') {
+    console.error('Invalid parameters provided:', error.message)
+  }
+}
+```
+
+**Common Error Types:**
+- `InitError`: SDK initialization failed
+- `InvalidParamError`: Invalid parameters provided
+- `SignatureNotFoundError`: Missing or invalid signature
+- `ProofNotVerifiedError`: Proof verification failed
+- `ProviderFailedError`: Provider failed to generate proof
+- `SessionNotStartedError`: Session could not be started
+- `ProofSubmissionFailedError`: Proof submission to callback failed
 
 ## Next Steps
 
