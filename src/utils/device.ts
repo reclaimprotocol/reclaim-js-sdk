@@ -104,10 +104,14 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
     }
     
     // Mobile APIs only count if combined with other mobile signs (+2 points)
+    // Exception: Desktop Safari has mobile APIs but should not be considered mobile
     const hasMobileAPIs = 'orientation' in window || 
                          'DeviceMotionEvent' in window ||
                          'DeviceOrientationEvent' in window;
-    if (hasMobileAPIs && (hasSmallScreen || hasMobileUserAgent)) {
+    const isDesktopSafari = /Safari/i.test(userAgent) && 
+                           !/Mobile/i.test(userAgent) && 
+                           /Mac|Intel/i.test(userAgent);
+    if (hasMobileAPIs && (hasSmallScreen || hasMobileUserAgent) && !isDesktopSafari) {
         mobileScore += 2;
     }
     
@@ -193,8 +197,10 @@ export function getMobileDeviceType(): DeviceType.ANDROID | DeviceType.IOS {
         return cachedMobileType;
     }
     
-    // Safari without Chrome (iOS WebKit)
-    const isIOSWebKit = /WebKit/i.test(ua) && !/Chrome|CriOS|Android/i.test(ua);
+    // Safari without Chrome (iOS WebKit) - but not desktop Safari
+    const isIOSWebKit = /WebKit/i.test(ua) && 
+                       !/Chrome|CriOS|Android/i.test(ua) && 
+                       !/Macintosh|MacIntel/i.test(ua);
     if (isIOSWebKit) {
         cachedMobileType = DeviceType.IOS;
         return cachedMobileType;
