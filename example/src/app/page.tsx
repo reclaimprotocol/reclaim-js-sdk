@@ -249,6 +249,13 @@ export default function Home() {
             </button>
           </div>
         )}
+        
+        {/* Optional: Add debug link for device detection testing */}
+        {/* <div className="text-center mt-8">
+          <a href="/debug" className="text-sm text-blue-600 hover:underline">
+            Device Detection Debug →
+          </a>
+        </div> */}
       </div>
     </main>
   )
