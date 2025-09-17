@@ -72,7 +72,7 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
     // Screen dimensions
     const screenWidth = window.innerWidth || window.screen?.width || 0;
     const screenHeight = window.innerHeight || window.screen?.height || 0;
-    const hasSmallScreen = screenWidth <= 768 || screenHeight <= 768;
+    const hasSmallScreen = screenWidth <= 480 || screenHeight <= 480;
     const hasLargeScreen = screenWidth > 1024 && screenHeight > 768;
     
     // Touch capabilities
@@ -81,6 +81,11 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
     const hasPreciseMouse = safeMatchMedia('(pointer: fine)');
     const canHover = safeMatchMedia('(hover: hover)');
     const hasMouseAndTouch = hasTouch && hasPreciseMouse; // Touchscreen laptop
+    
+    // Windows touch laptop detection (used for exceptions)
+    const isWindowsTouchLaptop = /Windows/i.test(userAgent) && 
+                                hasPreciseMouse && 
+                                hasTouch;
     
     // ====== Mobile Indicators (Add Points) ======
     
@@ -93,7 +98,8 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
     }
     
     // Small screen is mobile indicator (+2 points)
-    if (hasSmallScreen) {
+    // Exception: Windows touch laptops with precise mouse should not be penalized for small screens
+    if (hasSmallScreen && !isWindowsTouchLaptop) {
         mobileScore += 2;
     }
     
@@ -104,14 +110,14 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
     }
     
     // Mobile APIs only count if combined with other mobile signs (+2 points)
-    // Exception: Desktop Safari has mobile APIs but should not be considered mobile
+    // Exception: Desktop Safari and Windows touch laptops have mobile APIs but should not be considered mobile
     const hasMobileAPIs = 'orientation' in window || 
                          'DeviceMotionEvent' in window ||
                          'DeviceOrientationEvent' in window;
     const isDesktopSafari = /Safari/i.test(userAgent) && 
                            !/Mobile/i.test(userAgent) && 
                            /Mac|Intel/i.test(userAgent);
-    if (hasMobileAPIs && (hasSmallScreen || hasMobileUserAgent) && !isDesktopSafari) {
+    if (hasMobileAPIs && (hasSmallScreen || hasMobileUserAgent) && !isDesktopSafari && !isWindowsTouchLaptop) {
         mobileScore += 2;
     }
     
@@ -147,6 +153,12 @@ export function getDeviceType(): DeviceType.DESKTOP | DeviceType.MOBILE {
     // Can hover with precise pointer = has real mouse (-2 points)
     if (hasPreciseMouse && canHover) {
         mobileScore -= 2;
+    }
+    
+    // Windows user agent = strong desktop indicator (-3 points)
+    const isWindowsDesktop = /Windows/i.test(userAgent) && !hasMobileUserAgent;
+    if (isWindowsDesktop) {
+        mobileScore -= 3;
     }
 
     // Cache and return the result
