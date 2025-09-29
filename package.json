@@ -91,5 +91,8 @@
     "release-it": "^19.0.4",
     "url-parse": "^1.5.10",
     "uuid": "^9.0.1"
+  },
+  "overrides": {
+    "@conventional-changelog/git-client": "^2.0.0"
   }
 }
