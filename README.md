@@ -42,67 +42,63 @@ npm install @reclaimprotocol/js-sdk react-qr-code
 Replace the contents of `src/App.js` with the following code:
 
 ```javascript
-import React, { useState, useEffect } from 'react'
-import { ReclaimProofRequest, verifyProof, ClaimCreationType } from '@reclaimprotocol/js-sdk'
-import QRCode from 'react-qr-code'
+import React, { useState, useEffect } from "react";
+import { ReclaimProofRequest, verifyProof, ClaimCreationType } from "@reclaimprotocol/js-sdk";
+import QRCode from "react-qr-code";
 
 function App() {
-  const [reclaimProofRequest, setReclaimProofRequest] = useState(null)
-  const [requestUrl, setRequestUrl] = useState('')
-  const [statusUrl, setStatusUrl] = useState('')
-  const [proofs, setProofs] = useState(null)
+  const [reclaimProofRequest, setReclaimProofRequest] = useState(null);
+  const [requestUrl, setRequestUrl] = useState("");
+  const [statusUrl, setStatusUrl] = useState("");
+  const [proofs, setProofs] = useState(null);
 
   useEffect(() => {
     async function initializeReclaim() {
-      const APP_ID = 'YOUR_APPLICATION_ID_HERE'
-      const APP_SECRET = 'YOUR_APPLICATION_SECRET_HERE'
-      const PROVIDER_ID = 'YOUR_PROVIDER_ID_HERE'
+      const APP_ID = "YOUR_APPLICATION_ID_HERE";
+      const APP_SECRET = "YOUR_APPLICATION_SECRET_HERE";
+      const PROVIDER_ID = "YOUR_PROVIDER_ID_HERE";
 
-      const proofRequest = await ReclaimProofRequest.init(
-        APP_ID,
-        APP_SECRET,
-        PROVIDER_ID
-      )
-      setReclaimProofRequest(proofRequest)
+      const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID);
+      setReclaimProofRequest(proofRequest);
     }
 
-    initializeReclaim()
-  }, [])
+    initializeReclaim();
+  }, []);
 
   async function handleCreateClaim() {
     if (!reclaimProofRequest) {
-      console.error('Reclaim Proof Request not initialized')
-      return
+      console.error("Reclaim Proof Request not initialized");
+      return;
     }
 
-    const url = await reclaimProofRequest.getRequestUrl()
-    setRequestUrl(url)
+    const url = await reclaimProofRequest.getRequestUrl();
+    setRequestUrl(url);
 
-    const status = reclaimProofRequest.getStatusUrl()
-    setStatusUrl(status)
-    console.log('Status URL:', status)
+    const status = reclaimProofRequest.getStatusUrl();
+    setStatusUrl(status);
+    console.log("Status URL:", status);
 
     await reclaimProofRequest.startSession({
       onSuccess: (proofs) => {
-        if (proofs && typeof proofs  === 'string') {
-            // When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof
-            console.log('SDK Message:', proofs)
-            setProofs(proofs)
-          } else if (proofs && typeof proofs !== 'string') {
-            // When using the default callback url, we get a proof
-            if (Array.isArray(proofs)) {
-              // when using the cascading providers, providers having more than one proof will return an array of proofs
-              console.log(JSON.stringify(proofs.map(p => p.claimData.context)))
-            } else {
-              console.log('Proof received:', proofs?.claimData.context)
-            }
-            setProofs(proofs)
+        if (proofs && typeof proofs === "string") {
+          // When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof
+          console.log("SDK Message:", proofs);
+          setProofs(proofs);
+        } else if (proofs && typeof proofs !== "string") {
+          // When using the default callback url, we get a proof
+          if (Array.isArray(proofs)) {
+            // when using the cascading providers, providers having more than one proof will return an array of proofs
+            console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+          } else {
+            console.log("Proof received:", proofs?.claimData.context);
           }
+          setProofs(proofs);
+        }
       },
       onFailure: (error) => {
-        console.error('Verification failed', error)
-      }
-    })
+        console.error("Verification failed", error);
+      },
+    });
   }
 
   return (
@@ -122,10 +118,10 @@ function App() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
 ```
 
 ## Step 4: Understanding the code
@@ -135,6 +131,7 @@ Let's break down what's happening in this code:
 1. We initialize the Reclaim SDK with your application ID, secret, and provider ID. This happens once when the component mounts.
 
 2. When the user clicks the "Create Claim" button, we:
+
    - Generate a request URL using `getRequestUrl()`. This URL is used to create the QR code.
    - Get the status URL using `getStatusUrl()`. This URL can be used to check the status of the claim process.
    - Start a session with `startSession()`, which sets up callbacks for successful and failed verifications.
@@ -156,35 +153,35 @@ Replace the `handleCreateClaim` function in your React component with this simpl
 ```javascript
 async function handleCreateClaim() {
   if (!reclaimProofRequest) {
-    console.error('Reclaim Proof Request not initialized')
-    return
+    console.error("Reclaim Proof Request not initialized");
+    return;
   }
 
   try {
     // Start the verification process automatically
-    await reclaimProofRequest.triggerReclaimFlow()
-    
+    await reclaimProofRequest.triggerReclaimFlow();
+
     // Listen for the verification results
     await reclaimProofRequest.startSession({
       onSuccess: (proofs) => {
-        if (proofs && typeof proofs === 'string') {
-          console.log('SDK Message:', proofs)
-          setProofs(proofs)
-        } else if (proofs && typeof proofs !== 'string') {
+        if (proofs && typeof proofs === "string") {
+          console.log("SDK Message:", proofs);
+          setProofs(proofs);
+        } else if (proofs && typeof proofs !== "string") {
           if (Array.isArray(proofs)) {
-            console.log(JSON.stringify(proofs.map(p => p.claimData.context)))
+            console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
           } else {
-            console.log('Proof received:', proofs?.claimData.context)
+            console.log("Proof received:", proofs?.claimData.context);
           }
-          setProofs(proofs)
+          setProofs(proofs);
         }
       },
       onFailure: (error) => {
-        console.error('Verification failed', error)
-      }
-    })
+        console.error("Verification failed", error);
+      },
+    });
   } catch (error) {
-    console.error('Error triggering Reclaim flow:', error)
+    console.error("Error triggering Reclaim flow:", error);
   }
 }
 ```
@@ -194,10 +191,12 @@ async function handleCreateClaim() {
 The `triggerReclaimFlow()` method automatically detects the user's environment and chooses the optimal verification method:
 
 #### On Desktop Browsers:
+
 1. **Browser Extension First**: If the Reclaim browser extension is installed, it will use the extension for a seamless in-browser verification experience.
 2. **QR Code Fallback**: If the extension is not available, it automatically displays a QR code modal for mobile scanning.
 
 #### On Mobile Devices:
+
 1. **iOS Devices**: Automatically redirects to the Reclaim App Clip for native iOS verification.
 2. **Android Devices**: Automatically redirects to the Reclaim Instant App for native Android verification.
 
@@ -206,6 +205,7 @@ The `triggerReclaimFlow()` method automatically detects the user's environment a
 The SDK now includes built-in support for the Reclaim browser extension, providing users with a seamless verification experience without leaving their current browser tab.
 
 #### Features:
+
 - **Automatic Detection**: The SDK automatically detects if the Reclaim browser extension is installed
 - **Seamless Integration**: No additional setup required - the extension integration works out of the box
 - **Fallback Support**: If the extension is not available, the SDK gracefully falls back to QR code or mobile app flows
@@ -215,11 +215,11 @@ The SDK now includes built-in support for the Reclaim browser extension, providi
 You can also manually check if the browser extension is available:
 
 ```javascript
-const isExtensionAvailable = await reclaimProofRequest.isBrowserExtensionAvailable()
+const isExtensionAvailable = await reclaimProofRequest.isBrowserExtensionAvailable();
 if (isExtensionAvailable) {
-  console.log('Reclaim browser extension is installed')
+  console.log("Reclaim browser extension is installed");
 } else {
-  console.log('Browser extension not available, will use alternative flow')
+  console.log("Browser extension not available, will use alternative flow");
 }
 ```
 
@@ -228,16 +228,11 @@ if (isExtensionAvailable) {
 You can customize the browser extension behavior during SDK initialization:
 
 ```javascript
-const proofRequest = await ReclaimProofRequest.init(
-  APP_ID,
-  APP_SECRET,
-  PROVIDER_ID,
-  {
-    useBrowserExtension: true, // Enable/disable browser extension (default: true)
-    extensionID: 'custom-extension-id', // Use custom extension ID if needed
-    // ... other options
-  }
-)
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+  useBrowserExtension: true, // Enable/disable browser extension (default: true)
+  extensionID: "custom-extension-id", // Use custom extension ID if needed
+  // ... other options
+});
 ```
 
 ### Modal Customization
@@ -247,18 +242,18 @@ When the QR code modal is displayed (fallback on desktop), you can customize its
 ```javascript
 // Set modal options before triggering the flow
 reclaimProofRequest.setModalOptions({
-  title: 'Custom Verification Title',
-  description: 'Scan this QR code with your mobile device to verify your account',
+  title: "Custom Verification Title",
+  description: "Scan this QR code with your mobile device to verify your account",
   darkTheme: true, // Enable dark theme (default: false)
   modalPopupTimer: 5, // Auto-close modal after 5 minutes (default: 1 minute)
   showExtensionInstallButton: true, // Show extension install button (default: false)
-  extensionUrl: 'https://custom-extension-url.com', // Custom extension download URL
+  extensionUrl: "https://custom-extension-url.com", // Custom extension download URL
   onClose: () => {
-    console.log('Modal was closed');
-  } // Callback when modal is closed
-})
+    console.log("Modal was closed");
+  }, // Callback when modal is closed
+});
 
-await reclaimProofRequest.triggerReclaimFlow()
+await reclaimProofRequest.triggerReclaimFlow();
 ```
 
 ### Benefits of the New Flow:
@@ -297,114 +292,116 @@ The Reclaim SDK offers several advanced options to customize your integration:
 
 1. **Adding Context**:
    You can add context to your proof request, which can be useful for providing additional information:
+
    ```javascript
-   reclaimProofRequest.addContext('0x00000000000', 'Example context message')
+   reclaimProofRequest.setContext("0x00000000000", "Example context message");
+
+   // deprecated method: use setContext instead
+   reclaimProofRequest.addContext("0x00000000000", "Example context message");
    ```
 
 2. **Setting Parameters**:
    If your provider requires specific parameters, you can set them like this:
+
    ```javascript
-   reclaimProofRequest.setParams({ email: "test@example.com", userName: "testUser" })
+   reclaimProofRequest.setParams({ email: "test@example.com", userName: "testUser" });
    ```
 
 3. **Custom Redirect URL**:
    Set a custom URL to redirect users after the verification process:
+
    ```javascript
-   reclaimProofRequest.setRedirectUrl('https://example.com/redirect')
+   reclaimProofRequest.setRedirectUrl("https://example.com/redirect");
    ```
 
 4. **Custom Callback URL**:
    Set a custom callback URL for your app which allows you to receive proofs and status updates on your callback URL:
    Pass in `jsonProofResponse: true` to receive the proof in JSON format: By default, the proof is returned as a url encoded string.
+
    ```javascript
-   reclaimProofRequest.setAppCallbackUrl('https://example.com/callback', true)
+   reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
    ```
 
 5. **Modal Customization for Desktop Users**:
    Customize the appearance and behavior of the QR code modal shown to desktop users:
+
    ```javascript
    reclaimProofRequest.setModalOptions({
-     title: 'Verify Your Account',
-     description: 'Scan the QR code with your mobile device or install our browser extension',
+     title: "Verify Your Account",
+     description: "Scan the QR code with your mobile device or install our browser extension",
      darkTheme: false, // Enable dark theme (default: false)
-     extensionUrl: 'https://chrome.google.com/webstore/detail/reclaim' // Custom extension URL
-   })
+     extensionUrl: "https://chrome.google.com/webstore/detail/reclaim", // Custom extension URL
+   });
    ```
 
 6. **Browser Extension Configuration**:
    Configure browser extension behavior and detection:
+
    ```javascript
    // Check if browser extension is available
-   const isExtensionAvailable = await reclaimProofRequest.isBrowserExtensionAvailable()
-   
+   const isExtensionAvailable = await reclaimProofRequest.isBrowserExtensionAvailable();
+
    // Trigger the verification flow with automatic platform detection
-   await reclaimProofRequest.triggerReclaimFlow()
-   
+   await reclaimProofRequest.triggerReclaimFlow();
+
    // Initialize with browser extension options
-   const proofRequest = await ReclaimProofRequest.init(
-     APP_ID,
-     APP_SECRET,
-     PROVIDER_ID,
-     {
-       useBrowserExtension: true, // Enable browser extension support (default: true)
-       extensionID: 'custom-extension-id', // Custom extension identifier
-       useAppClip: true, // Enable mobile app clips (default: true)
-       log: true // Enable logging for debugging
-     }
-   )
+   const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+     useBrowserExtension: true, // Enable browser extension support (default: true)
+     extensionID: "custom-extension-id", // Custom extension identifier
+     useAppClip: true, // Enable mobile app clips (default: true)
+     log: true, // Enable logging for debugging
+   });
    ```
 
 7. **Custom Share Page and App Clip URLs**:
-   You can customize the share page and app clip URLs for your app: 
+   You can customize the share page and app clip URLs for your app:
 
-  ```javascript
-  const proofRequest = await ReclaimProofRequest.init(
-  APP_ID,
-  APP_SECRET,
-  PROVIDER_ID,
-  {
-    customSharePageUrl: 'https://your-custom-domain.com/verify', // Custom share page URL
-    customAppClipUrl: 'https://appclip.apple.com/id?p=your.custom.app.clip', // Custom iOS App Clip URL
-    // ... other options
-  }
-  )
-  ```
-
+```javascript
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+  customSharePageUrl: "https://your-custom-domain.com/verify", // Custom share page URL
+  customAppClipUrl: "https://appclip.apple.com/id?p=your.custom.app.clip", // Custom iOS App Clip URL
+  // ... other options
+});
+```
 
 8. **Platform-Specific Flow Control**:
    The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
+
    ```javascript
    // Traditional approach with manual QR code handling
-   const requestUrl = await reclaimProofRequest.getRequestUrl()
+   const requestUrl = await reclaimProofRequest.getRequestUrl();
    // Display your own QR code implementation
-   
+
    // Or use the new streamlined approach
-   await reclaimProofRequest.triggerReclaimFlow()
+   await reclaimProofRequest.triggerReclaimFlow();
    // Automatically handles platform detection and optimal user experience
    ```
 
 9. **Exporting and Importing SDK Configuration**:
    You can export the entire Reclaim SDK configuration as a JSON string and use it to initialize the SDK with the same configuration on a different service or backend:
+
    ```javascript
    // On the client-side or initial service
-   const configJson = reclaimProofRequest.toJsonString()
-   console.log('Exportable config:', configJson)
-   
+   const configJson = reclaimProofRequest.toJsonString();
+   console.log("Exportable config:", configJson);
+
    // Send this configJson to your backend or another service
-   
+
    // On the backend or different service
-   const importedRequest = ReclaimProofRequest.fromJsonString(configJson)
-   const requestUrl = await importedRequest.getRequestUrl()
+   const importedRequest = ReclaimProofRequest.fromJsonString(configJson);
+   const requestUrl = await importedRequest.getRequestUrl();
    ```
+
    This allows you to generate request URLs and other details from your backend or a different service while maintaining the same configuration.
 
 10. **Utility Methods**:
-   Additional utility methods for managing your proof requests:
-   ```javascript
-   // Get the current session ID
-   const sessionId = reclaimProofRequest.getSessionId()
-   console.log('Current session ID:', sessionId)
-   ```
+    Additional utility methods for managing your proof requests:
+
+```javascript
+// Get the current session ID
+const sessionId = reclaimProofRequest.getSessionId();
+console.log("Current session ID:", sessionId);
+```
 
 ## Handling Proofs on Your Backend
 
@@ -412,7 +409,7 @@ For production applications, it's recommended to handle proofs on your backend:
 
 1. Set a callback URL:
    ```javascript
-   reclaimProofRequest.setCallbackUrl('https://your-backend.com/receive-proofs')
+   reclaimProofRequest.setCallbackUrl("https://your-backend.com/receive-proofs");
    ```
 
 These options allow you to securely process proofs and status updates on your server.
@@ -422,26 +419,27 @@ These options allow you to securely process proofs and status updates on your se
 The SDK provides a `verifyProof` function to manually verify proofs. This is useful when you need to validate proofs outside of the normal flow:
 
 ```javascript
-import { verifyProof } from '@reclaimprotocol/js-sdk'
+import { verifyProof } from "@reclaimprotocol/js-sdk";
 
 // Verify a single proof
-const isValid = await verifyProof(proof)
+const isValid = await verifyProof(proof);
 if (isValid) {
-  console.log('Proof is valid')
+  console.log("Proof is valid");
 } else {
-  console.log('Proof is invalid')
+  console.log("Proof is invalid");
 }
 
 // Verify multiple proofs
-const areValid = await verifyProof([proof1, proof2, proof3])
+const areValid = await verifyProof([proof1, proof2, proof3]);
 if (areValid) {
-  console.log('All proofs are valid')
+  console.log("All proofs are valid");
 } else {
-  console.log('One or more proofs are invalid')
+  console.log("One or more proofs are invalid");
 }
 ```
 
 The `verifyProof` function:
+
 - Accepts either a single proof or an array of proofs
 - Returns a boolean indicating if the proof(s) are valid
 - Verifies signatures, witness integrity, and claim data
@@ -452,43 +450,40 @@ The `verifyProof` function:
 The SDK provides specific error types for different failure scenarios. Here's how to handle them:
 
 ```javascript
-import { ReclaimProofRequest } from '@reclaimprotocol/js-sdk'
+import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 
 try {
-  const proofRequest = await ReclaimProofRequest.init(
-    APP_ID,
-    APP_SECRET,
-    PROVIDER_ID
-  )
-  
+  const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID);
+
   await proofRequest.startSession({
     onSuccess: (proof) => {
-      console.log('Proof received:', proof)
+      console.log("Proof received:", proof);
     },
     onError: (error) => {
       // Handle different error types
-      if (error.name === 'ProofNotVerifiedError') {
-        console.error('Proof verification failed')
-      } else if (error.name === 'ProviderFailedError') {
-        console.error('Provider failed to generate proof')
-      } else if (error.name === 'SessionNotStartedError') {
-        console.error('Session could not be started')
+      if (error.name === "ProofNotVerifiedError") {
+        console.error("Proof verification failed");
+      } else if (error.name === "ProviderFailedError") {
+        console.error("Provider failed to generate proof");
+      } else if (error.name === "SessionNotStartedError") {
+        console.error("Session could not be started");
       } else {
-        console.error('Unknown error:', error.message)
+        console.error("Unknown error:", error.message);
       }
-    }
-  })
+    },
+  });
 } catch (error) {
   // Handle initialization errors
-  if (error.name === 'InitError') {
-    console.error('Failed to initialize SDK:', error.message)
-  } else if (error.name === 'InvalidParamError') {
-    console.error('Invalid parameters provided:', error.message)
+  if (error.name === "InitError") {
+    console.error("Failed to initialize SDK:", error.message);
+  } else if (error.name === "InvalidParamError") {
+    console.error("Invalid parameters provided:", error.message);
   }
 }
 ```
 
 **Common Error Types:**
+
 - `InitError`: SDK initialization failed
 - `InvalidParamError`: Invalid parameters provided
 - `SignatureNotFoundError`: Missing or invalid signature

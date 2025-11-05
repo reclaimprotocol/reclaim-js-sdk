@@ -2,10 +2,10 @@ function createErrorClass(name: string) {
     return class extends Error {
         constructor(message?: string, public innerError?: Error) {
             // Include inner error message in the main message if available
-            const fullMessage = innerError 
+            const fullMessage = innerError
                 ? `${message || ''} caused by ${innerError.name}: ${innerError.message}`
                 : message;
-                
+
             super(fullMessage);
             this.name = name;
             if (innerError) {
@@ -32,7 +32,7 @@ export const BackendServerError = createErrorClass('BackendServerError');
 export const GetStatusUrlError = createErrorClass('GetStatusUrlError');
 export const NoProviderParamsError = createErrorClass('NoProviderParamsError');
 export const SetParamsError = createErrorClass('SetParamsError');
-export const AddContextError = createErrorClass('AddContextError');
+export const SetContextError = createErrorClass('SetContextError');
 export const SetSignatureError = createErrorClass('SetSignatureError');
 export const GetAppCallbackUrlError = createErrorClass("GetAppCallbackUrlError");
 export const StatusUrlError = createErrorClass('StatusUrlError');

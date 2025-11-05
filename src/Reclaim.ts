@@ -19,7 +19,7 @@ import {
 } from './utils/helper'
 import { constants, setBackendBaseUrl } from './utils/constants'
 import {
-    AddContextError,
+    SetContextError,
     GetAppCallbackUrlError,
     GetStatusUrlError,
     InitError,
@@ -44,11 +44,11 @@ const logger = loggerModule.logger
 const sdkVersion = require('../package.json').version;
 
 // Implementation
-export async function verifyProof(proofOrProofs: Proof | Proof[],allowAiWitness?: boolean): Promise<boolean> {
+export async function verifyProof(proofOrProofs: Proof | Proof[], allowAiWitness?: boolean): Promise<boolean> {
     // If input is an array of proofs
     if (Array.isArray(proofOrProofs)) {
         for (const proof of proofOrProofs) {
-            const isVerified = await verifyProof(proof,allowAiWitness);
+            const isVerified = await verifyProof(proof, allowAiWitness);
             if (!isVerified) {
                 return false;
             }
@@ -207,7 +207,7 @@ export class ReclaimProofRequest {
             this.customSharePageUrl = options.customSharePageUrl;
         }
 
-        if(options?.customAppClipUrl){
+        if (options?.customAppClipUrl) {
             this.customAppClipUrl = options.customAppClipUrl;
         }
 
@@ -417,17 +417,22 @@ export class ReclaimProofRequest {
         }
     }
 
-    addContext(address: string, message: string): void {
+    setContext(address: string, message: string): void {
         try {
             validateFunctionParams([
                 { input: address, paramName: 'address', isString: true },
                 { input: message, paramName: 'message', isString: true }
-            ], 'addContext');
+            ], 'setContext');
             this.context = { contextAddress: address, contextMessage: message };
         } catch (error) {
-            logger.info("Error adding context", error)
-            throw new AddContextError("Error adding context", error as Error)
+            logger.info("Error setting context", error)
+            throw new SetContextError("Error setting context", error as Error)
         }
+    }
+
+    // deprecated method: use setContext instead
+    addContext(address: string, message: string): void {
+        this.setContext(address, message);
     }
 
     setParams(params: { [key: string]: string }): void {
@@ -509,11 +514,11 @@ export class ReclaimProofRequest {
 
     private buildSharePageUrl(template: string): string {
         const baseUrl = 'https://share.reclaimprotocol.org/verify';
-        
+
         if (this.customSharePageUrl) {
             return `${this.customSharePageUrl}/?template=${template}`;
         }
-        
+
         return `${baseUrl}/?template=${template}`;
     }
 
@@ -744,7 +749,7 @@ export class ReclaimProofRequest {
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
 
-            const appClipUrl =  this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+            const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
 
             // Redirect to app clip
@@ -811,7 +816,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
                         throw new ProofSubmissionFailedError();
                     }
-                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED || 
+                    if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED ||
                         statusUrlResponse.session.statusV2 === SessionStatus.AI_PROOF_SUBMITTED) {
                         if (onSuccess) {
                             onSuccess('Proof submitted successfully to the custom callback url');
