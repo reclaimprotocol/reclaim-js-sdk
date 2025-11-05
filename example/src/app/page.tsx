@@ -45,7 +45,7 @@ export default function Home() {
       // proofRequest.setContext("0x48796C654F7574707574", "test")
 
       // deprecated method: use setContext instead
-      // proofRequest.addContext("0x48796C654F7574707574", "test")
+      // proofRequest.addContext("0x48796C654F7574707574", "test1")
 
       // Set parameters for the proof request (if needed)
       // proofRequest.setParams({ email: "test@example.com", userName: "testUser" })
