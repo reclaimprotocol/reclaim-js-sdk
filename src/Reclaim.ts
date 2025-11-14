@@ -866,7 +866,10 @@ export class ReclaimProofRequest {
                 // check if the app is running on iOS or Android
                 const isIos = getMobileDeviceType() === DeviceType.IOS;
                 if (!isIos) {
-                    const instantAppUrl = this.buildSharePageUrl(template);
+                    let instantAppUrl = this.buildSharePageUrl(template);
+                    if (await this.isNewLinkingEnabledAsync) {
+                        instantAppUrl = instantAppUrl.replace("/verifier", "/link");
+                    }
                     logger.info('Instant App Url created successfully: ' + instantAppUrl);
                     return instantAppUrl;
                 } else {
@@ -1030,8 +1033,75 @@ export class ReclaimProofRequest {
             template = replaceAll(template, '(', '%28');
             template = replaceAll(template, ')', '%29');
 
-            const instantAppUrl = this.buildSharePageUrl(template);
+            let instantAppUrl = this.buildSharePageUrl(template);
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
+
+            if (await this.isNewLinkingEnabledAsync) {
+                instantAppUrl = instantAppUrl.replace("/verifier", "/link");
+
+                // Construct Android intent deep link
+                const deepLink = `intent://details?id=org.reclaimprotocol.app&url=${encodeURIComponent(
+                    instantAppUrl
+                )}&template=${template}#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;`;
+
+                try {
+                    const requestUrl = instantAppUrl;
+
+                    let appInstalled = false;
+                    let timeoutId: string | number | NodeJS.Timeout | undefined;
+
+                    // Create hidden iframe to test deep link
+                    const iframe = document.createElement("iframe");
+                    iframe.style.display = "none";
+                    iframe.style.width = "1px";
+                    iframe.style.height = "1px";
+                    document.body.appendChild(iframe);
+
+                    // Function to clean up
+                    const cleanup = () => {
+                        if (iframe.parentNode) {
+                            document.body.removeChild(iframe);
+                        }
+                        if (timeoutId) {
+                            clearTimeout(timeoutId);
+                        }
+                    };
+
+                    // If page becomes hidden, app opened successfully
+                    const onVisibilityChange = () => {
+                        if (document.hidden) {
+                            appInstalled = true;
+                            cleanup();
+                            // Open in main window since app is installed
+                            window.location.href = deepLink;
+                        }
+                    };
+
+                    // Listen for visibility change
+                    document.addEventListener("visibilitychange", onVisibilityChange, { once: true });
+
+                    // Test reclaimverifier deep link in iframe
+                    iframe.src = deepLink.replace('intent:', 'reclaimverifier:');
+
+                    // After timeout, assume app not installed
+                    timeoutId = setTimeout(() => {
+                        document.removeEventListener("visibilitychange", onVisibilityChange);
+                        cleanup();
+
+                        if (!appInstalled) {
+                            // App not installed - redirect to the store page to install the app
+                            window.navigator.clipboard.writeText(requestUrl).catch(() => {
+                                console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
+                            });
+                            window.location.href = deepLink;
+                        }
+                    }, 1500);
+                } catch (e) {
+                    // Final fallback → verifier
+                    window.location.href = instantAppUrl;
+                }
+                return;
+            }
 
             // Redirect to instant app
             window.location.href = instantAppUrl;
