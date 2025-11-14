@@ -39,11 +39,28 @@ import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClai
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType, isMobileDevice } from './utils/device'
+import { Features } from './utils/apis/feature'
+import { canonicalStringify } from './utils/strings'
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
 
-// Implementation
+/**
+ * Verifies one or more Reclaim proofs by validating signatures and witness information
+ *
+ * @param proofOrProofs - A single proof object or an array of proof objects to verify
+ * @param allowAiWitness - Optional flag to allow AI witness verification. Defaults to false
+ * @returns Promise<boolean> - Returns true if all proofs are valid, false otherwise
+ * @throws {SignatureNotFoundError} When proof has no signatures
+ * @throws {ProofNotVerifiedError} When identifier mismatch occurs
+ *
+ * @example
+ * ```typescript
+ * const isValid = await verifyProof(proof);
+ * const areAllValid = await verifyProof([proof1, proof2, proof3]);
+ * const isValidWithAI = await verifyProof(proof, true);
+ * ```
+ */
 export async function verifyProof(proofOrProofs: Proof | Proof[], allowAiWitness?: boolean): Promise<boolean> {
     // If input is an array of proofs
     if (Array.isArray(proofOrProofs)) {
@@ -106,6 +123,18 @@ export async function verifyProof(proofOrProofs: Proof | Proof[], allowAiWitness
     return true
 }
 
+/**
+ * Transforms a Reclaim proof into a format suitable for on-chain verification
+ *
+ * @param proof - The proof object to transform
+ * @returns Object containing claimInfo and signedClaim formatted for blockchain contracts
+ *
+ * @example
+ * ```typescript
+ * const { claimInfo, signedClaim } = transformForOnchain(proof);
+ * // Use claimInfo and signedClaim with smart contract verification
+ * ```
+ */
 export function transformForOnchain(proof: Proof): { claimInfo: any, signedClaim: any } {
     const claimInfoBuilder = new Map([
         ['context', proof.claimData.context],
@@ -144,7 +173,6 @@ const emptyTemplateData: TemplateData = {
     jsonProofResponse: false
 }
 export class ReclaimProofRequest {
-    // Private class properties
     private applicationId: string;
     private signature?: string;
     private appCallbackUrl?: string;
@@ -167,9 +195,9 @@ export class ReclaimProofRequest {
     private customAppClipUrl?: string;
     private modalOptions?: ModalOptions;
     private modal?: QRCodeModal;
-    private readonly FAILURE_TIMEOUT = 30000; // 30 seconds timeout, can be adjusted
+    private readonly FAILURE_TIMEOUT = 30 * 1000; // 30 seconds timeout, can be adjusted
+    private isNewLinkingEnabledAsync: Promise<boolean>
 
-    // Private constructor
     private constructor(applicationId: string, providerId: string, options?: ProofRequestOptions) {
         this.providerId = providerId;
         this.timeStamp = Date.now().toString();
@@ -215,9 +243,34 @@ export class ReclaimProofRequest {
         // Fetch sdk version from package.json
         this.sdkVersion = 'js-' + sdkVersion;
         logger.info(`Initializing client with applicationId: ${this.applicationId}`);
+
+        this.isNewLinkingEnabledAsync = Features.isNewLinkingEnabled({
+            applicationId: applicationId,
+            providerId: providerId,
+            sessionId: this.sessionId,
+        });
     }
 
-    // Static initialization methods
+    /**
+     * Initializes a new Reclaim proof request instance with automatic signature generation and session creation
+     *
+     * @param applicationId - Your Reclaim application ID
+     * @param appSecret - Your application secret key for signing requests
+     * @param providerId - The ID of the provider to use for proof generation
+     * @param options - Optional configuration options for the proof request
+     * @returns Promise<ReclaimProofRequest> - A fully initialized proof request instance
+     * @throws {InitError} When initialization fails due to invalid parameters or session creation errors
+     *
+     * @example
+     * ```typescript
+     * const proofRequest = await ReclaimProofRequest.init(
+     *   'your-app-id',
+     *   'your-app-secret',
+     *   'provider-id',
+     *   { log: true, acceptAiProviders: true }
+     * );
+     * ```
+     */
     static async init(applicationId: string, appSecret: string, providerId: string, options?: ProofRequestOptions): Promise<ReclaimProofRequest> {
         try {
             validateFunctionParams([
@@ -296,6 +349,23 @@ export class ReclaimProofRequest {
         }
     }
 
+    /**
+     * Creates a ReclaimProofRequest instance from a JSON string representation
+     *
+     * This method deserializes a previously exported proof request (via toJsonString) and reconstructs
+     * the instance with all its properties. Useful for recreating requests on the frontend or across different contexts.
+     *
+     * @param jsonString - JSON string containing the serialized proof request data
+     * @returns {Promise<ReclaimProofRequest>} - Reconstructed proof request instance
+     * @throws {InvalidParamError} When JSON string is invalid or contains invalid parameters
+     *
+     * @example
+     * ```typescript
+     * const jsonString = proofRequest.toJsonString();
+     * const reconstructed = await ReclaimProofRequest.fromJsonString(jsonString);
+     * // Can also be used with InApp SDK's startVerificationFromJson method
+     * ```
+     */
     static async fromJsonString(jsonString: string): Promise<ReclaimProofRequest> {
         try {
             const {
@@ -388,22 +458,78 @@ export class ReclaimProofRequest {
         }
     }
 
-    // Setter methods
+    /**
+     * Sets a custom callback URL where proofs will be submitted via HTTP POST
+     *
+     * By default, proofs are posted as `application/x-www-form-urlencoded`.
+     * When a custom callback URL is set, Reclaim will no longer receive proofs upon submission,
+     * and listeners on the startSession method will not be triggered. Your application must
+     * coordinate with your backend to receive and verify proofs using verifyProof().
+     *
+     * Note: InApp SDKs are unaffected by this property as they do not handle proof submission.
+     *
+     * @param url - The URL where proofs should be submitted via HTTP POST
+     * @param jsonProofResponse - Optional. Set to true to submit proofs as `application/json`. Defaults to false
+     * @throws {InvalidParamError} When URL is invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setAppCallbackUrl('https://your-backend.com/callback');
+     * // Or with JSON format
+     * proofRequest.setAppCallbackUrl('https://your-backend.com/callback', true);
+     * ```
+     */
     setAppCallbackUrl(url: string, jsonProofResponse?: boolean): void {
         validateURL(url, 'setAppCallbackUrl')
         this.appCallbackUrl = url
         this.jsonProofResponse = jsonProofResponse ?? false
     }
 
+    /**
+     * Sets a redirect URL where users will be redirected after successfully acquiring and submitting proof
+     *
+     * @param url - The URL where users should be redirected after successful proof generation
+     * @throws {InvalidParamError} When URL is invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setRedirectUrl('https://your-app.com/success');
+     * ```
+     */
     setRedirectUrl(url: string): void {
         validateURL(url, 'setRedirectUrl');
         this.redirectUrl = url;
     }
 
+    /**
+     * Sets the claim creation type for the proof request
+     *
+     * @param claimCreationType - The type of claim creation (e.g., STANDALONE)
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setClaimCreationType(ClaimCreationType.STANDALONE);
+     * ```
+     */
     setClaimCreationType(claimCreationType: ClaimCreationType): void {
         this.claimCreationType = claimCreationType;
     }
 
+    /**
+     * Sets custom options for the QR code modal display
+     *
+     * @param options - Modal configuration options including title, description, theme, etc.
+     * @throws {SetParamsError} When modal options are invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setModalOptions({
+     *   title: 'Scan QR Code',
+     *   description: 'Scan with your mobile device',
+     *   darkTheme: true
+     * });
+     * ```
+     */
     setModalOptions(options: ModalOptions): void {
         try {
             // Validate modal options
@@ -417,6 +543,50 @@ export class ReclaimProofRequest {
         }
     }
 
+    /**
+     * Sets additional context data to be stored with the claim
+     *
+     * This allows you to associate custom data (address and message) with the proof claim.
+     * The context can be retrieved and validated when verifying the proof. 
+     * 
+     * Also see [setContext] which is an alternate way to set context that has an address & message.
+     *
+     * @param context - Any additional data you want to store with the claim. Should be serializable to a JSON string.
+     * @throws {SetContextError} When context parameters are invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setJsonContext({foo: 'bar'});
+     * ```
+     */
+    setJsonContext(context: Record<string, any>) {
+        try {
+            validateFunctionParams([
+                { input: context, paramName: 'context', isString: false }
+            ], 'setJsonContext');
+            // ensure context is canonically json serializable
+            this.context = JSON.parse(canonicalStringify(context));
+        } catch (error) {
+            logger.info("Error setting context", error)
+            throw new SetContextError("Error setting context", error as Error)
+        }
+    }
+
+    /**
+     * Sets additional context data to be stored with the claim
+     *
+     * This allows you to associate custom data (address and message) with the proof claim.
+     * The context can be retrieved and validated when verifying the proof.
+     *
+     * @param address - Context address identifier
+     * @param message - Additional data to associate with the address
+     * @throws {SetContextError} When context parameters are invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setContext('0x1234...', 'User verification for premium access');
+     * ```
+     */
     setContext(address: string, message: string): void {
         try {
             validateFunctionParams([
@@ -430,11 +600,33 @@ export class ReclaimProofRequest {
         }
     }
 
-    // deprecated method: use setContext instead
+    /**
+     * @deprecated use setContext instead
+     *
+     * @param address 
+     * @param message additional data you want associated with the [address] 
+     */
     addContext(address: string, message: string): void {
         this.setContext(address, message);
     }
 
+    /**
+     * Sets provider-specific parameters for the proof request
+     *
+     * These parameters are passed to the provider and may include configuration options,
+     * filters, or other provider-specific settings required for proof generation.
+     *
+     * @param params - Key-value pairs of parameters to set
+     * @throws {SetParamsError} When parameters are invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setParams({
+     *   minFollowers: '1000',
+     *   platform: 'twitter'
+     * });
+     * ```
+     */
     setParams(params: { [key: string]: string }): void {
         try {
             validateParameters(params);
@@ -445,7 +637,21 @@ export class ReclaimProofRequest {
         }
     }
 
-    // Getter methods
+    /**
+     * Returns the currently configured app callback URL
+     *
+     * If no custom callback URL was set via setAppCallbackUrl(), this returns the default
+     * Reclaim service callback URL with the current session ID.
+     *
+     * @returns The callback URL where proofs will be submitted
+     * @throws {GetAppCallbackUrlError} When unable to retrieve the callback URL
+     *
+     * @example
+     * ```typescript
+     * const callbackUrl = proofRequest.getAppCallbackUrl();
+     * console.log('Proofs will be sent to:', callbackUrl);
+     * ```
+     */
     getAppCallbackUrl(): string {
         try {
             validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getAppCallbackUrl');
@@ -456,6 +662,20 @@ export class ReclaimProofRequest {
         }
     }
 
+    /**
+     * Returns the status URL for monitoring the current session
+     *
+     * This URL can be used to check the status of the proof request session.
+     *
+     * @returns The status monitoring URL for the current session
+     * @throws {GetStatusUrlError} When unable to retrieve the status URL
+     *
+     * @example
+     * ```typescript
+     * const statusUrl = proofRequest.getStatusUrl();
+     * // Use this URL to poll for session status updates
+     * ```
+     */
     getStatusUrl(): string {
         try {
             validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getStatusUrl');
@@ -466,7 +686,21 @@ export class ReclaimProofRequest {
         }
     }
 
-    // getter for SessionId
+    /**
+     * Returns the session ID associated with this proof request
+     *
+     * The session ID is automatically generated during initialization and uniquely
+     * identifies this proof request session.
+     *
+     * @returns The session ID string
+     * @throws {SessionNotStartedError} When session ID is not set
+     *
+     * @example
+     * ```typescript
+     * const sessionId = proofRequest.getSessionId();
+     * console.log('Session ID:', sessionId);
+     * ```
+     */
     getSessionId(): string {
         if (!this.sessionId) {
             throw new SessionNotStartedError("SessionId is not set");
@@ -522,7 +756,22 @@ export class ReclaimProofRequest {
         return `${baseUrl}/?template=${template}`;
     }
 
-    // Public methods
+    /**
+     * Exports the Reclaim proof verification request as a JSON string
+     *
+     * This serialized format can be sent to the frontend to recreate this request using
+     * ReclaimProofRequest.fromJsonString() or any InApp SDK's startVerificationFromJson()
+     * method to initiate the verification journey.
+     *
+     * @returns JSON string representation of the proof request
+     *
+     * @example
+     * ```typescript
+     * const jsonString = proofRequest.toJsonString();
+     * // Send to frontend or store for later use
+     * // Can be reconstructed with: ReclaimProofRequest.fromJsonString(jsonString)
+     * ```
+     */
     toJsonString(): string {
         return JSON.stringify({
             applicationId: this.applicationId,
@@ -551,6 +800,54 @@ export class ReclaimProofRequest {
         })
     }
 
+    /**
+     * Validates signature and returns template data
+     * @returns 
+     */
+    private getTemplateData = (): TemplateData => {
+        if (!this.signature) {
+            throw new SignatureNotFoundError('Signature is not set.')
+        }
+        validateSignature(this.providerId, this.signature, this.applicationId, this.timeStamp)
+        const templateData: TemplateData = {
+            sessionId: this.sessionId,
+            providerId: this.providerId,
+            applicationId: this.applicationId,
+            signature: this.signature,
+            timestamp: this.timeStamp,
+            callbackUrl: this.getAppCallbackUrl(),
+            context: canonicalStringify(this.context),
+            providerVersion: this.options?.providerVersion ?? '',
+            resolvedProviderVersion: this.resolvedProviderVersion ?? '',
+            parameters: this.parameters,
+            redirectUrl: this.redirectUrl ?? '',
+            acceptAiProviders: this.options?.acceptAiProviders ?? false,
+            sdkVersion: this.sdkVersion,
+            jsonProofResponse: this.jsonProofResponse
+
+        }
+
+        return templateData;
+    }
+
+    /**
+     * Generates and returns the request URL for proof verification
+     *
+     * This URL can be shared with users to initiate the proof generation process.
+     * The URL format varies based on device type:
+     * - Mobile iOS: Returns App Clip URL (if useAppClip is enabled)
+     * - Mobile Android: Returns Instant App URL (if useAppClip is enabled)
+     * - Desktop/Other: Returns standard verification URL
+     *
+     * @returns Promise<string> - The generated request URL
+     * @throws {SignatureNotFoundError} When signature is not set
+     *
+     * @example
+     * ```typescript
+     * const requestUrl = await proofRequest.getRequestUrl();
+     * // Share this URL with users or display as QR code
+     * ```
+     */
     async getRequestUrl(): Promise<string> {
         logger.info('Creating Request Url')
         if (!this.signature) {
@@ -558,25 +855,7 @@ export class ReclaimProofRequest {
         }
 
         try {
-            validateSignature(this.providerId, this.signature, this.applicationId, this.timeStamp)
-
-            const templateData: TemplateData = {
-                sessionId: this.sessionId,
-                providerId: this.providerId,
-                providerVersion: this.options?.providerVersion ?? '',
-                resolvedProviderVersion: this.resolvedProviderVersion ?? '',
-                applicationId: this.applicationId,
-                signature: this.signature,
-                timestamp: this.timeStamp,
-                callbackUrl: this.getAppCallbackUrl(),
-                context: JSON.stringify(this.context),
-                parameters: this.parameters,
-                redirectUrl: this.redirectUrl ?? '',
-                acceptAiProviders: this.options?.acceptAiProviders ?? false,
-                sdkVersion: this.sdkVersion,
-                jsonProofResponse: this.jsonProofResponse
-
-            }
+            const templateData = this.getTemplateData()
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
             const deviceType = getDeviceType();
             if (this.options?.useAppClip && deviceType === DeviceType.MOBILE) {
@@ -606,29 +885,31 @@ export class ReclaimProofRequest {
         }
     }
 
+    /**
+     * Triggers the appropriate Reclaim verification flow based on device type and configuration
+     *
+     * This method automatically detects the device type and initiates the optimal verification flow:
+     * - Desktop with browser extension: Triggers extension flow
+     * - Desktop without extension: Shows QR code modal
+     * - Mobile Android: Redirects to Instant App
+     * - Mobile iOS: Redirects to App Clip
+     *
+     * @returns Promise<void>
+     * @throws {SignatureNotFoundError} When signature is not set
+     *
+     * @example
+     * ```typescript
+     * await proofRequest.triggerReclaimFlow();
+     * // The appropriate verification method will be triggered automatically
+     * ```
+     */
     async triggerReclaimFlow(): Promise<void> {
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
         }
 
         try {
-            validateSignature(this.providerId, this.signature, this.applicationId, this.timeStamp)
-            const templateData: TemplateData = {
-                sessionId: this.sessionId,
-                providerId: this.providerId,
-                applicationId: this.applicationId,
-                signature: this.signature,
-                timestamp: this.timeStamp,
-                callbackUrl: this.getAppCallbackUrl(),
-                context: JSON.stringify(this.context),
-                providerVersion: this.options?.providerVersion ?? '',
-                resolvedProviderVersion: this.resolvedProviderVersion ?? '',
-                parameters: this.parameters,
-                redirectUrl: this.redirectUrl ?? '',
-                acceptAiProviders: this.options?.acceptAiProviders ?? false,
-                sdkVersion: this.sdkVersion,
-                jsonProofResponse: this.jsonProofResponse
-            }
+            const templateData = this.getTemplateData()
 
             this.templateData = templateData;
 
@@ -636,7 +917,7 @@ export class ReclaimProofRequest {
 
             // Get device type
             const deviceType = getDeviceType();
-            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
+            updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
 
             if (deviceType === DeviceType.DESKTOP) {
                 const extensionAvailable = await this.isBrowserExtensionAvailable();
@@ -661,7 +942,7 @@ export class ReclaimProofRequest {
                 } else if (mobileDeviceType === DeviceType.IOS) {
                     // Redirect to app clip URL
                     logger.info('Redirecting to iOS app clip');
-                    await this.redirectToAppClip();
+                    this.redirectToAppClip();
                 }
             }
         } catch (error) {
@@ -671,6 +952,23 @@ export class ReclaimProofRequest {
     }
 
 
+    /**
+     * Checks if the Reclaim browser extension is installed and available
+     *
+     * This method attempts to communicate with the browser extension to verify its availability.
+     * It uses a timeout mechanism to quickly determine if the extension responds.
+     *
+     * @param timeout - Timeout in milliseconds to wait for extension response. Defaults to 200ms
+     * @returns Promise<boolean> - True if extension is available, false otherwise
+     *
+     * @example
+     * ```typescript
+     * const hasExtension = await proofRequest.isBrowserExtensionAvailable();
+     * if (hasExtension) {
+     *   console.log('Browser extension is installed');
+     * }
+     * ```
+     */
     async isBrowserExtensionAvailable(timeout = 200): Promise<boolean> {
         try {
             return new Promise<boolean>((resolve) => {
@@ -743,7 +1041,7 @@ export class ReclaimProofRequest {
         }
     }
 
-    private async redirectToAppClip(): Promise<void> {
+    private redirectToAppClip(): void {
         try {
             let template = encodeURIComponent(JSON.stringify(this.templateData));
             template = replaceAll(template, '(', '%28');
@@ -754,12 +1052,48 @@ export class ReclaimProofRequest {
 
             // Redirect to app clip
             window.location.href = appClipUrl;
+
+            if (Features.isFirstAttemptToLaunchAppClip()) {
+                setTimeout(() => {
+                    window.location.href = appClipUrl;
+                }, 2000);
+            }
         } catch (error) {
             logger.info('Error redirecting to app clip:', error);
             throw error;
         }
     }
 
+    /**
+     * Starts the proof request session and monitors for proof submission
+     *
+     * This method begins polling the session status to detect when
+     * a proof has been generated and submitted. It handles both default Reclaim callbacks
+     * and custom callback URLs.
+     *
+     * For default callbacks: Verifies proofs automatically and passes them to onSuccess
+     * For custom callbacks: Monitors submission status and notifies via onSuccess when complete
+     *
+     * @param onSuccess - Callback function invoked when proof is successfully submitted
+     * @param onError - Callback function invoked when an error occurs during the session
+     * @returns Promise<void>
+     * @throws {SessionNotStartedError} When session ID is not defined
+     * @throws {ProofNotVerifiedError} When proof verification fails (default callback only)
+     * @throws {ProofSubmissionFailedError} When proof submission fails (custom callback only)
+     * @throws {ProviderFailedError} When proof generation fails with timeout
+     *
+     * @example
+     * ```typescript
+     * await proofRequest.startSession({
+     *   onSuccess: (proof) => {
+     *     console.log('Proof received:', proof);
+     *   },
+     *   onError: (error) => {
+     *     console.error('Error:', error);
+     *   }
+     * });
+     * ```
+     */
     async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
         if (!this.sessionId) {
             const message = "Session can't be started due to undefined value of sessionId";
@@ -768,6 +1102,8 @@ export class ReclaimProofRequest {
         }
 
         logger.info('Starting session');
+
+        const sessionUpdatePollingInterval = 3 * 1000;
         const interval = setInterval(async () => {
             try {
                 const statusUrlResponse = await fetchStatusUrl(this.sessionId);
@@ -832,12 +1168,24 @@ export class ReclaimProofRequest {
                 this.clearInterval();
                 this.modal?.close();
             }
-        }, 3000);
+        }, sessionUpdatePollingInterval);
 
         this.intervals.set(this.sessionId, interval);
         scheduleIntervalEndingTask(this.sessionId, this.intervals, onError);
     }
 
+    /**
+     * Closes the QR code modal if it is currently open
+     *
+     * This method can be called to programmatically close the modal, for example,
+     * when implementing custom UI behavior or cleanup logic.
+     *
+     * @example
+     * ```typescript
+     * // Close modal after some condition
+     * proofRequest.closeModal();
+     * ```
+     */
     closeModal(): void {
         if (this.modal) {
             this.modal.close();
