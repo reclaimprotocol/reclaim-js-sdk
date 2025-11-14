@@ -1091,7 +1091,7 @@ export class ReclaimProofRequest {
                         if (!appInstalled) {
                             // App not installed - redirect to the store page to install the app
                             window.navigator.clipboard.writeText(requestUrl).catch(() => {
-                                alert("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
+                                console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
                             });
                             window.location.href = deepLink;
                         }
