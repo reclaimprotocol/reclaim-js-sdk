@@ -1123,11 +1123,10 @@ export class ReclaimProofRequest {
             // Redirect to app clip
             window.location.href = appClipUrl;
 
-            if (Features.isFirstAttemptToLaunchAppClip()) {
-                setTimeout(() => {
-                    window.location.href = appClipUrl;
-                }, 2000);
-            }
+            setTimeout(() => {
+                window.location.href = appClipUrl;
+                // 5 second delay to allow app clip to launch
+            }, 5 * 1000);
         } catch (error) {
             logger.info('Error redirecting to app clip:', error);
             throw error;
