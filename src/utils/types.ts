@@ -67,6 +67,8 @@ export type ModalOptions = {
   modalPopupTimer?: number;
   showExtensionInstallButton?: boolean;
   onClose?: () => void;
+   // NEW OPTION
+  preventScreenshot?: boolean;   // when true: add blur + disable copy/screenshot hints
 };
 
 // JSON-safe modal options (excludes non-serializable functions)
