@@ -38,8 +38,25 @@ export type ProofRequestOptions = {
   extensionID?: string;
   providerVersion?: string;
   customSharePageUrl?: string;
-  customAppClipUrl?: string
+  customAppClipUrl?: string;
+  launchOptions?: ReclaimFlowLaunchOptions;
 };
+
+export type ReclaimFlowLaunchOptions = {
+  /**
+   * Enables deferred deep links for the Reclaim verification flow.
+   *
+   * When enabled, users without the verifier app installed will receive a deferred deep link
+   * that automatically launches the verification flow after they install the app, ensuring
+   * a seamless continuation of the verification process.
+   *
+   * **Platform Support:** Currently Android only
+   *
+   * **Default Behavior:** Opt-in during rollout phase. Will default to `true` for all apps
+   * once fully released. See: https://blog.reclaimprotocol.org/posts/moving-beyond-google-play-instant
+   */
+  canUseDeferredDeepLinksFlow?: boolean;
+}
 
 // Modal customization options
 export type ModalOptions = {
