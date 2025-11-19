@@ -832,6 +832,7 @@ export class ReclaimProofRequest {
      * - Mobile Android: Returns Instant App URL (if useAppClip is enabled)
      * - Desktop/Other: Returns standard verification URL
      *
+     * @param launchOptions - Optional launch configuration to override default behavior
      * @returns Promise<string> - The generated request URL
      * @throws {SignatureNotFoundError} When signature is not set
      *
@@ -894,6 +895,7 @@ export class ReclaimProofRequest {
      * - Mobile Android: Redirects to Instant App
      * - Mobile iOS: Redirects to App Clip
      *
+     * @param launchOptions - Optional launch configuration to override default behavior
      * @returns Promise<void>
      * @throws {SignatureNotFoundError} When signature is not set
      *
