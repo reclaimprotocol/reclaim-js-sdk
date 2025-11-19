@@ -9,6 +9,7 @@ import {
     InitSessionResponse,
     ClaimCreationType,
     ModalOptions,
+    ReclaimFlowLaunchOptions,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -39,7 +40,6 @@ import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClai
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType, isMobileDevice } from './utils/device'
-import { Features } from './utils/apis/feature'
 import { canonicalStringify } from './utils/strings'
 const logger = loggerModule.logger
 
@@ -196,7 +196,6 @@ export class ReclaimProofRequest {
     private modalOptions?: ModalOptions;
     private modal?: QRCodeModal;
     private readonly FAILURE_TIMEOUT = 30 * 1000; // 30 seconds timeout, can be adjusted
-    private isNewLinkingEnabledAsync: Promise<boolean>
 
     private constructor(applicationId: string, providerId: string, options?: ProofRequestOptions) {
         this.providerId = providerId;
@@ -243,12 +242,6 @@ export class ReclaimProofRequest {
         // Fetch sdk version from package.json
         this.sdkVersion = 'js-' + sdkVersion;
         logger.info(`Initializing client with applicationId: ${this.applicationId}`);
-
-        this.isNewLinkingEnabledAsync = Features.isNewLinkingEnabled({
-            applicationId: applicationId,
-            providerId: providerId,
-            sessionId: this.sessionId,
-        });
     }
 
     /**
@@ -848,7 +841,9 @@ export class ReclaimProofRequest {
      * // Share this URL with users or display as QR code
      * ```
      */
-    async getRequestUrl(): Promise<string> {
+    async getRequestUrl(launchOptions?: ReclaimFlowLaunchOptions): Promise<string> {
+        const options = launchOptions || this.options?.launchOptions || {};
+
         logger.info('Creating Request Url')
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
@@ -867,7 +862,9 @@ export class ReclaimProofRequest {
                 const isIos = getMobileDeviceType() === DeviceType.IOS;
                 if (!isIos) {
                     let instantAppUrl = this.buildSharePageUrl(template);
-                    if (await this.isNewLinkingEnabledAsync) {
+                    const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
+
+                    if (isDeferredDeeplinksFlowEnabled) {
                         instantAppUrl = instantAppUrl.replace("/verifier", "/link");
                     }
                     logger.info('Instant App Url created successfully: ' + instantAppUrl);
@@ -906,7 +903,9 @@ export class ReclaimProofRequest {
      * // The appropriate verification method will be triggered automatically
      * ```
      */
-    async triggerReclaimFlow(): Promise<void> {
+    async triggerReclaimFlow(launchOptions?: ReclaimFlowLaunchOptions): Promise<void> {
+        const options = launchOptions || this.options?.launchOptions || {};
+
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
         }
@@ -941,7 +940,7 @@ export class ReclaimProofRequest {
                 if (mobileDeviceType === DeviceType.ANDROID) {
                     // Redirect to instant app URL
                     logger.info('Redirecting to Android instant app');
-                    await this.redirectToInstantApp();
+                    await this.redirectToInstantApp(options);
                 } else if (mobileDeviceType === DeviceType.IOS) {
                     // Redirect to app clip URL
                     logger.info('Redirecting to iOS app clip');
@@ -1027,7 +1026,7 @@ export class ReclaimProofRequest {
         }
     }
 
-    private async redirectToInstantApp(): Promise<void> {
+    private async redirectToInstantApp(options: ReclaimFlowLaunchOptions): Promise<void> {
         try {
             let template = encodeURIComponent(JSON.stringify(this.templateData));
             template = replaceAll(template, '(', '%28');
@@ -1036,7 +1035,9 @@ export class ReclaimProofRequest {
             let instantAppUrl = this.buildSharePageUrl(template);
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
-            if (await this.isNewLinkingEnabledAsync) {
+            const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
+
+            if (isDeferredDeeplinksFlowEnabled) {
                 instantAppUrl = instantAppUrl.replace("/verifier", "/link");
 
                 // Construct Android intent deep link
