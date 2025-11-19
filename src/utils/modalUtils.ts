@@ -23,31 +23,52 @@ export class QRCodeModal {
         };
     }
 
-    async show(requestUrl: string): Promise<void> {
-        try {
-            // Remove existing modal if present
-            this.close();
+   async show(requestUrl: string): Promise<void> {
+    try {
 
-            // Create modal HTML
-            const modalHTML = this.createModalHTML();
-
-            // Add modal to DOM
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-            // Generate QR code
-            await this.generateQRCode(requestUrl, 'reclaim-qr-code');
-
-            // Add event listeners
-            this.addEventListeners();
-
-            // Start auto-close timer
-            this.startAutoCloseTimer();
-
-        } catch (error) {
-            logger.info('Error showing QR code modal:', error);
-            throw error;
+        // Prevent showing modal inside an iframe if enabled
+        if (this.options.preventIframe) {
+            try {
+                if (window.self !== window.top) {
+                    console.warn(
+                        "Reclaim Modal blocked: preventIframe = true and page is inside an iframe."
+                    );
+                    if (this.options.onClose) this.options.onClose();
+                    return;
+                }
+            } catch {
+                console.warn(
+                    "Reclaim Modal blocked: preventIframe = true and iframe check threw a security error."
+                );
+                if (this.options.onClose) this.options.onClose();
+                return;
+            }
         }
+
+        // Remove existing modal if present
+        this.close();
+
+        // Create modal HTML
+        const modalHTML = this.createModalHTML();
+
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Generate QR code
+        await this.generateQRCode(requestUrl, 'reclaim-qr-code');
+
+        // Add event listeners
+        this.addEventListeners();
+
+        // Start auto-close timer
+        this.startAutoCloseTimer();
+
+    } catch (error) {
+        logger.info('Error showing QR code modal:', error);
+        throw error;
     }
+}
+
 
     close(): void {
         // Clear timers
