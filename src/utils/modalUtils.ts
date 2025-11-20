@@ -25,8 +25,10 @@ export class QRCodeModal {
 
    async show(requestUrl: string): Promise<void> {
     try {
+        // Always close previous modal FIRST
+    this.close();
 
-        // Prevent showing modal inside an iframe if enabled
+        // IFRAME CHECK
         if (this.options.preventIframe) {
             try {
                 if (window.self !== window.top) {
@@ -44,9 +46,6 @@ export class QRCodeModal {
                 return;
             }
         }
-
-        // Remove existing modal if present
-        this.close();
 
         // Create modal HTML
         const modalHTML = this.createModalHTML();
