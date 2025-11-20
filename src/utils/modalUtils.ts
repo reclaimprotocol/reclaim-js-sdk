@@ -30,14 +30,14 @@ export class QRCodeModal {
         if (this.options.preventIframe) {
             try {
                 if (window.self !== window.top) {
-                    console.warn(
+                    logger.info(
                         "Reclaim Modal blocked: preventIframe = true and page is inside an iframe."
                     );
                     if (this.options.onClose) this.options.onClose();
                     return;
                 }
             } catch {
-                console.warn(
+                logger.info(
                     "Reclaim Modal blocked: preventIframe = true and iframe check threw a security error."
                 );
                 if (this.options.onClose) this.options.onClose();
