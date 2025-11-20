@@ -170,7 +170,8 @@ const emptyTemplateData: TemplateData = {
     sdkVersion: '',
     providerVersion: '',
     resolvedProviderVersion: '',
-    jsonProofResponse: false
+    jsonProofResponse: false,
+    log: false
 }
 export class ReclaimProofRequest {
     private applicationId: string;
@@ -816,7 +817,8 @@ export class ReclaimProofRequest {
             redirectUrl: this.redirectUrl ?? '',
             acceptAiProviders: this.options?.acceptAiProviders ?? false,
             sdkVersion: this.sdkVersion,
-            jsonProofResponse: this.jsonProofResponse
+            jsonProofResponse: this.jsonProofResponse,
+            log: this.options?.log ?? false
 
         }
 
