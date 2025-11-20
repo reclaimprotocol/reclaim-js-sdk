@@ -146,6 +146,7 @@ export type TemplateData = {
   jsonProofResponse?: boolean;
   providerVersion?: string;
   resolvedProviderVersion: string;
+  log?: boolean;
 };
 
 // Add the new StatusUrlResponse type
