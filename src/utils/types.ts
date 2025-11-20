@@ -68,7 +68,6 @@ export type ModalOptions = {
   showExtensionInstallButton?: boolean;
   onClose?: () => void;
    // NEW OPTION
-  preventScreenshot?: boolean;   // when true: add blur + disable copy/screenshot hints
   preventIframe?: boolean;
 
 };
