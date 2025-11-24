@@ -121,7 +121,11 @@ export type ProofPropertiesJSON = {
   signature: string;
   redirectUrl?: string;
   parameters: { [key: string]: string };
-  timeStamp: string;
+  /**
+   * @deprecated use timestamp instead (maintained for compatibility)
+   */
+  timeStamp?: string;
+  timestamp?: string; // new timestamp field
   appCallbackUrl?: string;
   claimCreationType?: ClaimCreationType;
   options?: ProofRequestOptions;

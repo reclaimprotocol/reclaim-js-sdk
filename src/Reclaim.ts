@@ -371,6 +371,7 @@ export class ReclaimProofRequest {
                 signature,
                 redirectUrl,
                 timeStamp,
+                timestamp,
                 appCallbackUrl,
                 claimCreationType,
                 options,
@@ -380,12 +381,15 @@ export class ReclaimProofRequest {
                 modalOptions
             }: ProofPropertiesJSON = JSON.parse(jsonString)
 
+            // Prefer 'timestamp' over 'timeStamp' for backward compatibility (remove in future versions)
+            const resolvedTimestamp = timestamp || timeStamp;
+
             validateFunctionParams([
                 { input: applicationId, paramName: 'applicationId', isString: true },
                 { input: providerId, paramName: 'providerId', isString: true },
                 { input: signature, paramName: 'signature', isString: true },
                 { input: sessionId, paramName: 'sessionId', isString: true },
-                { input: timeStamp, paramName: 'timeStamp', isString: true },
+                { input: resolvedTimestamp, paramName: 'timestamp', isString: true },
                 { input: sdkVersion, paramName: 'sdkVersion', isString: true },
             ], 'fromJsonString');
 
@@ -440,7 +444,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.parameters = parameters;
             proofRequestInstance.appCallbackUrl = appCallbackUrl
             proofRequestInstance.redirectUrl = redirectUrl
-            proofRequestInstance.timeStamp = timeStamp
+            proofRequestInstance.timeStamp = resolvedTimestamp!
             proofRequestInstance.signature = signature
             proofRequestInstance.sdkVersion = sdkVersion;
             proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
@@ -757,7 +761,7 @@ export class ReclaimProofRequest {
      * ReclaimProofRequest.fromJsonString() or any InApp SDK's startVerificationFromJson()
      * method to initiate the verification journey.
      *
-     * @returns JSON string representation of the proof request
+     * @returns JSON string representation of the proof request. Note: The JSON includes both `timestamp` and `timeStamp` (deprecated) for backward compatibility.
      *
      * @example
      * ```typescript
@@ -777,7 +781,8 @@ export class ReclaimProofRequest {
             parameters: this.parameters,
             signature: this.signature,
             redirectUrl: this.redirectUrl,
-            timeStamp: this.timeStamp,
+            timestamp: this.timeStamp, // New field with correct spelling
+            timeStamp: this.timeStamp, // @deprecated: Remove in future versions 
             options: this.options,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
