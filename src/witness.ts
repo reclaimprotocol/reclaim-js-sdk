@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import type { WitnessData } from './utils/interfaces';
 import type { ClaimID, ClaimInfo, CompleteClaimData } from './utils/types';
+import { canonicalStringify } from './utils/strings';
 
 type BeaconState = {
   witnesses: WitnessData[];
@@ -42,8 +43,20 @@ export function fetchWitnessListForClaim(
   return selectedWitnesses;
 }
 
+
 export function getIdentifierFromClaimInfo(info: ClaimInfo): ClaimID {
-  const str: string = `${info.provider}\n${info.parameters}\n${info.context || ''}`;
+  // re-canonicalize context if it's not empty
+  let canonicalContext = info.context || '';
+  if (canonicalContext.length > 0) {
+    try {
+      const ctx = JSON.parse(canonicalContext);
+      canonicalContext = canonicalStringify(ctx);
+    } catch (e) {
+      throw new Error('unable to parse non-empty context. Must be JSON');
+    }
+  }
+
+  const str = `${info.provider}\n${info.parameters}\n${canonicalContext}`;
   return ethers.keccak256(strToUint8Array(str)).toLowerCase();
 }
 
