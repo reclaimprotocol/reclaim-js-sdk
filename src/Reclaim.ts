@@ -1129,12 +1129,13 @@ export class ReclaimProofRequest {
 
             const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
+            const verifierUrl = `https://share.reclaimprotocol.org/verifier/?template=${template}`;
 
             // Redirect to app clip
             window.location.href = appClipUrl;
 
             setTimeout(() => {
-                window.location.href = appClipUrl;
+                window.location.href = verifierUrl;
                 // 5 second delay to allow app clip to launch
             }, 5 * 1000);
         } catch (error) {
