@@ -445,6 +445,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.sdkVersion = sdkVersion;
             proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
             proofRequestInstance.modalOptions = modalOptions;
+            proofRequestInstance.jsonProofResponse = jsonProofResponse ?? false;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -1265,6 +1266,21 @@ export class ReclaimProofRequest {
             this.modal.close();
             logger.info('Modal closed by user');
         }
+    }
+
+    /**
+     * Returns whether proofs will be submitted as JSON format
+     *
+     * @returns boolean - True if proofs are sent as application/json, false for application/x-www-form-urlencoded
+     *
+     * @example
+     * ```typescript
+     * const isJson = proofRequest.getJsonProofResponse();
+     * console.log('JSON format:', isJson);
+     * ```
+     */
+    getJsonProofResponse(): boolean {
+        return this.jsonProofResponse;
     }
 }
 
