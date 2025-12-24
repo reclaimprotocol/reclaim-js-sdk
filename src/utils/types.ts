@@ -59,6 +59,8 @@ export type ProofRequestOptions = {
    * This can be used to customize the client experience, such as customizing themes or UI by passing context-specific information.
    * The keys and values must be strings. For most clients, this is not required and goes unused.
    * 
+   * This has no effect on the verification process.
+   * 
    * Example: `{ theme: 'dark', verify_another_way_link: 'https://exampe.org/alternative-verification?id=1234' }`
    * 
    * @since 4.7.0

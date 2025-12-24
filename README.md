@@ -420,6 +420,8 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 Additional metadata to pass to the verification client. This can be used to customize the client experience, such as customizing themes or UI by passing context-specific information. 
 The keys and values must be strings. For most clients, this is not required and goes unused.
 
+This has no effect on the verification process.
+
 ```js
 // Initialize with options
 const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
