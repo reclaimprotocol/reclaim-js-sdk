@@ -50,6 +50,7 @@ export type ProofRequestOptions = {
    * Whether the verification client should automatically submit necessary proofs once they are generated.
    * If set to false, the user must manually click a button to submit.
    * 
+   * @since 4.7.0
    * @default true
    */
   canAutoSubmit?: boolean;
@@ -59,6 +60,8 @@ export type ProofRequestOptions = {
    * The keys and values must be strings. For most clients, this is not required and goes unused.
    * 
    * Example: `{ theme: 'dark', verify_another_way_link: 'https://exampe.org/alternative-verification?id=1234' }`
+   * 
+   * @since 4.7.0
    */
   metadata?: Record<string, string>;
 };

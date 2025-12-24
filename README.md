@@ -349,7 +349,7 @@ The Reclaim SDK offers several advanced options to customize your integration:
      useBrowserExtension: true, // Enable browser extension support (default: true)
      extensionID: "custom-extension-id", // Custom extension identifier
      useAppClip: true, // Enable mobile app clips (default: true)
-     log: true, // Enable logging for debugging
+     log: true, // Enable troubleshooting mode and more verbose logging for debugging
    });
    ```
 
@@ -401,6 +401,30 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 // Get the current session ID
 const sessionId = reclaimProofRequest.getSessionId();
 console.log("Current session ID:", sessionId);
+```
+
+11. **Control auto-submission of proofs**:
+
+Whether the verification client should automatically submit necessary proofs once they are generated. If set to false, the user must manually click a button to submit.
+Defaults to true.
+
+```js
+// Initialize with options
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+  canAutoSubmit: true,
+});
+```
+
+12. **Add additional metadata for verification client**:
+
+Additional metadata to pass to the verification client. This can be used to customize the client experience, such as customizing themes or UI by passing context-specific information. 
+The keys and values must be strings. For most clients, this is not required and goes unused.
+
+```js
+// Initialize with options
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+  metadata: { theme: 'dark', verify_another_way_link: 'https://exampe.org/alternative-verification?id=1234' },
+});
 ```
 
 ## Handling Proofs on Your Backend
