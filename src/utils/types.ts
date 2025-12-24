@@ -29,7 +29,13 @@ export type OnSuccess = (proof?: Proof | Proof[] | string) => void;
 export type OnError = (error: Error) => void;
 
 export type ProofRequestOptions = {
+  /**
+   * Enables troubleshooting mode and more verbose logging
+   */
   log?: boolean;
+  /**
+   * Accepts AI providers in the verification flow
+   */
   acceptAiProviders?: boolean;
   useAppClip?: boolean;
   device?: string;
@@ -40,6 +46,26 @@ export type ProofRequestOptions = {
   customSharePageUrl?: string;
   customAppClipUrl?: string;
   launchOptions?: ReclaimFlowLaunchOptions;
+  /**
+   * Whether the verification client should automatically submit necessary proofs once they are generated.
+   * If set to false, the user must manually click a button to submit.
+   * 
+   * @since 4.7.0
+   * @default true
+   */
+  canAutoSubmit?: boolean;
+  /**
+   * Additional metadata to pass to the verification client.
+   * This can be used to customize the client experience, such as customizing themes or UI by passing context-specific information.
+   * The keys and values must be strings. For most clients, this is not required and goes unused.
+   * 
+   * This has no effect on the verification process.
+   * 
+   * Example: `{ theme: 'dark', verify_another_way_link: 'https://exampe.org/alternative-verification?id=1234' }`
+   * 
+   * @since 4.7.0
+   */
+  metadata?: Record<string, string>;
 };
 
 export type ReclaimFlowLaunchOptions = {
@@ -151,6 +177,8 @@ export type TemplateData = {
   providerVersion?: string;
   resolvedProviderVersion: string;
   log?: boolean;
+  canAutoSubmit?: boolean;
+  metadata?: Record<string, string>;
 };
 
 // Add the new StatusUrlResponse type

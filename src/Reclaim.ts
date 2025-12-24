@@ -824,8 +824,9 @@ export class ReclaimProofRequest {
             acceptAiProviders: this.options?.acceptAiProviders ?? false,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
-            log: this.options?.log ?? false
-
+            log: this.options?.log ?? false,
+            canAutoSubmit: this.options?.canAutoSubmit ?? true,
+            metadata: this.options?.metadata,
         }
 
         return templateData;
