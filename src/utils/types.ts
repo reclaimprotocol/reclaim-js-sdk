@@ -93,6 +93,9 @@ export type ModalOptions = {
   modalPopupTimer?: number;
   showExtensionInstallButton?: boolean;
   onClose?: () => void;
+   // NEW OPTION
+  preventIframe?: boolean;
+
 };
 
 // JSON-safe modal options (excludes non-serializable functions)
