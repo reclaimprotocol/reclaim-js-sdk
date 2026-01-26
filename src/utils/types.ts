@@ -135,6 +135,8 @@ export enum SessionStatus {
   PROOF_SUBMITTED = 'PROOF_SUBMITTED',
   AI_PROOF_SUBMITTED = 'AI_PROOF_SUBMITTED',
   PROOF_SUBMISSION_FAILED = 'PROOF_SUBMISSION_FAILED',
+  ERROR_SUBMITTED = 'ERROR_SUBMITTED',
+  ERROR_SUBMISSION_FAILED = 'ERROR_SUBMISSION_FAILED',
   PROOF_MANUAL_VERIFICATION_SUBMITED = 'PROOF_MANUAL_VERIFICATION_SUBMITED',
 };
 
@@ -153,6 +155,8 @@ export type ProofPropertiesJSON = {
   timeStamp?: string;
   timestamp?: string; // new timestamp field
   appCallbackUrl?: string;
+  errorCallbackUrl?: TemplateData['errorCallbackUrl'];
+  errorRedirectUrl?: TemplateData['errorRedirectUrl'];
   claimCreationType?: ClaimCreationType;
   options?: ProofRequestOptions;
   sdkVersion: string;
@@ -171,6 +175,8 @@ export type TemplateData = {
   context: string;
   parameters: { [key: string]: string };
   redirectUrl: string;
+  errorCallbackUrl?: string | null;
+  errorRedirectUrl?: string | null;
   acceptAiProviders: boolean;
   sdkVersion: string;
   jsonProofResponse?: boolean;

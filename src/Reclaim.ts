@@ -32,7 +32,8 @@ import {
     SetParamsError,
     SetSignatureError,
     SignatureGeneratingError,
-    SignatureNotFoundError
+    SignatureNotFoundError,
+    ErrorDuringVerificationError
 } from './utils/errors'
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
@@ -166,6 +167,8 @@ const emptyTemplateData: TemplateData = {
     context: '',
     parameters: {},
     redirectUrl: '',
+    errorCallbackUrl: '',
+    errorRedirectUrl: '',
     acceptAiProviders: false,
     sdkVersion: '',
     providerVersion: '',
@@ -185,6 +188,8 @@ export class ReclaimProofRequest {
     private resolvedProviderVersion?: string;
     private parameters: { [key: string]: string };
     private redirectUrl?: string;
+    private errorCallbackUrl?: TemplateData['errorCallbackUrl'];
+    private errorRedirectUrl?: TemplateData['errorRedirectUrl'];
     private intervals: Map<string, NodeJS.Timer> = new Map();
     private timeStamp: string;
     private sdkVersion: string;
@@ -370,6 +375,8 @@ export class ReclaimProofRequest {
                 parameters,
                 signature,
                 redirectUrl,
+                errorCallbackUrl,
+                errorRedirectUrl,
                 timeStamp,
                 timestamp,
                 appCallbackUrl,
@@ -403,6 +410,14 @@ export class ReclaimProofRequest {
 
             if (appCallbackUrl) {
                 validateURL(appCallbackUrl, 'fromJsonString');
+            }
+
+            if (errorRedirectUrl) {
+                validateURL(errorRedirectUrl, 'fromJsonString');
+            }
+
+            if (errorCallbackUrl) {
+                validateURL(errorCallbackUrl, 'fromJsonString');
             }
 
             if (context) {
@@ -450,6 +465,8 @@ export class ReclaimProofRequest {
             proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
             proofRequestInstance.modalOptions = modalOptions;
             proofRequestInstance.jsonProofResponse = jsonProofResponse ?? false;
+            proofRequestInstance.errorCallbackUrl = errorCallbackUrl;
+            proofRequestInstance.errorRedirectUrl = errorRedirectUrl;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -498,6 +515,43 @@ export class ReclaimProofRequest {
     setRedirectUrl(url: string): void {
         validateURL(url, 'setRedirectUrl');
         this.redirectUrl = url;
+    }
+
+    /**
+     * Sets a custom callback URL where errors will be submitted via HTTP POST
+     *
+     * Errors will be HTTP POSTed with `header 'Content-Type': 'application/json'`.
+     * When a custom error callback URL is set, Reclaim will no longer receive errors upon submission,
+     * and listeners on the startSession method will not be triggered. Your application must
+     * coordinate with your backend to receive errors.
+     *
+     * @param url - The URL where errors should be submitted via HTTP POST
+     * @throws {InvalidParamError} When URL is invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setErrorCallbackUrl('https://your-backend.com/error-callback');
+     * ```
+     */
+    setErrorCallbackUrl(url: string): void {
+        validateURL(url, 'setErrorCallbackUrl')
+        this.errorCallbackUrl = url
+    }
+
+    /**
+     * Sets an error redirect URL where users will be redirected after error in verification process
+     *
+     * @param url - The URL where users should be redirected after error in verification process
+     * @throws {InvalidParamError} When URL is invalid
+     *
+     * @example
+     * ```typescript
+     * proofRequest.setErrorRedirectUrl('https://your-app.com/error');
+     * ```
+     */
+    setErrorRedirectUrl(url: string): void {
+        validateURL(url, 'setErrorRedirectUrl');
+        this.errorRedirectUrl = url;
     }
 
     /**
@@ -662,6 +716,31 @@ export class ReclaimProofRequest {
     }
 
     /**
+     * Returns the currently configured error callback URL
+     *
+     * If no custom error callback URL was set via setErrorCallbackUrl(), this returns the default
+     * Reclaim service error callback URL with the current session ID.
+     *
+     * @returns The error callback URL where proofs will be submitted
+     * @throws {GetAppCallbackUrlError} When unable to retrieve the error callback URL
+     *
+     * @example
+     * ```typescript
+     * const callbackUrl = proofRequest.getErrorCallbackUrl();
+     * console.log('Errors will be sent to:', callbackUrl);
+     * ```
+     */
+    getErrorCallbackUrl(): string {
+        try {
+            validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getErrorCallbackUrl');
+            return this.errorCallbackUrl || `${constants.DEFAULT_RECLAIM_ERROR_CALLBACK_URL}${this.sessionId}`
+        } catch (error) {
+            logger.info("Error getting error callback url", error)
+            throw new GetAppCallbackUrlError("Error getting error callback url", error as Error)
+        }
+    }
+
+    /**
      * Returns the status URL for monitoring the current session
      *
      * This URL can be used to check the status of the proof request session.
@@ -782,6 +861,8 @@ export class ReclaimProofRequest {
             parameters: this.parameters,
             signature: this.signature,
             redirectUrl: this.redirectUrl,
+            errorCallbackUrl: this.errorCallbackUrl,
+            errorRedirectUrl: this.errorRedirectUrl,
             timestamp: this.timeStamp, // New field with correct spelling
             timeStamp: this.timeStamp, // @deprecated: Remove in future versions 
             options: this.options,
@@ -821,6 +902,8 @@ export class ReclaimProofRequest {
             resolvedProviderVersion: this.resolvedProviderVersion ?? '',
             parameters: this.parameters,
             redirectUrl: this.redirectUrl ?? '',
+            errorCallbackUrl: this.getErrorCallbackUrl(),
+            errorRedirectUrl: this.errorRedirectUrl,
             acceptAiProviders: this.options?.acceptAiProviders ?? false,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
@@ -1206,6 +1289,10 @@ export class ReclaimProofRequest {
                         throw new ProviderFailedError('Proof generation failed - timeout reached');
                     }
                     return; // Continue monitoring if under timeout
+                }
+
+                if (statusUrlResponse.session.statusV2 === SessionStatus.ERROR_SUBMISSION_FAILED || statusUrlResponse.session.statusV2 === SessionStatus.ERROR_SUBMITTED) {
+                    throw new ErrorDuringVerificationError();
                 }
 
                 const isDefaultCallbackUrl = this.getAppCallbackUrl() === `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`;
