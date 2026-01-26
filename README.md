@@ -314,7 +314,13 @@ The Reclaim SDK offers several advanced options to customize your integration:
    reclaimProofRequest.setRedirectUrl("https://example.com/redirect");
    ```
 
-4. **Custom Callback URL**:
+4. **Custom Error Redirect URL**:
+   Set a custom URL to redirect users on an error which aborts the verification process:
+   ```javascript
+   reclaimProofRequest.setErrorRedirectUrl("https://example.com/error-redirect");
+   ```
+
+5. **Custom Callback URL**:
    Set a custom callback URL for your app which allows you to receive proofs and status updates on your callback URL:
    Pass in `jsonProofResponse: true` to receive the proof in JSON format: By default, the proof is returned as a url encoded string.
 
@@ -322,7 +328,14 @@ The Reclaim SDK offers several advanced options to customize your integration:
    reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
    ```
 
-5. **Modal Customization for Desktop Users**:
+6. **Custom Error Callback URL**:
+   Set a custom error callback URL for your app which allows you to receive errors and status updates on your error callback URL:
+
+   ```javascript
+   reclaimProofRequest.setErrorCallbackUrl("https://example.com/error-callback");
+   ```
+
+7. **Modal Customization for Desktop Users**:
    Customize the appearance and behavior of the QR code modal shown to desktop users:
 
    ```javascript
@@ -334,7 +347,7 @@ The Reclaim SDK offers several advanced options to customize your integration:
    });
    ```
 
-6. **Browser Extension Configuration**:
+8. **Browser Extension Configuration**:
    Configure browser extension behavior and detection:
 
    ```javascript
@@ -353,7 +366,7 @@ The Reclaim SDK offers several advanced options to customize your integration:
    });
    ```
 
-7. **Custom Share Page and App Clip URLs**:
+9. **Custom Share Page and App Clip URLs**:
    You can customize the share page and app clip URLs for your app:
 
 ```javascript
@@ -364,7 +377,7 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 });
 ```
 
-8. **Platform-Specific Flow Control**:
+10. **Platform-Specific Flow Control**:
    The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
 
    ```javascript
@@ -377,7 +390,7 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
    // Automatically handles platform detection and optimal user experience
    ```
 
-9. **Exporting and Importing SDK Configuration**:
+11. **Exporting and Importing SDK Configuration**:
    You can export the entire Reclaim SDK configuration as a JSON string and use it to initialize the SDK with the same configuration on a different service or backend:
 
    ```javascript
@@ -394,7 +407,7 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 
    This allows you to generate request URLs and other details from your backend or a different service while maintaining the same configuration.
 
-10. **Utility Methods**:
+12. **Utility Methods**:
     Additional utility methods for managing your proof requests:
 
 ```javascript
@@ -403,7 +416,7 @@ const sessionId = reclaimProofRequest.getSessionId();
 console.log("Current session ID:", sessionId);
 ```
 
-11. **Control auto-submission of proofs**:
+13. **Control auto-submission of proofs**:
 
 Whether the verification client should automatically submit necessary proofs once they are generated. If set to false, the user must manually click a button to submit.
 Defaults to true.
@@ -415,7 +428,7 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 });
 ```
 
-12. **Add additional metadata for verification client**:
+14. **Add additional metadata for verification client**:
 
 Additional metadata to pass to the verification client. This can be used to customize the client experience, such as customizing themes or UI by passing context-specific information. 
 The keys and values must be strings. For most clients, this is not required and goes unused.
@@ -431,11 +444,16 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 
 ## Handling Proofs on Your Backend
 
-For production applications, it's recommended to handle proofs on your backend:
+For production applications, it's recommended to handle proofs, and errors on your backend:
 
 1. Set a callback URL:
    ```javascript
-   reclaimProofRequest.setCallbackUrl("https://your-backend.com/receive-proofs");
+   reclaimProofRequest.setAppCallbackUrl("https://your-backend.com/receive-proofs");
+   ```
+
+2. Set a error callback URL:
+   ```javascript
+   reclaimProofRequest.setErrorCallbackUrl("https://your-backend.com/receive-errors");
    ```
 
 These options allow you to securely process proofs and status updates on your server.
@@ -517,6 +535,7 @@ try {
 - `ProviderFailedError`: Provider failed to generate proof
 - `SessionNotStartedError`: Session could not be started
 - `ProofSubmissionFailedError`: Proof submission to callback failed
+- `ErrorDuringVerificationError`: An abort error during verification which was caused by the user aborting the verification process or provider's JS script raising a validation error
 
 ## Next Steps
 
