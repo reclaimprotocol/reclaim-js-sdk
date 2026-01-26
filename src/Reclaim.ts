@@ -518,7 +518,7 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Sets a custom callback URL where errors will be submitted via HTTP POST
+     * Sets a custom callback URL where errors that abort the verification process will be submitted via HTTP POST
      *
      * Errors will be HTTP POSTed with `header 'Content-Type': 'application/json'`.
      * When a custom error callback URL is set, Reclaim will no longer receive errors upon submission,
