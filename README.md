@@ -315,7 +315,7 @@ The Reclaim SDK offers several advanced options to customize your integration:
    ```
 
 4. **Custom Error Redirect URL**:
-   Set a custom URL to redirect users after the verification process:
+   Set a custom URL to redirect users on an error which aborts the verification process:
    ```javascript
    reclaimProofRequest.setErrorRedirectUrl("https://example.com/error-redirect");
    ```
@@ -448,7 +448,7 @@ For production applications, it's recommended to handle proofs, and errors on yo
 
 1. Set a callback URL:
    ```javascript
-   reclaimProofRequest.setCallbackUrl("https://your-backend.com/receive-proofs");
+   reclaimProofRequest.setAppCallbackUrl("https://your-backend.com/receive-proofs");
    ```
 
 2. Set a error callback URL:

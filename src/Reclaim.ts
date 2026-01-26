@@ -539,9 +539,9 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Sets an error redirect URL where users will be redirected after error in verification process
+     * Sets an error redirect URL where users will be redirected after an error which aborts the verification process
      *
-     * @param url - The URL where users should be redirected after error in verification process
+     * @param url - The URL where users should be redirected after an error which aborts the verification process
      * @throws {InvalidParamError} When URL is invalid
      *
      * @example
