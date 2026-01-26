@@ -12,6 +12,11 @@ export const constants = {
         return `${BACKEND_BASE_URL}/api/sdk/callback?callbackId=`;
     },
 
+    // Default error callback URL for Reclaim protocol
+    get DEFAULT_RECLAIM_ERROR_CALLBACK_URL() {
+        return `${BACKEND_BASE_URL}/api/sdk/error-callback?callbackId=`;
+    },
+
     // Default status URL for Reclaim sessions
     get DEFAULT_RECLAIM_STATUS_URL() {
         return `${BACKEND_BASE_URL}/api/sdk/session/`;
