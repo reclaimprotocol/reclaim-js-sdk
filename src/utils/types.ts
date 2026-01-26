@@ -55,6 +55,19 @@ export type ProofRequestOptions = {
    */
   canAutoSubmit?: boolean;
   /**
+   * An identifier used to select a user's language and formatting preferences.
+   * 
+   * Locales are expected to be canonicalized according to the "preferred value" entries in the [IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry). 
+   * For example, `he`, and `iw` are equal and both have the languageCode `he`, because `iw` is a deprecated language subtag that was replaced by the subtag `he`.
+   * 
+   * Defaults to the browser's locale if available, otherwise English (en).
+   * 
+   * For more info, refer: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl#description
+   * 
+   * @since 4.9.0
+   */
+  preferredLocale?: string;
+  /**
    * Additional metadata to pass to the verification client.
    * This can be used to customize the client experience, such as customizing themes or UI by passing context-specific information.
    * The keys and values must be strings. For most clients, this is not required and goes unused.
@@ -185,6 +198,7 @@ export type TemplateData = {
   log?: boolean;
   canAutoSubmit?: boolean;
   metadata?: Record<string, string>;
+  preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
 
 // Add the new StatusUrlResponse type

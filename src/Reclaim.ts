@@ -532,6 +532,9 @@ export class ReclaimProofRequest {
      * ```typescript
      * proofRequest.setErrorCallbackUrl('https://your-backend.com/error-callback');
      * ```
+     * 
+     * @since 4.8.1
+     * 
      */
     setErrorCallbackUrl(url: string): void {
         validateURL(url, 'setErrorCallbackUrl')
@@ -548,6 +551,9 @@ export class ReclaimProofRequest {
      * ```typescript
      * proofRequest.setErrorRedirectUrl('https://your-app.com/error');
      * ```
+     * 
+     * @since 4.8.1
+     * 
      */
     setErrorRedirectUrl(url: string): void {
         validateURL(url, 'setErrorRedirectUrl');
@@ -910,6 +916,7 @@ export class ReclaimProofRequest {
             log: this.options?.log ?? false,
             canAutoSubmit: this.options?.canAutoSubmit ?? true,
             metadata: this.options?.metadata,
+            preferredLocale: this.options?.preferredLocale,
         }
 
         return templateData;
