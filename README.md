@@ -442,6 +442,23 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 });
 ```
 
+15. Set preferred locale for verification client:
+
+An identifier used to select a user's language and formatting preferences.
+
+This represents a Unicode Language Identifier (i.e. without Locale extensions), except variants are not supported.
+Locales are expected to be canonicalized according to the "preferred value" entries in the [IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry). 
+For example, `he`, and `iw` are equal and both have the languageCode `he`, because `iw` is a deprecated language subtag that was replaced by the subtag `he`.
+
+Defaults to the browser's locale if available, otherwise English (en).
+
+```js
+// Initialize with options
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+  preferredLocale: 'en-US',
+});
+```
+
 ## Handling Proofs on Your Backend
 
 For production applications, it's recommended to handle proofs, and errors on your backend:
