@@ -35,7 +35,7 @@ import {
     SignatureNotFoundError,
     ErrorDuringVerificationError
 } from './utils/errors'
-import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions } from './utils/validationUtils'
+import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
@@ -330,6 +330,22 @@ export class ReclaimProofRequest {
                         { paramName: 'customAppClipUrl', input: options.customAppClipUrl, isString: true }
                     ], 'the constructor')
                 }
+                if (options.preferredLocale) {
+                    validateFunctionParams([
+                        { paramName: 'preferredLocale', input: options.preferredLocale, isString: true }
+                    ], 'the constructor');
+                    validateFunctionParamsWithFn({
+                        paramName: 'preferredLocale', input: options.preferredLocale, isValid: () => {
+                            try {
+                                Intl.getCanonicalLocales(options.preferredLocale);
+                                return true;
+                            } catch (error) {
+                                logger.info('Failed to canonicalize locale', error);
+                                return false;
+                            }
+                        }
+                    }, 'the constructor');
+                }
             }
 
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options)
@@ -443,7 +459,7 @@ export class ReclaimProofRequest {
 
             if (options?.providerVersion) {
                 validateFunctionParams([
-                    { input: options.providerVersion, paramName: 'providerVersion', isString: true }
+                    { input: options.providerVersion, paramName: 'options.providerVersion', isString: true }
                 ], 'fromJsonString');
             }
 
@@ -451,6 +467,23 @@ export class ReclaimProofRequest {
                 validateFunctionParams([
                     { input: resolvedProviderVersion, paramName: 'resolvedProviderVersion', isString: true }
                 ], 'fromJsonString');
+            }
+
+            if (options?.preferredLocale) {
+                validateFunctionParams([
+                    { paramName: 'options.preferredLocale', input: options.preferredLocale, isString: true }
+                ], 'fromJsonString');
+                validateFunctionParamsWithFn({
+                    paramName: 'options.preferredLocale', input: options.preferredLocale, isValid: () => {
+                        try {
+                            Intl.getCanonicalLocales(options.preferredLocale);
+                            return true;
+                        } catch (error) {
+                            logger.info('Failed to canonicalize locale', error);
+                            return false;
+                        }
+                    }
+                }, 'fromJsonString');
             }
 
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);

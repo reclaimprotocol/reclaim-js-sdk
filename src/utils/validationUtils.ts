@@ -29,6 +29,13 @@ export function validateFunctionParams(params: { input: any, paramName: string, 
   });
 }
 
+export function validateFunctionParamsWithFn(param: { input: any, paramName: string, isValid: () => boolean }, functionName: string): void {
+  if (!param.isValid()) {
+    logger.info(`Validation failed: ${param.paramName} in ${functionName} is not valid`);
+    throw new InvalidParamError(`${param.paramName} passed to ${functionName} must be valid.`);
+  }
+}
+
 
 // validate the parameters
 /** 
