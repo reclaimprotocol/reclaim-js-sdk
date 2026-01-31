@@ -1365,7 +1365,10 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED ||
                         statusUrlResponse.session.statusV2 === SessionStatus.AI_PROOF_SUBMITTED) {
                         if (onSuccess) {
-                            onSuccess('Proof submitted successfully to the custom callback url');
+                            // Proof submitted successfully to the custom callback url
+                            // We don't have proof, so we just return empty array
+                            // Before 4.10.1, this was a string message.
+                            onSuccess([]);
                         }
                         this.clearInterval();
                         this.modal?.close();
