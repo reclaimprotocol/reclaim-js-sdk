@@ -4,6 +4,7 @@ import canonicalize from 'canonicalize'
 import { Context } from "./interfaces";
 import loggerModule from './logger';
 import { ProofRequestOptions, ModalOptions } from "./types";
+import { canonicalStringify } from "./strings";
 const logger = loggerModule.logger;
 
 /**
@@ -117,13 +118,25 @@ export function validateSignature(providerId: string, signature: string, applica
   }
 }
 
-
 /**
  * Validates the context object
  * @param context - The context object to validate
  * @throws InvalidParamError if the context object is not valid
  */
-export function validateContext(context: Context): void {
+export function validateContext(context: Context | Record<string, any>): void {
+  if (context && !('contextAddress' in context)) {
+    try {
+      validateFunctionParams([
+        { input: context, paramName: 'context', isString: false }
+      ], 'validateContext');
+      // ensure context is canonically json serializable
+      JSON.parse(canonicalStringify(context));
+      return;
+    } catch (e) {
+      logger.info(`Context validation failed: Provided JSON serializable context is not valid`);
+      throw new InvalidParamError(`The provided context is not valid`);
+    }
+  }
   if (!context.contextAddress) {
     logger.info(`Context validation failed: Provided context address in context is not valid`);
     throw new InvalidParamError(`The provided context address in context is not valid`);

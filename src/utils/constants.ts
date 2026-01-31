@@ -13,7 +13,7 @@ export const constants = {
     },
 
     // Default error callback URL for Reclaim protocol
-    get DEFAULT_RECLAIM_ERROR_CALLBACK_URL() {
+    get DEFAULT_RECLAIM_CANCEL_CALLBACK_URL() {
         return `${BACKEND_BASE_URL}/api/sdk/error-callback?callbackId=`;
     },
 

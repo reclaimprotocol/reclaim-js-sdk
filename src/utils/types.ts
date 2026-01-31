@@ -68,8 +68,8 @@ export type ProofRequestOptions = {
    */
   preferredLocale?: string;
   /**
-   * Additional metadata to pass to the verification client.
-   * This can be used to customize the client experience, such as customizing themes or UI by passing context-specific information.
+   * Additional metadata to pass to the verification client frontend.
+   * This can be used to customize the client UI experience, such as customizing themes or UI by passing context-specific information.
    * The keys and values must be strings. For most clients, this is not required and goes unused.
    * 
    * This has no effect on the verification process.
@@ -168,8 +168,8 @@ export type ProofPropertiesJSON = {
   timeStamp?: string;
   timestamp?: string; // new timestamp field
   appCallbackUrl?: string;
-  errorCallbackUrl?: TemplateData['errorCallbackUrl'];
-  errorRedirectUrl?: TemplateData['errorRedirectUrl'];
+  cancelCallbackUrl?: TemplateData['cancelCallbackUrl'];
+  cancelRedirectUrl?: TemplateData['cancelRedirectUrl'];
   claimCreationType?: ClaimCreationType;
   options?: ProofRequestOptions;
   sdkVersion: string;
@@ -188,8 +188,8 @@ export type TemplateData = {
   context: string;
   parameters: { [key: string]: string };
   redirectUrl: string;
-  errorCallbackUrl?: string | null;
-  errorRedirectUrl?: string | null;
+  cancelCallbackUrl?: string | null;
+  cancelRedirectUrl?: string | null;
   acceptAiProviders: boolean;
   sdkVersion: string;
   jsonProofResponse?: boolean;
