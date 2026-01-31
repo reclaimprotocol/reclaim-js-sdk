@@ -167,8 +167,8 @@ const emptyTemplateData: TemplateData = {
     context: '',
     parameters: {},
     redirectUrl: '',
-    errorCallbackUrl: '',
-    errorRedirectUrl: '',
+    cancelCallbackUrl: '',
+    cancelRedirectUrl: '',
     acceptAiProviders: false,
     sdkVersion: '',
     providerVersion: '',
@@ -188,8 +188,8 @@ export class ReclaimProofRequest {
     private resolvedProviderVersion?: string;
     private parameters: { [key: string]: string };
     private redirectUrl?: string;
-    private errorCallbackUrl?: TemplateData['errorCallbackUrl'];
-    private errorRedirectUrl?: TemplateData['errorRedirectUrl'];
+    private cancelCallbackUrl?: TemplateData['cancelCallbackUrl'];
+    private cancelRedirectUrl?: TemplateData['cancelRedirectUrl'];
     private intervals: Map<string, NodeJS.Timer> = new Map();
     private timeStamp: string;
     private sdkVersion: string;
@@ -359,6 +359,7 @@ export class ReclaimProofRequest {
 
             return proofRequestInstance
         } catch (error) {
+            console.error(error);
             logger.info('Failed to initialize ReclaimProofRequest', error as Error);
             throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
         }
@@ -391,8 +392,8 @@ export class ReclaimProofRequest {
                 parameters,
                 signature,
                 redirectUrl,
-                errorCallbackUrl,
-                errorRedirectUrl,
+                cancelCallbackUrl,
+                cancelRedirectUrl,
                 timeStamp,
                 timestamp,
                 appCallbackUrl,
@@ -428,12 +429,12 @@ export class ReclaimProofRequest {
                 validateURL(appCallbackUrl, 'fromJsonString');
             }
 
-            if (errorRedirectUrl) {
-                validateURL(errorRedirectUrl, 'fromJsonString');
+            if (cancelRedirectUrl) {
+                validateURL(cancelRedirectUrl, 'fromJsonString');
             }
 
-            if (errorCallbackUrl) {
-                validateURL(errorCallbackUrl, 'fromJsonString');
+            if (cancelCallbackUrl) {
+                validateURL(cancelCallbackUrl, 'fromJsonString');
             }
 
             if (context) {
@@ -498,8 +499,8 @@ export class ReclaimProofRequest {
             proofRequestInstance.resolvedProviderVersion = resolvedProviderVersion;
             proofRequestInstance.modalOptions = modalOptions;
             proofRequestInstance.jsonProofResponse = jsonProofResponse ?? false;
-            proofRequestInstance.errorCallbackUrl = errorCallbackUrl;
-            proofRequestInstance.errorRedirectUrl = errorRedirectUrl;
+            proofRequestInstance.cancelCallbackUrl = cancelCallbackUrl;
+            proofRequestInstance.cancelRedirectUrl = cancelRedirectUrl;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -563,15 +564,15 @@ export class ReclaimProofRequest {
      *
      * @example
      * ```typescript
-     * proofRequest.setErrorCallbackUrl('https://your-backend.com/error-callback');
+     * proofRequest.setCancelCallbackUrl('https://your-backend.com/error-callback');
      * ```
      * 
      * @since 4.8.1
      * 
      */
-    setErrorCallbackUrl(url: string): void {
-        validateURL(url, 'setErrorCallbackUrl')
-        this.errorCallbackUrl = url
+    setCancelCallbackUrl(url: string): void {
+        validateURL(url, 'setCancelCallbackUrl')
+        this.cancelCallbackUrl = url
     }
 
     /**
@@ -582,15 +583,15 @@ export class ReclaimProofRequest {
      *
      * @example
      * ```typescript
-     * proofRequest.setErrorRedirectUrl('https://your-app.com/error');
+     * proofRequest.setCancelRedirectUrl('https://your-app.com/error');
      * ```
      * 
-     * @since 4.8.1
+     * @since 4.10.0
      * 
      */
-    setErrorRedirectUrl(url: string): void {
-        validateURL(url, 'setErrorRedirectUrl');
-        this.errorRedirectUrl = url;
+    setCancelRedirectUrl(url: string): void {
+        validateURL(url, 'setCancelRedirectUrl');
+        this.cancelRedirectUrl = url;
     }
 
     /**
@@ -755,27 +756,27 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Returns the currently configured error callback URL
+     * Returns the currently configured cancel callback URL
      *
-     * If no custom error callback URL was set via setErrorCallbackUrl(), this returns the default
-     * Reclaim service error callback URL with the current session ID.
+     * If no custom cancel callback URL was set via setCancelCallbackUrl(), this returns the default
+     * Reclaim service cancel callback URL with the current session ID.
      *
-     * @returns The error callback URL where proofs will be submitted
-     * @throws {GetAppCallbackUrlError} When unable to retrieve the error callback URL
+     * @returns The cancel callback URL where proofs will be submitted
+     * @throws {GetAppCallbackUrlError} When unable to retrieve the cancel callback URL
      *
      * @example
      * ```typescript
-     * const callbackUrl = proofRequest.getErrorCallbackUrl();
+     * const callbackUrl = proofRequest.getCancelCallbackUrl();
      * console.log('Errors will be sent to:', callbackUrl);
      * ```
      */
-    getErrorCallbackUrl(): string {
+    getCancelCallbackUrl(): string {
         try {
-            validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getErrorCallbackUrl');
-            return this.errorCallbackUrl || `${constants.DEFAULT_RECLAIM_ERROR_CALLBACK_URL}${this.sessionId}`
+            validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getCancelCallbackUrl');
+            return this.cancelCallbackUrl || `${constants.DEFAULT_RECLAIM_ERROR_CALLBACK_URL}${this.sessionId}`
         } catch (error) {
-            logger.info("Error getting error callback url", error)
-            throw new GetAppCallbackUrlError("Error getting error callback url", error as Error)
+            logger.info("Error getting cancel callback url", error)
+            throw new GetAppCallbackUrlError("Error getting cancel callback url", error as Error)
         }
     }
 
@@ -900,8 +901,8 @@ export class ReclaimProofRequest {
             parameters: this.parameters,
             signature: this.signature,
             redirectUrl: this.redirectUrl,
-            errorCallbackUrl: this.errorCallbackUrl,
-            errorRedirectUrl: this.errorRedirectUrl,
+            cancelCallbackUrl: this.cancelCallbackUrl,
+            cancelRedirectUrl: this.cancelRedirectUrl,
             timestamp: this.timeStamp, // New field with correct spelling
             timeStamp: this.timeStamp, // @deprecated: Remove in future versions 
             options: this.options,
@@ -941,8 +942,8 @@ export class ReclaimProofRequest {
             resolvedProviderVersion: this.resolvedProviderVersion ?? '',
             parameters: this.parameters,
             redirectUrl: this.redirectUrl ?? '',
-            errorCallbackUrl: this.getErrorCallbackUrl(),
-            errorRedirectUrl: this.errorRedirectUrl,
+            cancelCallbackUrl: this.getCancelCallbackUrl(),
+            cancelRedirectUrl: this.cancelRedirectUrl,
             acceptAiProviders: this.options?.acceptAiProviders ?? false,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,

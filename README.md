@@ -308,32 +308,33 @@ The Reclaim SDK offers several advanced options to customize your integration:
    ```
 
 3. **Custom Redirect URL**:
-   Set a custom URL to redirect users after the verification process:
 
-   ```javascript
-   reclaimProofRequest.setRedirectUrl("https://example.com/redirect");
-   ```
+Set a custom URL to redirect users after the verification process:
 
-4. **Custom Error Redirect URL**:
-   Set a custom URL to redirect users on an error which aborts the verification process:
-   ```javascript
-   reclaimProofRequest.setErrorRedirectUrl("https://example.com/error-redirect");
-   ```
+```javascript
+reclaimProofRequest.setRedirectUrl("https://example.com/redirect");
+```
+
+4. **Custom Cancel Redirect URL**:
+   Set a custom URL to redirect users on a cancellation which aborts the verification process:
+  
+```javascript
+reclaimProofRequest.setCancelRedirectUrl("https://example.com/error-redirect");
+```
 
 5. **Custom Callback URL**:
    Set a custom callback URL for your app which allows you to receive proofs and status updates on your callback URL:
    Pass in `jsonProofResponse: true` to receive the proof in JSON format: By default, the proof is returned as a url encoded string.
 
-   ```javascript
    reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
    ```
 
 6. **Custom Error Callback URL**:
-   Set a custom error callback URL for your app which allows you to receive errors and status updates on your error callback URL:
+   Set a custom cancel callback URL for your app which allows you to receive user or provider initiated cancellation on your callback URL:
 
    ```javascript
-   reclaimProofRequest.setErrorCallbackUrl("https://example.com/error-callback");
-   ```
+   reclaimProofRequest.setCancelCallbackUrl("https://example.com/error-callback");
+   
 
 7. **Modal Customization for Desktop Users**:
    Customize the appearance and behavior of the QR code modal shown to desktop users:
@@ -461,19 +462,19 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 
 ## Handling Proofs on Your Backend
 
-For production applications, it's recommended to handle proofs, and errors on your backend:
+For production applications, it's recommended to handle proofs, and cancellations on your backend:
 
 1. Set a callback URL:
    ```javascript
    reclaimProofRequest.setAppCallbackUrl("https://your-backend.com/receive-proofs");
    ```
 
-2. Set a error callback URL:
+2. Set a cancel callback URL:
    ```javascript
-   reclaimProofRequest.setErrorCallbackUrl("https://your-backend.com/receive-errors");
+   reclaimProofRequest.setCancelCallbackUrl("https://your-backend.com/receive-cancel");
    ```
 
-These options allow you to securely process proofs and status updates on your server.
+These options allow you to securely process proofs or cancellations on your server.
 
 ## Proof Verification
 
