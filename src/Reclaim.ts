@@ -773,7 +773,7 @@ export class ReclaimProofRequest {
     getCancelCallbackUrl(): string {
         try {
             validateFunctionParams([{ input: this.sessionId, paramName: 'sessionId', isString: true }], 'getCancelCallbackUrl');
-            return this.cancelCallbackUrl || `${constants.DEFAULT_RECLAIM_ERROR_CALLBACK_URL}${this.sessionId}`
+            return this.cancelCallbackUrl || `${constants.DEFAULT_RECLAIM_CANCEL_CALLBACK_URL}${this.sessionId}`
         } catch (error) {
             logger.info("Error getting cancel callback url", error)
             throw new GetAppCallbackUrlError("Error getting cancel callback url", error as Error)
