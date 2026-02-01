@@ -80,15 +80,17 @@ function App() {
 
     await reclaimProofRequest.startSession({
       onSuccess: (proofs) => {
-        if (proofs && typeof proofs === "string") {
-          // When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof
-          console.log("SDK Message:", proofs);
-          setProofs(proofs);
-        } else if (proofs && typeof proofs !== "string") {
+        if (proofs && typeof proofs !== "string") {
           // When using the default callback url, we get a proof
           if (Array.isArray(proofs)) {
-            // when using the cascading providers, providers having more than one proof will return an array of proofs
-            console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            if (proofs.length == 0) {
+              // From version 4.10.1, this is the case when using a custom callback url
+              // Proofs are sent to the callback url.
+              console.log("No proofs received. This is expected when using a custom callback url.");
+            } else {
+              // when using the cascading providers, providers having more than one proof will return an array of proofs
+              console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            }
           } else {
             console.log("Proof received:", proofs?.claimData.context);
           }
@@ -164,12 +166,13 @@ async function handleCreateClaim() {
     // Listen for the verification results
     await reclaimProofRequest.startSession({
       onSuccess: (proofs) => {
-        if (proofs && typeof proofs === "string") {
-          console.log("SDK Message:", proofs);
-          setProofs(proofs);
-        } else if (proofs && typeof proofs !== "string") {
+        if (proofs && typeof proofs !== "string") {
           if (Array.isArray(proofs)) {
-            console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            if (proofs.length == 0) {
+              // proofs sent to callback url
+            } else {
+              console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            }
           } else {
             console.log("Proof received:", proofs?.claimData.context);
           }
