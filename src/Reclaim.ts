@@ -646,7 +646,7 @@ export class ReclaimProofRequest {
      * 
      * Also see [setContext] which is an alternate way to set context that has an address & message.
      *
-     * [setContext] and [setJsonContext] overwrite each other.
+     * [setContext] and [setJsonContext] overwrite each other. Each call replaces the existing context.
      * 
      * @param context - Any additional data you want to store with the claim. Should be serializable to a JSON string.
      * @throws {SetContextError} When context parameters are invalid
@@ -677,7 +677,7 @@ export class ReclaimProofRequest {
      *
      * Also see [setJsonContext] which is an alternate way to set context that allows for custom JSON serializable data.
      * 
-     * [setContext] and [setJsonContext] overwrite each other.
+     * [setContext] and [setJsonContext] overwrite each other. Each call replaces the existing context.
      * 
      * @param address - Context address identifier
      * @param message - Additional data to associate with the address
