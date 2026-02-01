@@ -80,15 +80,17 @@ function App() {
 
     await reclaimProofRequest.startSession({
       onSuccess: (proofs) => {
-        if (proofs && typeof proofs === "string") {
-          // When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof
-          console.log("SDK Message:", proofs);
-          setProofs(proofs);
-        } else if (proofs && typeof proofs !== "string") {
+        if (proofs && typeof proofs !== "string") {
           // When using the default callback url, we get a proof
           if (Array.isArray(proofs)) {
-            // when using the cascading providers, providers having more than one proof will return an array of proofs
-            console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            if (proofs.length == 0) {
+              // From version 4.10.1, this is the case when using a custom callback url
+              // Proofs are sent to the callback url.
+              console.log("No proofs received. This is expected when using a custom callback url.");
+            } else {
+              // when using the cascading providers, providers having more than one proof will return an array of proofs
+              console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            }
           } else {
             console.log("Proof received:", proofs?.claimData.context);
           }
@@ -164,12 +166,13 @@ async function handleCreateClaim() {
     // Listen for the verification results
     await reclaimProofRequest.startSession({
       onSuccess: (proofs) => {
-        if (proofs && typeof proofs === "string") {
-          console.log("SDK Message:", proofs);
-          setProofs(proofs);
-        } else if (proofs && typeof proofs !== "string") {
+        if (proofs && typeof proofs !== "string") {
           if (Array.isArray(proofs)) {
-            console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            if (proofs.length == 0) {
+              // proofs sent to callback url
+            } else {
+              console.log(JSON.stringify(proofs.map((p) => p.claimData.context)));
+            }
           } else {
             console.log("Proof received:", proofs?.claimData.context);
           }
@@ -282,7 +285,7 @@ Your Reclaim SDK demo should now be running. Click the "Create Claim" button to 
 
 3. **Status URL**: This URL (logged to the console) can be used to check the status of the claim process. It's useful for tracking the progress of verification.
 
-4. **Verification**: The `onSuccess` is called when verification is successful, providing the proof data. When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof.
+4. **Verification**: The `onSuccess` is called when verification is successful, providing the proof data. When using a custom callback url, the proof is returned to the callback url and we get an empty array instead of a proof.
 
 5. **Handling Failures**: The `onFailure` is called if verification fails, allowing you to handle errors gracefully.
 
@@ -324,7 +327,10 @@ reclaimProofRequest.setCancelRedirectUrl("https://example.com/error-redirect");
 
 5. **Custom Callback URL**:
    Set a custom callback URL for your app which allows you to receive proofs and status updates on your callback URL:
-   Pass in `jsonProofResponse: true` to receive the proof in JSON format: By default, the proof is returned as a url encoded string.
+   
+   **Note**: When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend. Consequently, the `onSuccess` callback will be invoked with an empty array (`[]`) instead of the proof data.
+
+   By default, proofs are sent as HTTP `POST` with `Content-Type` as `application/x-www-form-urlencoded`. Pass function argument `jsonProofResponse` as `true` to send proofs with `Content-Type` as `application/json`.
 
    reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
    ```
@@ -476,6 +482,9 @@ For production applications, it's recommended to handle proofs, and cancellation
 
 These options allow you to securely process proofs or cancellations on your server.
 
+> [!TIP]
+> **Best Practice:** When using `setAppCallbackUrl` and/or `setCancelCallbackUrl`, your backend receives the proof or cancellation details directly. We recommend your backend notifies the frontend (e.g. via WebSockets, SSE, or polling) to stop the verification process and handle the appropriate success/failure action. Do not rely completely on `startSession` callbacks on the frontend when using these backend callbacks.
+
 ## Proof Verification
 
 The SDK provides a `verifyProof` function to manually verify proofs. This is useful when you need to validate proofs outside of the normal flow:
@@ -518,8 +527,9 @@ try {
   const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID);
 
   await proofRequest.startSession({
-    onSuccess: (proof) => {
-      console.log("Proof received:", proof);
+    onSuccess: (proofs) => {
+      // proofs can be empty if callback url set
+      console.log("Proof received:", proofs);
     },
     onError: (error) => {
       // Handle different error types

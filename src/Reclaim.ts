@@ -509,16 +509,18 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Sets a custom callback URL where proofs will be submitted via HTTP POST
+     * Sets a custom callback URL where proofs will be submitted via HTTP `POST`
      *
-     * By default, proofs are posted as `application/x-www-form-urlencoded`.
-     * When a custom callback URL is set, Reclaim will no longer receive proofs upon submission,
-     * and listeners on the startSession method will not be triggered. Your application must
-     * coordinate with your backend to receive and verify proofs using verifyProof().
-     *
+     * By default, proofs are sent as HTTP POST with `Content-Type` as `application/x-www-form-urlencoded`. 
+     * Pass function argument `jsonProofResponse` as `true` to send proofs with `Content-Type` as `application/json`.
+     * 
+     * When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend.
+     * Consequently, the startSession `onSuccess` callback will be invoked with an empty array (`[]`) 
+     * instead of the proof data, as the proof is not available to the SDK in this flow.
+     * 
      * Note: InApp SDKs are unaffected by this property as they do not handle proof submission.
      *
-     * @param url - The URL where proofs should be submitted via HTTP POST
+     * @param url - The URL where proofs should be submitted via HTTP `POST`
      * @param jsonProofResponse - Optional. Set to true to submit proofs as `application/json`. Defaults to false
      * @throws {InvalidParamError} When URL is invalid
      *
@@ -639,11 +641,13 @@ export class ReclaimProofRequest {
     /**
      * Sets additional context data to be stored with the claim
      *
-     * This allows you to associate custom data (address and message) with the proof claim.
+     * This allows you to associate custom JSON serializable data with the proof claim.
      * The context can be retrieved and validated when verifying the proof. 
      * 
      * Also see [setContext] which is an alternate way to set context that has an address & message.
      *
+     * [setContext] and [setJsonContext] overwrite each other. Each call replaces the existing context.
+     * 
      * @param context - Any additional data you want to store with the claim. Should be serializable to a JSON string.
      * @throws {SetContextError} When context parameters are invalid
      *
@@ -671,6 +675,10 @@ export class ReclaimProofRequest {
      * This allows you to associate custom data (address and message) with the proof claim.
      * The context can be retrieved and validated when verifying the proof.
      *
+     * Also see [setJsonContext] which is an alternate way to set context that allows for custom JSON serializable data.
+     * 
+     * [setContext] and [setJsonContext] overwrite each other. Each call replaces the existing context.
+     * 
      * @param address - Context address identifier
      * @param message - Additional data to associate with the address
      * @throws {SetContextError} When context parameters are invalid
@@ -1278,7 +1286,16 @@ export class ReclaimProofRequest {
      * and custom callback URLs.
      *
      * For default callbacks: Verifies proofs automatically and passes them to onSuccess
-     * For custom callbacks: Monitors submission status and notifies via onSuccess when complete
+     * For custom callbacks: Monitors submission status and notifies via onSuccess when complete.
+     * In the custom-callback flow (where the SDK submits a proof to a provided callback URL),
+     * onSuccess may be invoked with an empty array (onSuccess([])) when no proof is available
+     * (this happens when a callback is set using setAppCallbackUrl where proof is sent to callback instead of reclaim backend).
+     * 
+     * Please refer to the OnSuccess type signature ((proof?: Proof | Proof[]) => void)
+     * and the startSession function source for more details.
+     * 
+     * > [!TIP]
+     * > **Best Practice:** When using `setAppCallbackUrl` and/or `setCancelCallbackUrl`, your backend receives the proof or cancellation details directly. We recommend your backend notifies the frontend (e.g. via WebSockets, SSE, or polling) to stop the verification process and handle the appropriate success/failure action. Do not rely completely on `startSession` callbacks on the frontend when using these backend callbacks.
      *
      * @param onSuccess - Callback function invoked when proof is successfully submitted
      * @param onError - Callback function invoked when an error occurs during the session
@@ -1365,7 +1382,10 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED ||
                         statusUrlResponse.session.statusV2 === SessionStatus.AI_PROOF_SUBMITTED) {
                         if (onSuccess) {
-                            onSuccess('Proof submitted successfully to the custom callback url');
+                            // Proof submitted successfully to the custom callback url
+                            // We don't have proof, so we just return empty array
+                            // Before 4.10.1, this was a string message.
+                            onSuccess([]);
                         }
                         this.clearInterval();
                         this.modal?.close();

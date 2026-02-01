@@ -78,7 +78,7 @@ export default function Home() {
       await reclaimProofRequest.triggerReclaimFlow()
 
       await reclaimProofRequest.startSession({
-        onSuccess: async (proof: Proof | Proof[] | string | undefined) => {
+        onSuccess: async (proof: Proof | Proof[] | undefined) => {
           setIsLoading(false)
 
           if (proof && typeof proof === 'string') {
