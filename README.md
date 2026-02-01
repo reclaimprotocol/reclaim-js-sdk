@@ -282,7 +282,7 @@ Your Reclaim SDK demo should now be running. Click the "Create Claim" button to 
 
 3. **Status URL**: This URL (logged to the console) can be used to check the status of the claim process. It's useful for tracking the progress of verification.
 
-4. **Verification**: The `onSuccess` is called when verification is successful, providing the proof data. When using a custom callback url, the proof is returned to the callback url and we get a message instead of a proof.
+4. **Verification**: The `onSuccess` is called when verification is successful, providing the proof data. When using a custom callback url, the proof is returned to the callback url and we get an empty array instead of a proof.
 
 5. **Handling Failures**: The `onFailure` is called if verification fails, allowing you to handle errors gracefully.
 
@@ -324,6 +324,9 @@ reclaimProofRequest.setCancelRedirectUrl("https://example.com/error-redirect");
 
 5. **Custom Callback URL**:
    Set a custom callback URL for your app which allows you to receive proofs and status updates on your callback URL:
+   
+   **Note**: When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend. Consequently, the `onSuccess` callback will be invoked with an empty array (`[]`) instead of the proof data.
+
    Pass in `jsonProofResponse: true` to receive the proof in JSON format: By default, the proof is returned as a url encoded string.
 
    reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
@@ -518,8 +521,9 @@ try {
   const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID);
 
   await proofRequest.startSession({
-    onSuccess: (proof) => {
-      console.log("Proof received:", proof);
+    onSuccess: (proofs) => {
+      // proofs can be empty if callback url set
+      console.log("Proof received:", proofs);
     },
     onError: (error) => {
       // Handle different error types

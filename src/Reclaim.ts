@@ -512,10 +512,10 @@ export class ReclaimProofRequest {
      * Sets a custom callback URL where proofs will be submitted via HTTP POST
      *
      * By default, proofs are posted as `application/x-www-form-urlencoded`.
-     * When a custom callback URL is set, Reclaim will no longer receive proofs upon submission,
-     * and listeners on the startSession method will not be triggered. Your application must
-     * coordinate with your backend to receive and verify proofs using verifyProof().
-     *
+     * When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend.
+     * Consequently, the startSession `onSuccess` callback will be invoked with an empty array (`[]`) 
+     * instead of the proof data, as the proof is not available to the SDK in this flow.
+     * 
      * Note: InApp SDKs are unaffected by this property as they do not handle proof submission.
      *
      * @param url - The URL where proofs should be submitted via HTTP POST
@@ -1284,7 +1284,13 @@ export class ReclaimProofRequest {
      * and custom callback URLs.
      *
      * For default callbacks: Verifies proofs automatically and passes them to onSuccess
-     * For custom callbacks: Monitors submission status and notifies via onSuccess when complete
+     * For custom callbacks: Monitors submission status and notifies via onSuccess when complete.
+     * In the custom-callback flow (where the SDK submits a proof to a provided callback URL),
+     * onSuccess may be invoked with an empty array (onSuccess([])) when no proof is available
+     * (this happens when a callback is set using setAppCallbackUrl where proof is sent to callback instead of reclaim backend).
+     * 
+     * Please refer to the OnSuccess type signature ((proof?: Proof | Proof[]) => void)
+     * and the startSession function source for more details.
      *
      * @param onSuccess - Callback function invoked when proof is successfully submitted
      * @param onError - Callback function invoked when an error occurs during the session
