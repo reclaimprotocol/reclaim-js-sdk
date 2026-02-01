@@ -327,7 +327,7 @@ reclaimProofRequest.setCancelRedirectUrl("https://example.com/error-redirect");
    
    **Note**: When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend. Consequently, the `onSuccess` callback will be invoked with an empty array (`[]`) instead of the proof data.
 
-   Pass in `jsonProofResponse: true` to receive the proof in JSON format: By default, the proof is returned as a url encoded string.
+   By default, proofs are sent as HTTP `POST` with `Content-Type` as `application/x-www-form-urlencoded`. Pass function argument `jsonProofResponse` as `true` to send proofs with `Content-Type` as `application/json`.
 
    reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
    ```

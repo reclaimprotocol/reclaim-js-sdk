@@ -509,16 +509,18 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Sets a custom callback URL where proofs will be submitted via HTTP POST
+     * Sets a custom callback URL where proofs will be submitted via HTTP `POST`
      *
-     * By default, proofs are posted as `application/x-www-form-urlencoded`.
+     * By default, proofs are sent as HTTP POST with `Content-Type` as `application/x-www-form-urlencoded`. 
+     * Pass function argument `jsonProofResponse` as `true` to send proofs with `Content-Type` as `application/json`.
+     * 
      * When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend.
      * Consequently, the startSession `onSuccess` callback will be invoked with an empty array (`[]`) 
      * instead of the proof data, as the proof is not available to the SDK in this flow.
      * 
      * Note: InApp SDKs are unaffected by this property as they do not handle proof submission.
      *
-     * @param url - The URL where proofs should be submitted via HTTP POST
+     * @param url - The URL where proofs should be submitted via HTTP `POST`
      * @param jsonProofResponse - Optional. Set to true to submit proofs as `application/json`. Defaults to false
      * @throws {InvalidParamError} When URL is invalid
      *
