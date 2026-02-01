@@ -1293,6 +1293,9 @@ export class ReclaimProofRequest {
      * 
      * Please refer to the OnSuccess type signature ((proof?: Proof | Proof[]) => void)
      * and the startSession function source for more details.
+     * 
+     * > [!TIP]
+     * > **Best Practice:** When using `setAppCallbackUrl` and/or `setCancelCallbackUrl`, your backend receives the proof or cancellation details directly. We recommend your backend notifies the frontend (e.g. via WebSockets, SSE, or polling) to stop the verification process and handle the appropriate success/failure action. Do not rely completely on `startSession` callbacks on the frontend when using these backend callbacks.
      *
      * @param onSuccess - Callback function invoked when proof is successfully submitted
      * @param onError - Callback function invoked when an error occurs during the session
