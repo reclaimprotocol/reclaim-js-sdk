@@ -482,6 +482,9 @@ For production applications, it's recommended to handle proofs, and cancellation
 
 These options allow you to securely process proofs or cancellations on your server.
 
+> [!TIP]
+> **Best Practice:** When using `setAppCallbackUrl` and/or `setCancelCallbackUrl`, your backend receives the proof or cancellation details directly. We recommend your backend notifies the frontend (e.g. via WebSockets, SSE, or polling) to stop the verification process and handle the appropriate success/failure action. Do not rely completely on `startSession` callbacks on the frontend when using these backend callbacks.
+
 ## Proof Verification
 
 The SDK provides a `verifyProof` function to manually verify proofs. This is useful when you need to validate proofs outside of the normal flow:
