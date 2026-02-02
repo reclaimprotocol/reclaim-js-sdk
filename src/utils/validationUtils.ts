@@ -115,7 +115,7 @@ export function validateRedirectionBody(records: HttpFormEntry[] | undefined | n
     if (Array.isArray(records)) {
       for (const record of records) {
         if ('name' in record && record.name && typeof record.name === 'string') {
-          if ('value' in record && record.value && typeof record.value === 'string') {
+          if ('value' in record && typeof record.value === 'string') {
             continue;
           }
         }

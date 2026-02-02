@@ -380,10 +380,10 @@ The request URL will contain query param `allowAiWitness` with value `true` when
 
 6. **Custom Error Callback URL**:
 
-Set a custom cancel callback URL for your app which allows you to receive user or provider initiated cancellation on your callback URL:
+Set a custom cancel callback URL for your app which allows you to receive user- or provider-initiated cancellation on your callback URL:
 
 ```javascript
-reclaimProofRequest.setCancelCallbackUrl("https://example.com/error-callback", body, method);
+reclaimProofRequest.setCancelCallbackUrl("https://example.com/error-callback");
 ```
 
 When verificaiton is cancelled by user (or upon error when auto-submit is enabled), following data is sent as an HTTP POST request to the url with `Content-Type: application/json`:
