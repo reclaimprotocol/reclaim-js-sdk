@@ -8,6 +8,8 @@
 
 This guide will walk you through integrating the Reclaim Protocol JavaScript SDK into your application. We'll create a simple React application that demonstrates how to use the SDK to generate proofs and verify claims.
 
+[Official documentation](https://docs.reclaimprotocol.org/js-sdk/installation)
+
 ## Prerequisites
 
 Before we begin, make sure you have:
@@ -312,17 +314,54 @@ The Reclaim SDK offers several advanced options to customize your integration:
 
 3. **Custom Redirect URL**:
 
-Set a custom URL to redirect users after the verification process:
+Set a custom URL to redirect users after the verification process.
 
 ```javascript
 reclaimProofRequest.setRedirectUrl("https://example.com/redirect");
 ```
 
+Redirection with body:
+
+   - **url**: The URL where users should be redirected after successful proof generation.
+   - **method** (optional): The redirection method to use. Allowed options: `GET` (default) and `POST`. 
+     *Note: `POST` form redirection is only supported in In-Browser SDK.*
+   - **body** (optional): List of name-value pairs to be sent as the body of the form request.
+     - When `method` is `POST`, `body` is sent with `application/x-www-form-urlencoded` content type.
+     - When `method` is `GET`, if `body` is set, it is sent as query parameters.
+     *Note: Sending `body` on redirection is only supported in In-Browser SDK.*
+
+```javascript
+reclaimProofRequest.setRedirectUrl(
+  "https://example.com/redirect",
+  "POST", // In-Browser SDK only
+  [{ name: "foo", value: "bar" }]  // In-Browser SDK only
+);
+```
+
 4. **Custom Cancel Redirect URL**:
-   Set a custom URL to redirect users on a cancellation which aborts the verification process:
+   Set a custom URL to redirect users on a cancellation which aborts the verification process.
+
   
 ```javascript
 reclaimProofRequest.setCancelRedirectUrl("https://example.com/error-redirect");
+```
+
+Redirection with body:
+
+   - **url**: The URL where users should be redirected after an error which aborts the verification process.
+   - **method** (optional): The redirection method to use. Allowed options: `GET` (default) and `POST`.
+     *Note: `POST` form redirection is only supported in In-Browser SDK.*
+   - **body** (optional): List of name-value pairs to be sent as the body of the form request.
+     - When `method` is `POST`, `body` is sent with `application/x-www-form-urlencoded` content type.
+     - When `method` is `GET`, if `body` is set, it is sent as query parameters.
+     *Note: Sending `body` on redirection is only supported in In-Browser SDK.*
+  
+```javascript
+reclaimProofRequest.setCancelRedirectUrl(
+  "https://example.com/error-redirect",
+  "POST",  // In-Browser SDK only
+  [{ name: "error_code", value: "1001" }]  // In-Browser SDK only
+);
 ```
 
 5. **Custom Callback URL**:
@@ -335,12 +374,36 @@ reclaimProofRequest.setCancelRedirectUrl("https://example.com/error-redirect");
    reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
    ```
 
-6. **Custom Error Callback URL**:
-   Set a custom cancel callback URL for your app which allows you to receive user or provider initiated cancellation on your callback URL:
+This verification session's id will also be present in `X-Reclaim-Session-Id` header of the request. 
 
-   ```javascript
-   reclaimProofRequest.setCancelCallbackUrl("https://example.com/error-callback");
-   
+The request URL will contain query param `allowAiWitness` with value `true` when AI Witness should be allowed by handler of the request.
+
+6. **Custom Error Callback URL**:
+
+Set a custom cancel callback URL for your app which allows you to receive user or provider initiated cancellation on your callback URL:
+
+```javascript
+reclaimProofRequest.setCancelCallbackUrl("https://example.com/error-callback", body, method);
+```
+
+When verificaiton is cancelled by user (or upon error when auto-submit is enabled), following data is sent as an HTTP POST request to the url with `Content-Type: application/json`:
+
+```json
+{
+  "type": "string", // Name of the exception
+  "message": "string",
+  "sessionId": "string",
+  // context as canonicalized json string
+  "context": "string",
+  // Other fields with more details about error may be present
+  // [key: any]: any
+}
+```
+
+This verification session's id will also be present in `X-Reclaim-Session-Id` header of the request. 
+
+For more details about response format, check out [official documentation of Error Callback URL](https://docs.reclaimprotocol.org/js-sdk/preparing-request#cancel-callback).
+
 
 7. **Modal Customization for Desktop Users**:
    Customize the appearance and behavior of the QR code modal shown to desktop users:

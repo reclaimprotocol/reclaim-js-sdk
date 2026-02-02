@@ -3,7 +3,7 @@ import { InavlidParametersError, InvalidParamError, InvalidSignatureError } from
 import canonicalize from 'canonicalize'
 import { Context } from "./interfaces";
 import loggerModule from './logger';
-import { ProofRequestOptions, ModalOptions } from "./types";
+import { ProofRequestOptions, ModalOptions, HttpRedirectionMethod, HttpFormEntry } from "./types";
 import { canonicalStringify } from "./strings";
 const logger = loggerModule.logger;
 
@@ -77,6 +77,56 @@ export function validateURL(url: string, functionName: string): void {
   } catch (e) {
     logger.info(`URL validation failed for ${url} in ${functionName}: ${(e as Error).message}`);
     throw new InvalidParamError(`Invalid URL format ${url} passed to ${functionName}.`, e as Error);
+  }
+}
+
+/**
+* Validates a URL string
+* @param url - The URL to validate
+* @param functionName - The name of the function calling this validation
+* @throws InvalidParamError if the URL is invalid or empty
+*/
+export function validateRedirectionMethod(method: string | null | undefined, functionName: string): void {
+  try {
+    if (method === null || method === undefined) {
+      return;
+    }
+    if (method !== 'GET' && method !== 'POST') {
+      throw new Error(`Invalid redirection method ${method} passed to ${functionName}.`);
+    }
+  } catch (e) {
+    logger.info(`Redirection method validation failed for ${method} in ${functionName}: ${(e as Error).message}`);
+    throw new InvalidParamError(`Invalid redirection method ${method} passed to ${functionName}.`, e as Error);
+  }
+}
+
+
+/**
+* Validates a URL string
+* @param url - The URL to validate
+* @param functionName - The name of the function calling this validation
+* @throws InvalidParamError if the URL is invalid or empty
+*/
+export function validateRedirectionBody(records: HttpFormEntry[] | undefined | null, functionName: string): void {
+  try {
+    if (records === null || records === undefined) {
+      return;
+    }
+    if (Array.isArray(records)) {
+      for (const record of records) {
+        if ('name' in record && record.name && typeof record.name === 'string') {
+          if ('value' in record && record.value && typeof record.value === 'string') {
+            continue;
+          }
+        }
+        throw new Error('Record in form entries do not have a valid name and/or value');
+      }
+    } else {
+      throw new Error('Redirection body must be an array of objects with name, and value');
+    }
+  } catch (e) {
+    logger.info(`Redirection body validation failed for ${records} in ${functionName}: ${(e as Error).message}`);
+    throw new InvalidParamError(`Invalid redirection body ${records} passed to ${functionName}.`, e as Error);
   }
 }
 
