@@ -161,6 +161,7 @@ export type ProofPropertiesJSON = {
   context: Context;
   signature: string;
   redirectUrl?: string;
+  redirectUrlOptions?: TemplateData['redirectUrlOptions'];
   parameters: { [key: string]: string };
   /**
    * @deprecated use timestamp instead (maintained for compatibility)
@@ -170,6 +171,7 @@ export type ProofPropertiesJSON = {
   appCallbackUrl?: string;
   cancelCallbackUrl?: TemplateData['cancelCallbackUrl'];
   cancelRedirectUrl?: TemplateData['cancelRedirectUrl'];
+  cancelRedirectUrlOptions?: TemplateData['cancelRedirectUrlOptions'];
   claimCreationType?: ClaimCreationType;
   options?: ProofRequestOptions;
   sdkVersion: string;
@@ -177,6 +179,44 @@ export type ProofPropertiesJSON = {
   resolvedProviderVersion: string;
   modalOptions?: SerializableModalOptions;
 };
+
+export type HttpFormEntry = {
+  name: string;
+  value: string;
+}
+
+export type HttpRedirectionMethod = 'GET' | 'POST';
+
+/**
+ * Options for HTTP redirection.
+ * 
+ * Only supported by In-Browser SDK.
+ * On other SDKs, this will be ignored and a GET redirection will be performed with the URL.
+ * 
+ * @since 4.11.0
+ * @default "{ method: 'GET' }"
+ */
+export type HttpRedirectionOptions = {
+  /**
+   * List of name-value pairs to be sent as the body of the form request.
+   * When `method` is set to `POST`, `body` will be sent with 'application/x-www-form-urlencoded' content type.
+   * When `method` is set to `GET`, `body` will be sent as query parameters.
+   * 
+   * @default undefined
+   */
+  body?: HttpFormEntry[] | null | undefined;
+  /**
+   * HTTP method to use for the redirection.
+   * 
+   * POST will result in `body` being sent with 'application/x-www-form-urlencoded' content type.
+   * GET will result in `body`, if present, being sent as query parameters.
+   * 
+   * With `method` set to `GET` and no `body`, this will result in a simple GET redirection using `window.location.href`.
+   * 
+   * @default 'GET'
+   */
+  method?: HttpRedirectionMethod;
+}
 
 export type TemplateData = {
   sessionId: string;
@@ -188,8 +228,10 @@ export type TemplateData = {
   context: string;
   parameters: { [key: string]: string };
   redirectUrl: string;
+  redirectUrlOptions?: HttpRedirectionOptions;
   cancelCallbackUrl?: string | null;
   cancelRedirectUrl?: string | null;
+  cancelRedirectUrlOptions?: HttpRedirectionOptions;
   acceptAiProviders: boolean;
   sdkVersion: string;
   jsonProofResponse?: boolean;

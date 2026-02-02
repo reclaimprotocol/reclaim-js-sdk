@@ -10,6 +10,8 @@ import {
     ClaimCreationType,
     ModalOptions,
     ReclaimFlowLaunchOptions,
+    HttpFormEntry,
+    HttpRedirectionMethod,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -35,7 +37,7 @@ import {
     SignatureNotFoundError,
     ErrorDuringVerificationError
 } from './utils/errors'
-import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn } from './utils/validationUtils'
+import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
@@ -167,8 +169,10 @@ const emptyTemplateData: TemplateData = {
     context: '',
     parameters: {},
     redirectUrl: '',
+    redirectUrlOptions: { method: 'GET' },
     cancelCallbackUrl: '',
     cancelRedirectUrl: '',
+    cancelRedirectUrlOptions: { method: 'GET' },
     acceptAiProviders: false,
     sdkVersion: '',
     providerVersion: '',
@@ -188,8 +192,10 @@ export class ReclaimProofRequest {
     private resolvedProviderVersion?: string;
     private parameters: { [key: string]: string };
     private redirectUrl?: string;
+    private redirectUrlOptions?: TemplateData['redirectUrlOptions'];
     private cancelCallbackUrl?: TemplateData['cancelCallbackUrl'];
     private cancelRedirectUrl?: TemplateData['cancelRedirectUrl'];
+    private cancelRedirectUrlOptions?: TemplateData['cancelRedirectUrlOptions'];
     private intervals: Map<string, NodeJS.Timer> = new Map();
     private timeStamp: string;
     private sdkVersion: string;
@@ -392,8 +398,10 @@ export class ReclaimProofRequest {
                 parameters,
                 signature,
                 redirectUrl,
+                redirectUrlOptions,
                 cancelCallbackUrl,
                 cancelRedirectUrl,
+                cancelRedirectUrlOptions,
                 timeStamp,
                 timestamp,
                 appCallbackUrl,
@@ -425,12 +433,22 @@ export class ReclaimProofRequest {
                 validateURL(redirectUrl, 'fromJsonString');
             }
 
+            if (redirectUrlOptions) {
+                validateRedirectionMethod(redirectUrlOptions.method, 'fromJsonString');
+                validateRedirectionBody(redirectUrlOptions.body, 'fromJsonString');
+            }
+
             if (appCallbackUrl) {
                 validateURL(appCallbackUrl, 'fromJsonString');
             }
 
             if (cancelRedirectUrl) {
                 validateURL(cancelRedirectUrl, 'fromJsonString');
+            }
+
+            if (cancelRedirectUrlOptions) {
+                validateRedirectionMethod(cancelRedirectUrlOptions.method, 'fromJsonString');
+                validateRedirectionBody(cancelRedirectUrlOptions.body, 'fromJsonString');
             }
 
             if (cancelCallbackUrl) {
@@ -491,8 +509,9 @@ export class ReclaimProofRequest {
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
             proofRequestInstance.parameters = parameters;
-            proofRequestInstance.appCallbackUrl = appCallbackUrl
-            proofRequestInstance.redirectUrl = redirectUrl
+            proofRequestInstance.appCallbackUrl = appCallbackUrl;
+            proofRequestInstance.redirectUrl = redirectUrl;
+            proofRequestInstance.redirectUrlOptions = redirectUrlOptions;
             proofRequestInstance.timeStamp = resolvedTimestamp!
             proofRequestInstance.signature = signature
             proofRequestInstance.sdkVersion = sdkVersion;
@@ -501,6 +520,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.jsonProofResponse = jsonProofResponse ?? false;
             proofRequestInstance.cancelCallbackUrl = cancelCallbackUrl;
             proofRequestInstance.cancelRedirectUrl = cancelRedirectUrl;
+            proofRequestInstance.cancelRedirectUrlOptions = cancelRedirectUrlOptions;
             return proofRequestInstance
         } catch (error) {
             logger.info('Failed to parse JSON string in fromJsonString:', error);
@@ -517,7 +537,10 @@ export class ReclaimProofRequest {
      * When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend.
      * Consequently, the startSession `onSuccess` callback will be invoked with an empty array (`[]`) 
      * instead of the proof data, as the proof is not available to the SDK in this flow.
-     * 
+     *
+     * This verification session's id will be present in `X-Reclaim-Session-Id` header of the request.
+     * The request URL will contain query param `allowAiWitness` with value `true` when AI Witness should be allowed by handler of the request.
+     *
      * Note: InApp SDKs are unaffected by this property as they do not handle proof submission.
      *
      * @param url - The URL where proofs should be submitted via HTTP `POST`
@@ -541,6 +564,13 @@ export class ReclaimProofRequest {
      * Sets a redirect URL where users will be redirected after successfully acquiring and submitting proof
      *
      * @param url - The URL where users should be redirected after successful proof generation
+     * @param method - The redirection method that should be used for redirection. Allowed options: `GET`, and `POST`.
+     * `POST` form redirection is only supported in In-Browser SDK.
+     * @param body - List of name-value pairs to be sent as the body of the form request.
+     * `When `method` is set to `POST`, `body` will be sent with 'application/x-www-form-urlencoded' content type.
+     * When `method` is set to `GET`, if `body` is set then `body` will be sent as query parameters.
+     * Sending `body` on redirection is only supported in In-Browser SDK.
+     * 
      * @throws {InvalidParamError} When URL is invalid
      *
      * @example
@@ -548,9 +578,13 @@ export class ReclaimProofRequest {
      * proofRequest.setRedirectUrl('https://your-app.com/success');
      * ```
      */
-    setRedirectUrl(url: string): void {
+    setRedirectUrl(url: string, method: HttpRedirectionMethod = 'GET', body?: HttpFormEntry[] | undefined): void {
         validateURL(url, 'setRedirectUrl');
+        validateRedirectionMethod(method, 'setRedirectUrl');
+        validateRedirectionBody(body, 'setRedirectUrl');
+
         this.redirectUrl = url;
+        this.redirectUrlOptions = { method: method || 'GET', body: body }
     }
 
     /**
@@ -560,6 +594,24 @@ export class ReclaimProofRequest {
      * When a custom error callback URL is set, Reclaim will no longer receive errors upon submission,
      * and listeners on the startSession method will not be triggered. Your application must
      * coordinate with your backend to receive errors.
+     *
+     * This verification session's id will be present in `X-Reclaim-Session-Id` header of the request.
+     * 
+     * Following is the data format which is sent as an HTTP POST request to the url with `Content-Type: application/json`:
+
+     * ```json
+     * {
+     *  "type": "string", // Name of the exception
+     *  "message": "string",
+     *  "sessionId": "string",
+     *   // context as canonicalized json string
+     *   "context": "string",
+     *   // Other fields with more details about error may be present
+     *   // [key: any]: any
+     * }
+     * ```
+     * 
+     * For more details about response format, check out [official documentation of Error Callback URL](https://docs.reclaimprotocol.org/js-sdk/preparing-request#cancel-callback).
      *
      * @param url - The URL where errors should be submitted via HTTP POST
      * @throws {InvalidParamError} When URL is invalid
@@ -581,6 +633,12 @@ export class ReclaimProofRequest {
      * Sets an error redirect URL where users will be redirected after an error which aborts the verification process
      *
      * @param url - The URL where users should be redirected after an error which aborts the verification process
+     * @param method - The redirection method that should be used for redirection. Allowed options: `GET`, and `POST`.
+     * `POST` form redirection is only supported in In-Browser SDK.
+     * @param body - List of name-value pairs to be sent as the body of the form request.
+     * When `method` is set to `POST`, `body` will be sent with 'application/x-www-form-urlencoded' content type.
+     * When `method` is set to `GET`, if `body` is set then `body` will be sent as query parameters.
+     * Sending `body` on redirection is only supported in In-Browser SDK.
      * @throws {InvalidParamError} When URL is invalid
      *
      * @example
@@ -591,9 +649,13 @@ export class ReclaimProofRequest {
      * @since 4.10.0
      * 
      */
-    setCancelRedirectUrl(url: string): void {
+    setCancelRedirectUrl(url: string, method: HttpRedirectionMethod = 'GET', body?: HttpFormEntry[] | undefined): void {
         validateURL(url, 'setCancelRedirectUrl');
+        validateRedirectionMethod(method, 'setCancelRedirectUrl');
+        validateRedirectionBody(body, 'setCancelRedirectUrl');
+
         this.cancelRedirectUrl = url;
+        this.cancelRedirectUrlOptions = { method: method || 'GET', body: body }
     }
 
     /**
@@ -909,8 +971,10 @@ export class ReclaimProofRequest {
             parameters: this.parameters,
             signature: this.signature,
             redirectUrl: this.redirectUrl,
+            redirectUrlOptions: this.redirectUrlOptions,
             cancelCallbackUrl: this.cancelCallbackUrl,
             cancelRedirectUrl: this.cancelRedirectUrl,
+            cancelRedirectUrlOptions: this.cancelRedirectUrlOptions,
             timestamp: this.timeStamp, // New field with correct spelling
             timeStamp: this.timeStamp, // @deprecated: Remove in future versions 
             options: this.options,
@@ -950,8 +1014,10 @@ export class ReclaimProofRequest {
             resolvedProviderVersion: this.resolvedProviderVersion ?? '',
             parameters: this.parameters,
             redirectUrl: this.redirectUrl ?? '',
+            redirectUrlOptions: this.redirectUrlOptions,
             cancelCallbackUrl: this.getCancelCallbackUrl(),
             cancelRedirectUrl: this.cancelRedirectUrl,
+            cancelRedirectUrlOptions: this.cancelRedirectUrlOptions,
             acceptAiProviders: this.options?.acceptAiProviders ?? false,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
