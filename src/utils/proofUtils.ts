@@ -61,17 +61,20 @@ export async function createLinkWithTemplateData(templateData: TemplateData, sha
  * Retrieves the list of witnesses for a given claim
  */
 export async function getAttestors(): Promise<WitnessData[]> {
-	const addrUrl = constants.DEFAULT_ATTESTOR_URL + '/address'
-	const response = await fetch(addrUrl)
+	const response = await fetch(constants.DEFAULT_ATTESTORS_URL)
 	if (!response.ok) {
 		response.body?.cancel()
 		throw new BackendServerError(
-			`Failed to fetch witness address: ${response.status}`
+			`Failed to fetch witness addresses: ${response.status}`
 		)
 	}
 
-	const data = await response.json() as {	address: string }
-	return [{ id: data.address, url: constants.DEFAULT_ATTESTOR_URL }]
+	const { data } = await response.json() as {
+		data: {
+			address: string
+		}[]
+	}
+	return data.map(wt => ({ id: wt.address, url: '' }))
 }
 
 /**
