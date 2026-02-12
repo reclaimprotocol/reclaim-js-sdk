@@ -56,7 +56,7 @@ export const http = {
 
                         // Cap the delay to 60 seconds to avoid indefinite hangs
                         const MAX_RETRY_DELAY_MS = 60 * 1000;
-                        if (delay > 0) {
+                        if (delay >= 0) {
                             return Math.min(delay, MAX_RETRY_DELAY_MS);
                         }
                     }
@@ -70,6 +70,9 @@ export const http = {
                     return false;
                 }
                 if (error) {
+                    if (error.name === 'AbortError') {
+                        return false;
+                    }
                     return true;
                 }
 
