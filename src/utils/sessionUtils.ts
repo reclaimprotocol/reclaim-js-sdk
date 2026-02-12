@@ -6,6 +6,7 @@ import {
 import { InitSessionResponse, SessionStatus, StatusUrlResponse } from "./types";
 import { validateFunctionParams } from "./validationUtils";
 import { BACKEND_BASE_URL, constants } from './constants';
+import { http } from "./fetch";
 import loggerModule from './logger';
 const logger = loggerModule.logger;
 
@@ -27,7 +28,7 @@ export async function initSession(
 ): Promise<InitSessionResponse> {
   logger.info(`Initializing session for providerId: ${providerId}, appId: ${appId}`);
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/api/sdk/init/session/`, {
+    const response = await http.client(`${BACKEND_BASE_URL}/api/sdk/init/session/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ providerId, appId, timestamp, signature, versionNumber })
@@ -62,7 +63,7 @@ export async function updateSession(sessionId: string, status: SessionStatus) {
   );
 
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/api/sdk/update/session/`, {
+    const response = await http.client(`${BACKEND_BASE_URL}/api/sdk/update/session/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, status })
@@ -98,7 +99,7 @@ export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlRespon
   );
 
   try {
-    const response = await fetch(`${constants.DEFAULT_RECLAIM_STATUS_URL}${sessionId}`, {
+    const response = await http.client(`${constants.DEFAULT_RECLAIM_STATUS_URL}${sessionId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
