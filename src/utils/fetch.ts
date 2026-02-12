@@ -1,9 +1,30 @@
 import fetchRetry from "fetch-retry";
 
 const MAX_RETRIES = 3;
+const MAX_RETRY_DELAY_MS = 60 * 1000;
 
 const isHttpResponseStatusRetryable = (statusCode: number) => {
     return statusCode === 408 || statusCode === 429 || statusCode >= 500;
+};
+
+const getRetryDelay = (response: Response | null | undefined): number | undefined => {
+    const retryAfter = response?.headers.get('Retry-After');
+    if (!retryAfter) {
+        return undefined;
+    }
+
+    const trimmed = retryAfter.trim();
+
+    if (/^\d+$/.test(trimmed)) {
+        return Math.min(parseInt(trimmed, 10) * 1000, MAX_RETRY_DELAY_MS);
+    }
+
+    const date = new Date(trimmed);
+    if (!isNaN(date.getTime())) {
+        return Math.min(Math.max(0, date.getTime() - Date.now()), MAX_RETRY_DELAY_MS);
+    }
+
+    return undefined;
 };
 
 export const http = {
@@ -11,26 +32,9 @@ export const http = {
         return fetchRetry(globalThis.fetch, {
             retries: MAX_RETRIES,
             retryDelay: function (attempt, _, response) {
-                if (response) {
-                    const retryAfter = response.headers.get('Retry-After');
-                    if (retryAfter) {
-                        const trimmed = retryAfter.trim();
-                        let delay = 0;
-                        if (/^\d+$/.test(trimmed)) {
-                            delay = parseInt(trimmed, 10) * 1000;
-                        } else {
-                            const date = new Date(trimmed);
-                            if (!isNaN(date.getTime())) {
-                                delay = Math.max(0, date.getTime() - Date.now());
-                            }
-                        }
-
-                        // Cap the delay to 60 seconds to avoid indefinite hangs
-                        const MAX_RETRY_DELAY_MS = 60 * 1000;
-                        if (delay >= 0) {
-                            return Math.min(delay, MAX_RETRY_DELAY_MS);
-                        }
-                    }
+                const delay = getRetryDelay(response);
+                if (delay !== undefined) {
+                    return delay;
                 }
                 // attempt starts at 0. 
                 // Returns: 1000ms, 2000ms, 4000ms
