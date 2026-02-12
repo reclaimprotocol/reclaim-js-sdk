@@ -20,9 +20,11 @@ export const constants = {
     // Default status URL for Reclaim sessions
     get DEFAULT_RECLAIM_STATUS_URL() {
         return `${BACKEND_BASE_URL}/api/sdk/session/`;
-    },
+	},
+  // Default Attestor (legacy: witness) URL for Reclaim protocol
+	DEFAULT_ATTESTOR_URL: 'https://attestor.reclaimprotocol.org:444',
 
-    // URL for sharing Reclaim templates
+	// URL for sharing Reclaim templates
     RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template=',
 
     // Chrome extension URL for Reclaim Protocol

@@ -1,12 +1,10 @@
 import { ethers } from "ethers";
-import { WitnessData } from "./interfaces";
 import { SignedClaim, TemplateData } from "./types";
-import { createSignDataForClaim, fetchWitnessListForClaim } from "../witness";
+import { createSignDataForClaim } from "../witness";
 import { BACKEND_BASE_URL, constants } from "./constants";
 import { replaceAll } from "./helper";
 import { validateURL } from "./validationUtils";
-import { makeBeacon } from "../smart-contract";
-import { ProofNotVerifiedError } from "./errors";
+import { BackendServerError, ProofNotVerifiedError } from "./errors";
 import loggerModule from './logger';
 const logger = loggerModule.logger;
 
@@ -60,7 +58,8 @@ export async function createLinkWithTemplateData(templateData: TemplateData, sha
 
 /**
  * Retrieves the list of witnesses for a given claim
- * @param epoch - The epoch number
+ *
+ * @param @deprecated epoch - The epoch number
  * @param identifier - The claim identifier
  * @param timestampS - The timestamp in seconds
  * @returns A promise that resolves to an array of witness addresses
@@ -71,15 +70,17 @@ export async function getWitnessesForClaim(
   identifier: string,
   timestampS: number
 ): Promise<string[]> {
-  const beacon = makeBeacon()
-  if (!beacon) {
-    logger.info('No beacon available for getting witnesses');
-    throw new Error('No beacon available');
-  }
-  const state = await beacon.getState(epoch)
-  const witnessList = fetchWitnessListForClaim(state, identifier, timestampS)
-  const witnesses = witnessList.map((w: WitnessData) => w.id.toLowerCase())
-  return witnesses;
+	const addrUrl = constants.DEFAULT_ATTESTOR_URL + '/address'
+	const response = await fetch(addrUrl)
+	if (!response.ok) {
+		response.body?.cancel()
+		throw new BackendServerError(
+			`Failed to fetch witness address: ${response.status}`
+		)
+	}
+
+	const data = await response.json() as {	address: string }
+	return [data.address]
 }
 
 /**
