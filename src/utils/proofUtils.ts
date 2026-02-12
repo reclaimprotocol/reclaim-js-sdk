@@ -7,6 +7,7 @@ import { validateURL } from "./validationUtils";
 import { BackendServerError, ProofNotVerifiedError } from "./errors";
 import loggerModule from './logger';
 import { WitnessData } from "./interfaces";
+import { http } from "./fetch";
 const logger = loggerModule.logger;
 
 
@@ -19,7 +20,7 @@ export async function getShortenedUrl(url: string): Promise<string> {
   logger.info(`Attempting to shorten URL: ${url}`);
   try {
     validateURL(url, 'getShortenedUrl')
-    const response = await fetch(`${BACKEND_BASE_URL}/api/sdk/shortener`, {
+    const response = await http.client(`${BACKEND_BASE_URL}/api/sdk/shortener`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fullUrl: url })
@@ -61,20 +62,20 @@ export async function createLinkWithTemplateData(templateData: TemplateData, sha
  * Retrieves the list of witnesses for a given claim
  */
 export async function getAttestors(): Promise<WitnessData[]> {
-	const response = await fetch(constants.DEFAULT_ATTESTORS_URL)
-	if (!response.ok) {
-		response.body?.cancel()
-		throw new BackendServerError(
-			`Failed to fetch witness addresses: ${response.status}`
-		)
-	}
+  const response = await http.client(constants.DEFAULT_ATTESTORS_URL)
+  if (!response.ok) {
+    response.body?.cancel()
+    throw new BackendServerError(
+      `Failed to fetch witness addresses: ${response.status}`
+    )
+  }
 
-	const { data } = await response.json() as {
-		data: {
-			address: string
-		}[]
-	}
-	return data.map(wt => ({ id: wt.address, url: '' }))
+  const { data } = await response.json() as {
+    data: {
+      address: string
+    }[]
+  }
+  return data.map(wt => ({ id: wt.address, url: '' }))
 }
 
 /**

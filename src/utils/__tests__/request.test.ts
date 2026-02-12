@@ -8,7 +8,7 @@ const testAppSecret = '37e1d9da2f551ce0dac7e0eeda8a9e00daf62a3a3c548ed98cc80fc1a
 
 describe('Request', () => {
     it('should serialize to JSON correctly', async () => {
-        window.fetch = mockFetch({
+        globalThis.fetch = mockFetch({
             sessionId: '123',
             resolvedProviderVersion: '1.0.0'
         });
@@ -61,8 +61,14 @@ describe('Request', () => {
             },
             "signature": actualOutput.signature,
             "redirectUrl": "https://example.com/success?session=def",
+            "redirectUrlOptions": {
+                "method": "GET",
+            },
             "cancelCallbackUrl": "https://api.example.com/cancel?session=def",
             "cancelRedirectUrl": "https://example.com/cancelled?session=def",
+            "cancelRedirectUrlOptions": {
+                "method": "GET",
+            },
             "timestamp": actualOutput.timestamp,
             "timeStamp": actualOutput.timeStamp,
             "options": {
@@ -106,6 +112,9 @@ describe('Request', () => {
             },
             "signature": "0xbbf1aad7bd65c6d0c37a5b6012c4dff217e190372d5e364bf8f2bf4ea9df3a080ec8b325b84b29e130d9b15401087b36bc4852367c8f93427c39ffb7b44b498d1c",
             "redirectUrl": "https://example.com/success?session=def",
+            "redirectUrlOptions": {
+                "method": "GET",
+            },
             "cancelCallbackUrl": "https://api.example.com/cancel?session=def",
             "cancelRedirectUrl": "https://example.com/cancelled?session=def",
             "timestamp": "1769867597546",
