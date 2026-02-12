@@ -7,22 +7,25 @@ export function setBackendBaseUrl(url: string) {
 
 // Constant values used throughout the application
 export const constants = {
-    // Default callback URL for Reclaim protocol
-    get DEFAULT_RECLAIM_CALLBACK_URL() {
-        return `${BACKEND_BASE_URL}/api/sdk/callback?callbackId=`;
-    },
+  // Default callback URL for Reclaim protocol
+  get DEFAULT_RECLAIM_CALLBACK_URL() {
+      return `${BACKEND_BASE_URL}/api/sdk/callback?callbackId=`;
+  },
 
-    // Default error callback URL for Reclaim protocol
-    get DEFAULT_RECLAIM_CANCEL_CALLBACK_URL() {
-        return `${BACKEND_BASE_URL}/api/sdk/error-callback?callbackId=`;
-    },
+  // Default error callback URL for Reclaim protocol
+  get DEFAULT_RECLAIM_CANCEL_CALLBACK_URL() {
+      return `${BACKEND_BASE_URL}/api/sdk/error-callback?callbackId=`;
+  },
 
-    // Default status URL for Reclaim sessions
-    get DEFAULT_RECLAIM_STATUS_URL() {
-        return `${BACKEND_BASE_URL}/api/sdk/session/`;
-    },
+  // Default status URL for Reclaim sessions
+  get DEFAULT_RECLAIM_STATUS_URL() {
+      return `${BACKEND_BASE_URL}/api/sdk/session/`;
+	},
+	get DEFAULT_ATTESTORS_URL() {
+		return `${BACKEND_BASE_URL}/api/attestors`
+	},
 
-    // URL for sharing Reclaim templates
+	// URL for sharing Reclaim templates
     RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template=',
 
     // Chrome extension URL for Reclaim Protocol
