@@ -90,30 +90,3 @@ export function recoverSignersOfSignedClaim({
   )
   return signers;
 }
-
-/**
- * Asserts that a signed claim is valid by checking if all expected witnesses have signed
- * @param claim - The signed claim to validate
- * @param expectedWitnessAddresses - An array of expected witness addresses
- * @throws ProofNotVerifiedError if any expected witness signature is missing
- */
-export function assertValidSignedClaim(
-  claim: SignedClaim,
-  expectedWitnessAddresses: string[]
-): void {
-  const witnessAddresses = recoverSignersOfSignedClaim(claim)
-  const witnessesNotSeen = new Set(expectedWitnessAddresses)
-  for (const witness of witnessAddresses) {
-    if (witnessesNotSeen.has(witness)) {
-      witnessesNotSeen.delete(witness)
-    }
-  }
-
-  if (witnessesNotSeen.size > 0) {
-    const missingWitnesses = Array.from(witnessesNotSeen).join(', ');
-    logger.info(`Claim validation failed. Missing signatures from: ${missingWitnesses}`);
-    throw new ProofNotVerifiedError(
-      `Missing signatures from ${missingWitnesses}`
-    )
-  }
-}
