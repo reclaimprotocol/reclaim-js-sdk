@@ -6,6 +6,7 @@ import { replaceAll } from "./helper";
 import { validateURL } from "./validationUtils";
 import { BackendServerError, ProofNotVerifiedError } from "./errors";
 import loggerModule from './logger';
+import { WitnessData } from "./interfaces";
 const logger = loggerModule.logger;
 
 
@@ -58,18 +59,8 @@ export async function createLinkWithTemplateData(templateData: TemplateData, sha
 
 /**
  * Retrieves the list of witnesses for a given claim
- *
- * @param @deprecated epoch - The epoch number
- * @param identifier - The claim identifier
- * @param timestampS - The timestamp in seconds
- * @returns A promise that resolves to an array of witness addresses
- * @throws Error if no beacon is available
  */
-export async function getWitnessesForClaim(
-  epoch: number,
-  identifier: string,
-  timestampS: number
-): Promise<string[]> {
+export async function getAttestors(): Promise<WitnessData[]> {
 	const addrUrl = constants.DEFAULT_ATTESTOR_URL + '/address'
 	const response = await fetch(addrUrl)
 	if (!response.ok) {
@@ -80,7 +71,7 @@ export async function getWitnessesForClaim(
 	}
 
 	const data = await response.json() as {	address: string }
-	return [data.address]
+	return [{ id: data.address, url: constants.DEFAULT_ATTESTOR_URL }]
 }
 
 /**

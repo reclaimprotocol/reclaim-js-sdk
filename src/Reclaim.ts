@@ -1,7 +1,5 @@
 import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage } from './utils/interfaces'
-import { getIdentifierFromClaimInfo } from './witness'
 import {
-    SignedClaim,
     ProofRequestOptions,
     StartSessionParams,
     ProofPropertiesJSON,
@@ -39,11 +37,12 @@ import {
 } from './utils/errors'
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
-import { assertValidSignedClaim, createLinkWithTemplateData, getWitnessesForClaim } from './utils/proofUtils'
+import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
-import { getDeviceType, getMobileDeviceType, isMobileDevice } from './utils/device'
+import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
+
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
@@ -64,66 +63,39 @@ const sdkVersion = require('../package.json').version;
  * const isValidWithAI = await verifyProof(proof, true);
  * ```
  */
-export async function verifyProof(proofOrProofs: Proof | Proof[], allowAiWitness?: boolean): Promise<boolean> {
-    // If input is an array of proofs
-    if (Array.isArray(proofOrProofs)) {
-        for (const proof of proofOrProofs) {
-            const isVerified = await verifyProof(proof, allowAiWitness);
-            if (!isVerified) {
-                return false;
-            }
-        }
-        return true;
-    }
+export async function verifyProof(
+	proofOrProofs: Proof | Proof[],
+	allowAiWitness = false
+) {
+	try {
+		await assertValidProof(proofOrProofs, allowAiWitness)
+		return true
+	} catch (error) {
+		logger.error('error in validating proof', error)
+		return false
+	}
+}
 
-    // Single proof verification logic
-    const proof = proofOrProofs;
-    if (!proof.signatures.length) {
-        throw new SignatureNotFoundError('No signatures')
-    }
-
-    try {
-        // check if witness array exist and first element is ai-witness
-        let witnesses = []
-        if (proof.witnesses.length && proof.witnesses[0]?.url === 'ai-witness' && allowAiWitness === true) {
-            witnesses.push(proof.witnesses[0].id)
-        } else {
-            witnesses = await getWitnessesForClaim(
-                proof.claimData.epoch,
-                proof.identifier,
-                proof.claimData.timestampS
-            )
-        }
-        // then hash the claim info with the encoded ctx to get the identifier
-        const calculatedIdentifier = getIdentifierFromClaimInfo({
-            parameters: JSON.parse(
-                canonicalize(proof.claimData.parameters) as string
-            ),
-            provider: proof.claimData.provider,
-            context: proof.claimData.context
-        })
-        proof.identifier = replaceAll(proof.identifier, '"', '')
-        // check if the identifier matches the one in the proof
-        if (calculatedIdentifier !== proof.identifier) {
-            throw new ProofNotVerifiedError('Identifier Mismatch')
-        }
-
-        const signedClaim: SignedClaim = {
-            claim: {
-                ...proof.claimData
-            },
-            signatures: proof.signatures.map(signature => {
-                return ethers.getBytes(signature)
-            })
-        }
-
-        assertValidSignedClaim(signedClaim, witnesses)
-    } catch (e: Error | unknown) {
-        logger.info(`Error verifying proof: ${e instanceof Error ? e.message : String(e)}`)
-        return false
-    }
-
-    return true
+export async function assertValidProof(
+	proofOrProofs: Proof | Proof[],
+	allowAiWitness = false
+) {
+	const attestors = await getAttestors()
+	proofOrProofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
+	for (const proof of proofOrProofs) {
+		const signers = recoverSignersOfSignedClaim({
+			claim: proof.claimData,
+			signatures: proof.signatures
+				.map(signature => ethers.getBytes(signature))
+		})
+		// ensure at least one signer is an attestor
+		if (
+			!attestors
+				.some(attestor => signers.includes(attestor.id.toLowerCase()))
+		) {
+			throw new ProofNotVerifiedError('Identifier mismatch')
+		}
+	}
 }
 
 /**
@@ -214,7 +186,7 @@ export class ReclaimProofRequest {
         this.timeStamp = Date.now().toString();
         this.applicationId = applicationId;
         this.sessionId = "";
-        // keep template data as empty object  
+        // keep template data as empty object
         this.templateData = emptyTemplateData;
         this.parameters = {};
 
@@ -531,11 +503,11 @@ export class ReclaimProofRequest {
     /**
      * Sets a custom callback URL where proofs will be submitted via HTTP `POST`
      *
-     * By default, proofs are sent as HTTP POST with `Content-Type` as `application/x-www-form-urlencoded`. 
+     * By default, proofs are sent as HTTP POST with `Content-Type` as `application/x-www-form-urlencoded`.
      * Pass function argument `jsonProofResponse` as `true` to send proofs with `Content-Type` as `application/json`.
-     * 
+     *
      * When a custom callback URL is set, proofs are sent to the custom URL *instead* of the Reclaim backend.
-     * Consequently, the startSession `onSuccess` callback will be invoked with an empty array (`[]`) 
+     * Consequently, the startSession `onSuccess` callback will be invoked with an empty array (`[]`)
      * instead of the proof data, as the proof is not available to the SDK in this flow.
      *
      * This verification session's id will be present in `X-Reclaim-Session-Id` header of the request.
@@ -570,7 +542,7 @@ export class ReclaimProofRequest {
      * `When `method` is set to `POST`, `body` will be sent with 'application/x-www-form-urlencoded' content type.
      * When `method` is set to `GET`, if `body` is set then `body` will be sent as query parameters.
      * Sending `body` on redirection is only supported in In-Browser SDK.
-     * 
+     *
      * @throws {InvalidParamError} When URL is invalid
      *
      * @example
@@ -596,7 +568,7 @@ export class ReclaimProofRequest {
      * coordinate with your backend to receive errors.
      *
      * This verification session's id will be present in `X-Reclaim-Session-Id` header of the request.
-     * 
+     *
      * Following is the data format which is sent as an HTTP POST request to the url with `Content-Type: application/json`:
 
      * ```json
@@ -610,7 +582,7 @@ export class ReclaimProofRequest {
      *   // [key: any]: any
      * }
      * ```
-     * 
+     *
      * For more details about response format, check out [official documentation of Error Callback URL](https://docs.reclaimprotocol.org/js-sdk/preparing-request#cancel-callback).
      *
      * @param url - The URL where errors should be submitted via HTTP POST
@@ -620,9 +592,9 @@ export class ReclaimProofRequest {
      * ```typescript
      * proofRequest.setCancelCallbackUrl('https://your-backend.com/error-callback');
      * ```
-     * 
+     *
      * @since 4.8.1
-     * 
+     *
      */
     setCancelCallbackUrl(url: string): void {
         validateURL(url, 'setCancelCallbackUrl')
@@ -645,9 +617,9 @@ export class ReclaimProofRequest {
      * ```typescript
      * proofRequest.setCancelRedirectUrl('https://your-app.com/error');
      * ```
-     * 
+     *
      * @since 4.10.0
-     * 
+     *
      */
     setCancelRedirectUrl(url: string, method: HttpRedirectionMethod = 'GET', body?: HttpFormEntry[] | undefined): void {
         validateURL(url, 'setCancelRedirectUrl');
@@ -704,12 +676,12 @@ export class ReclaimProofRequest {
      * Sets additional context data to be stored with the claim
      *
      * This allows you to associate custom JSON serializable data with the proof claim.
-     * The context can be retrieved and validated when verifying the proof. 
-     * 
+     * The context can be retrieved and validated when verifying the proof.
+     *
      * Also see [setContext] which is an alternate way to set context that has an address & message.
      *
      * [setContext] and [setJsonContext] overwrite each other. Each call replaces the existing context.
-     * 
+     *
      * @param context - Any additional data you want to store with the claim. Should be serializable to a JSON string.
      * @throws {SetContextError} When context parameters are invalid
      *
@@ -738,9 +710,9 @@ export class ReclaimProofRequest {
      * The context can be retrieved and validated when verifying the proof.
      *
      * Also see [setJsonContext] which is an alternate way to set context that allows for custom JSON serializable data.
-     * 
+     *
      * [setContext] and [setJsonContext] overwrite each other. Each call replaces the existing context.
-     * 
+     *
      * @param address - Context address identifier
      * @param message - Additional data to associate with the address
      * @throws {SetContextError} When context parameters are invalid
@@ -766,8 +738,8 @@ export class ReclaimProofRequest {
     /**
      * @deprecated use setContext instead
      *
-     * @param address 
-     * @param message additional data you want associated with the [address] 
+     * @param address
+     * @param message additional data you want associated with the [address]
      */
     addContext(address: string, message: string): void {
         this.setContext(address, message);
@@ -976,7 +948,7 @@ export class ReclaimProofRequest {
             cancelRedirectUrl: this.cancelRedirectUrl,
             cancelRedirectUrlOptions: this.cancelRedirectUrlOptions,
             timestamp: this.timeStamp, // New field with correct spelling
-            timeStamp: this.timeStamp, // @deprecated: Remove in future versions 
+            timeStamp: this.timeStamp, // @deprecated: Remove in future versions
             options: this.options,
             sdkVersion: this.sdkVersion,
             jsonProofResponse: this.jsonProofResponse,
@@ -995,7 +967,7 @@ export class ReclaimProofRequest {
 
     /**
      * Validates signature and returns template data
-     * @returns 
+     * @returns
      */
     private getTemplateData = (): TemplateData => {
         if (!this.signature) {
@@ -1356,10 +1328,10 @@ export class ReclaimProofRequest {
      * In the custom-callback flow (where the SDK submits a proof to a provided callback URL),
      * onSuccess may be invoked with an empty array (onSuccess([])) when no proof is available
      * (this happens when a callback is set using setAppCallbackUrl where proof is sent to callback instead of reclaim backend).
-     * 
+     *
      * Please refer to the OnSuccess type signature ((proof?: Proof | Proof[]) => void)
      * and the startSession function source for more details.
-     * 
+     *
      * > [!TIP]
      * > **Best Practice:** When using `setAppCallbackUrl` and/or `setCancelCallbackUrl`, your backend receives the proof or cancellation details directly. We recommend your backend notifies the frontend (e.g. via WebSockets, SSE, or polling) to stop the verification process and handle the appropriate success/failure action. Do not rely completely on `startSession` callbacks on the frontend when using these backend callbacks.
      *
@@ -1431,7 +1403,7 @@ export class ReclaimProofRequest {
                                 throw new ProofNotVerifiedError();
                             }
                         }
-                        // check if the proofs array has only one proof then send the proofs in onSuccess 
+                        // check if the proofs array has only one proof then send the proofs in onSuccess
                         if (proofs.length === 1) {
 
                             onSuccess(proofs[0]);
@@ -1504,4 +1476,3 @@ export class ReclaimProofRequest {
         return this.jsonProofResponse;
     }
 }
-

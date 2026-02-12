@@ -1,6 +1,6 @@
 export * from './Reclaim';
-export * from './utils/interfaces';
-export * from './utils/types';
+export type * from './utils/interfaces';
+export type * from './utils/types';
 // Export device detection utilities for debugging (optional)
 export {
     getDeviceType,
