@@ -260,6 +260,16 @@ reclaimProofRequest.setModalOptions({
 
 await reclaimProofRequest.triggerReclaimFlow();
 ```
+### preventIframe (optional)
+
+Prevents the QR modal from opening when the SDK is running inside an iframe.  
+Useful for apps embedded in dashboards, widgets, or hosted inside other platforms.
+
+```ts
+reclaimProofRequest.setModalOptions({
+  preventIframe: true
+});
+```
 
 ### Benefits of the New Flow:
 
