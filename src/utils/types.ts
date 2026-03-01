@@ -253,6 +253,7 @@ export type StatusUrlResponse = {
     sessionId: string;
     proofs?: Proof[];
     statusV2: string;
+    errorMessage?: string;
   };
   providerId?: string;
 };
