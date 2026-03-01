@@ -1382,13 +1382,13 @@ export class ReclaimProofRequest {
                     if (!this.lastFailureTime) {
                         this.lastFailureTime = currentTime;
                     } else if (currentTime - this.lastFailureTime >= this.FAILURE_TIMEOUT) {
-                        throw new ProviderFailedError('Proof generation failed - timeout reached');
+                        throw new ProviderFailedError(statusUrlResponse.session.errorMessage || 'Proof generation failed - timeout reached');
                     }
                     return; // Continue monitoring if under timeout
                 }
 
                 if (statusUrlResponse.session.statusV2 === SessionStatus.ERROR_SUBMISSION_FAILED || statusUrlResponse.session.statusV2 === SessionStatus.ERROR_SUBMITTED) {
-                    throw new ErrorDuringVerificationError();
+                    throw new ErrorDuringVerificationError(statusUrlResponse.session.errorMessage || 'An error occurred during the verification process');
                 }
 
                 const isDefaultCallbackUrl = this.getAppCallbackUrl() === `${constants.DEFAULT_RECLAIM_CALLBACK_URL}${this.sessionId}`;
@@ -1400,7 +1400,7 @@ export class ReclaimProofRequest {
                             const verified = await verifyProof(proofs, this.options?.acceptAiProviders);
                             if (!verified) {
                                 logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
-                                throw new ProofNotVerifiedError();
+                                throw new ProofNotVerifiedError('Proof verification failed - the generated proof could not be verified');
                             }
                         }
                         // check if the proofs array has only one proof then send the proofs in onSuccess
@@ -1415,7 +1415,7 @@ export class ReclaimProofRequest {
                     }
                 } else {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
-                        throw new ProofSubmissionFailedError();
+                        throw new ProofSubmissionFailedError(statusUrlResponse.session.errorMessage || 'Proof submission to the callback URL failed');
                     }
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED ||
                         statusUrlResponse.session.statusV2 === SessionStatus.AI_PROOF_SUBMITTED) {
