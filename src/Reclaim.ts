@@ -208,6 +208,8 @@ export class ReclaimProofRequest {
 
         if (options?.envUrl) {
             setBackendBaseUrl(options.envUrl);
+        } else if (options?.customSharePageUrl?.includes('eu.portal.reclaimprotocol.org')) {
+            setBackendBaseUrl('https://eu.api.reclaimprotocol.org');
         }
 
         if (options.extensionID) {
