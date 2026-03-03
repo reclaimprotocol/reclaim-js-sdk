@@ -978,7 +978,6 @@ export class ReclaimProofRequest {
         }
 
         // When using a non-default regional portal, a custom callback URL is required
-        // because the regional backend cannot relay proofs to the default callback endpoint.
         const defaultPortalHost = 'portal.reclaimprotocol.org';
         if (this.customSharePageUrl) {
             try {
