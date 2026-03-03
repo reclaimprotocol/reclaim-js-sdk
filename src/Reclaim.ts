@@ -978,14 +978,13 @@ export class ReclaimProofRequest {
         }
 
         // When using a non-default regional portal, a custom callback URL is required
-        const defaultPortalHost = 'portal.reclaimprotocol.org';
+        const defaultHosts = ['share.reclaimprotocol.org', 'portal.reclaimprotocol.org'];
         if (this.customSharePageUrl) {
             try {
                 const sharePageHost = new URL(this.customSharePageUrl).hostname;
-                if (sharePageHost !== defaultPortalHost && !this.appCallbackUrl) {
+                if (!defaultHosts.includes(sharePageHost) && !this.appCallbackUrl) {
                     throw new CallbackUrlRequiredError(
-                        `A custom callback URL is required when using a non-default regional portal (${this.customSharePageUrl}). ` +
-                        `Please call setAppCallbackUrl() before starting the session.`
+                        'A custom callback URL is required when using a customSharePage url'
                     );
                 }
             } catch (e) {
