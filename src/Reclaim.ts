@@ -33,7 +33,8 @@ import {
     SetSignatureError,
     SignatureGeneratingError,
     SignatureNotFoundError,
-    ErrorDuringVerificationError
+    ErrorDuringVerificationError,
+    CallbackUrlRequiredError
 } from './utils/errors'
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
@@ -975,6 +976,23 @@ export class ReclaimProofRequest {
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
         }
+
+        // When using a non-default regional portal, a custom callback URL is required
+        const defaultHosts = ['share.reclaimprotocol.org', 'portal.reclaimprotocol.org'];
+        if (this.customSharePageUrl) {
+            try {
+                const sharePageHost = new URL(this.customSharePageUrl).hostname;
+                if (!defaultHosts.includes(sharePageHost) && !this.appCallbackUrl) {
+                    throw new CallbackUrlRequiredError(
+                        'A custom callback URL is required when using a customSharePage url'
+                    );
+                }
+            } catch (e) {
+                if (e instanceof CallbackUrlRequiredError) throw e;
+                // If URL parsing fails, skip this check — URL validation elsewhere will catch it
+            }
+        }
+
         validateSignature(this.providerId, this.signature, this.applicationId, this.timeStamp)
         const templateData: TemplateData = {
             sessionId: this.sessionId,

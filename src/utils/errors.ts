@@ -39,3 +39,4 @@ export const StatusUrlError = createErrorClass('StatusUrlError');
 export const InavlidParametersError = createErrorClass('InavlidParametersError');
 export const ProofSubmissionFailedError = createErrorClass('ProofSubmissionFailedError');
 export const ErrorDuringVerificationError = createErrorClass('ErrorDuringVerificationError');
+export const CallbackUrlRequiredError = createErrorClass('CallbackUrlRequiredError');
