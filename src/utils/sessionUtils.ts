@@ -55,7 +55,7 @@ export async function initSession(
  * @returns A promise that resolves to the update response
  * @throws UpdateSessionError if the session update fails
  */
-export async function updateSession(sessionId: string, status: SessionStatus) {
+export async function updateSession(sessionId: string, status: SessionStatus, errorMessage?: string) {
   logger.info(`Updating session status for sessionId: ${sessionId}, new status: ${status}`);
   validateFunctionParams(
     [{ input: sessionId, paramName: 'sessionId', isString: true }],
@@ -66,7 +66,7 @@ export async function updateSession(sessionId: string, status: SessionStatus) {
     const response = await http.client(`${BACKEND_BASE_URL}/api/sdk/update/session/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, status })
+      body: JSON.stringify({ sessionId, status, ...(errorMessage && { errorMessage }) })
     });
 
     const res = await response.json();
