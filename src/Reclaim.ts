@@ -1419,7 +1419,7 @@ export class ReclaimProofRequest {
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
                             const verified = await verifyProof(proofs, this.options?.acceptAiProviders);
                             if (!verified) {
-                                logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
+                                logger.info(`Proofs not verified: count=${proofs.length}`);
                                 throw new ProofNotVerifiedError();
                             }
                         }
