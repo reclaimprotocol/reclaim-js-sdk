@@ -6,7 +6,25 @@ export type ClaimID = ProviderClaimData['identifier'];
 export type ClaimInfo = Pick<ProviderClaimData, 'context' | 'provider' | 'parameters'>;
 
 export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'>
-	& ClaimInfo
+  & ClaimInfo
+
+export interface HttpProviderParams {
+  body: string;
+  method: "GET" | "POST" | "PUT" | "PATCH";
+  responseMatches: {
+    invert: boolean;
+    isOptional: boolean;
+    type: "regex" | "contains";
+    value: string;
+  }[]
+  responseRedactions: {
+    hash?: "oprf" | undefined;
+    jsonPath: string;
+    regex: string;
+    xPath: string;
+  }[]
+  url: string;
+}
 
 export type SignedClaim = {
   claim: CompleteClaimData;
@@ -242,6 +260,14 @@ export type TemplateData = {
   preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
 
+export type ProviderVersionConfig = {
+  major?: number;
+  minor?: number;
+  patch?: number;
+  prereleaseTag?: string;
+  prereleaseNumber?: number;
+}
+
 // Add the new StatusUrlResponse type
 export type StatusUrlResponse = {
   message: string;
@@ -249,9 +275,65 @@ export type StatusUrlResponse = {
     id: string;
     appId: string;
     httpProviderId: string[];
+    providerId: string;
+    providerVersionString: string;
     sessionId: string;
     proofs?: Proof[];
     statusV2: string;
   };
   providerId?: string;
 };
+
+export type ProviderConfigResponse = {
+  message: string;
+  provider?: ReclaimProviderConfig;
+  providerId?: string;
+  providerVersionString?: string;
+};
+
+export interface ReclaimProviderConfig {
+  loginUrl: string;
+  customInjection: string;
+  geoLocation: string;
+  injectionType: string;
+  disableRequestReplay: boolean;
+  verificationType: string;
+  requestData: InterceptorRequestSpec[];
+  allowedInjectedRequestData: InjectedRequestSpec[];
+}
+
+export interface InterceptorRequestSpec {
+  url: string;
+  urlType: string;
+  method: string;
+  responseMatches: ResponseMatch[];
+  responseRedactions: ResponseRedaction[];
+  bodySniff: BodySniff;
+}
+
+export interface InjectedRequestSpec {
+  url: string;
+  method: string;
+  bodySniff: BodySniff;
+  responseMatches: ResponseMatch[];
+  responseRedactions: ResponseRedaction[];
+}
+
+export interface BodySniff {
+  enabled: boolean;
+  template: string;
+}
+
+export interface ResponseMatch {
+  value: string;
+  type: string;
+  invert: boolean;
+  description: null;
+}
+
+export interface ResponseRedaction {
+  xPath: string;
+  jsonPath: string;
+  regex: string;
+  hash: string;
+}

@@ -3,7 +3,7 @@ import {
   UpdateSessionError,
   StatusUrlError
 } from "./errors";
-import { InitSessionResponse, SessionStatus, StatusUrlResponse } from "./types";
+import { InitSessionResponse, ProviderConfigResponse, SessionStatus, StatusUrlResponse } from "./types";
 import { validateFunctionParams } from "./validationUtils";
 import { BACKEND_BASE_URL, constants } from './constants';
 import { http } from "./fetch";
@@ -120,4 +120,30 @@ export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlRespon
   }
 }
 
+export async function fetchProviderConfig(sessionId: string): Promise<ProviderConfigResponse> {
+  validateFunctionParams(
+    [{ input: sessionId, paramName: 'sessionId', isString: true }],
+    'fetchProviderConfig'
+  );
 
+  try {
+    const response = await http.client(`${constants.DEFAULT_RECLAIM_STATUS_URL}${sessionId}/provider`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const res = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = `Error fetching provider config for sessionId: ${sessionId}. Status Code: ${response.status}`;
+      logger.info(errorMessage, res);
+      throw new StatusUrlError(errorMessage);
+    }
+
+    return res as ProviderConfigResponse;
+  } catch (err) {
+    const errorMessage = `Failed to fetch provider config for sessionId: ${sessionId}`;
+    logger.info(errorMessage, err);
+    throw new StatusUrlError(`Error fetching provider config for sessionId: ${sessionId}`);
+  }
+}

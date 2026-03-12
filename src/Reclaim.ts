@@ -1,4 +1,4 @@
-import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage } from './utils/interfaces'
+import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage, WitnessData } from './utils/interfaces'
 import {
     ProofRequestOptions,
     StartSessionParams,
@@ -10,6 +10,8 @@ import {
     ReclaimFlowLaunchOptions,
     HttpFormEntry,
     HttpRedirectionMethod,
+    InterceptorRequestSpec,
+    InjectedRequestSpec,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -26,6 +28,7 @@ import {
     InitError,
     InvalidParamError,
     ProofNotVerifiedError,
+    ProofNotValidatedError,
     ProofSubmissionFailedError,
     ProviderFailedError,
     SessionNotStartedError,
@@ -37,25 +40,45 @@ import {
     CallbackUrlRequiredError
 } from './utils/errors'
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
-import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
+import { fetchProviderConfig, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
+import { hashProviderParams } from './witness'
 
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
 
 /**
+ * Verification using reclaim session id
+ */
+export interface VerificationOptionsWithSessionId { reclaimSessionId: string, isValidationEnabled: true }
+/**
+ * Verification using any proof hash
+ */
+export interface VerificationOptionsWithHash { allowedProofHashes: string[], isValidationEnabled: true }
+/**
+ * Legacy way of verification without proof validation
+ */
+export interface VerificationOptionsWithDisabledValidation { isValidationEnabled: false }
+
+/**
+ * Verification options
+ */
+export type VerificationOptions = VerificationOptionsWithSessionId | VerificationOptionsWithHash | VerificationOptionsWithDisabledValidation;
+
+/**
  * Verifies one or more Reclaim proofs by validating signatures and witness information
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to verify
- * @param allowAiWitness - Optional flag to allow AI witness verification. Defaults to false
+ * @param options - Optional verification options. Validation is disabled by default only when proofs don't have reclaimSessionId in context.
  * @returns Promise<boolean> - Returns true if all proofs are valid, false otherwise
  * @throws {SignatureNotFoundError} When proof has no signatures
  * @throws {ProofNotVerifiedError} When identifier mismatch occurs
+ * @throws {ProofNotValidatedError} When proof content mismatch occurs with expectations
  *
  * @example
  * ```typescript
@@ -65,38 +88,159 @@ const sdkVersion = require('../package.json').version;
  * ```
  */
 export async function verifyProof(
-	proofOrProofs: Proof | Proof[],
-	allowAiWitness = false
+    proofOrProofs: Proof | Proof[],
+    options?: VerificationOptions
 ) {
-	try {
-		await assertValidProof(proofOrProofs, allowAiWitness)
-		return true
-	} catch (error) {
-		logger.error('error in validating proof', error)
-		return false
-	}
+    try {
+        const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
+        if (proofs.length === 0) {
+            throw new Error('No proofs provided')
+        }
+
+        const reclaimSessionId: string | null = options && 'reclaimSessionId' in options ? options.reclaimSessionId : recoverReclaimSessionIdFromProof(proofs[0]);
+        const effectiveOptions: VerificationOptions = options ?? (reclaimSessionId ? ({ reclaimSessionId: reclaimSessionId, isValidationEnabled: true }) : { isValidationEnabled: false });
+
+        const attestors = await getAttestors()
+        for (const proof of proofs) {
+            await assertVerifiedProof(proof, attestors)
+        }
+
+        await assertValidateProof(proofs, effectiveOptions)
+
+        return true
+    } catch (error) {
+        logger.error('error in validating proof', error)
+        return false
+    }
 }
 
-export async function assertValidProof(
-	proofOrProofs: Proof | Proof[],
-	allowAiWitness = false
+export function recoverReclaimSessionIdFromProof(proof: Proof) {
+    const contextJson = JSON.parse(proof.claimData.context)
+    const reclaimSessionId = contextJson?.reclaimSessionId;
+    if (typeof reclaimSessionId === 'string') return reclaimSessionId;
+    return null;
+}
+
+/**
+ * Asserts that the proof is verified by checking the signatures and witness information
+ * @param proof - The proof to verify
+ * @param attestors - The attestors to check against
+ * @throws {ProofNotVerifiedError} When the proof is not verified
+ */
+export async function assertVerifiedProof(
+    proof: Proof,
+    attestors: WitnessData[],
 ) {
-	const attestors = await getAttestors()
-	proofOrProofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
-	for (const proof of proofOrProofs) {
-		const signers = recoverSignersOfSignedClaim({
-			claim: proof.claimData,
-			signatures: proof.signatures
-				.map(signature => ethers.getBytes(signature))
-		})
-		// ensure at least one signer is an attestor
-		if (
-			!attestors
-				.some(attestor => signers.includes(attestor.id.toLowerCase()))
-		) {
-			throw new ProofNotVerifiedError('Identifier mismatch')
-		}
-	}
+    const canonicalizedContext = JSON.parse(proof.claimData.context)
+    if (!canonicalizedContext?.providerHash) {
+        throw new ProofNotVerifiedError('Provider hash not found in context')
+    }
+    const signers = recoverSignersOfSignedClaim({
+        claim: proof.claimData,
+        signatures: proof.signatures
+            .map(signature => ethers.getBytes(signature))
+    })
+    // ensure at least one signer is an attestor
+    if (
+        !attestors
+            .some(attestor => signers.includes(attestor.id.toLowerCase()))
+    ) {
+        throw new ProofNotVerifiedError('Identifier mismatch')
+    }
+}
+
+/**
+ * Asserts that the proof is validated by checking the content of proof with with expectations from provider config or hash based on [options]
+ * @param proofs - The proofs to validate
+ * @param options - The validation options
+ * @throws {ProofNotValidatedError} When the proof is not validated
+ */
+export async function assertValidateProof(proofs: Proof[], options: VerificationOptions) {
+    if (!options.isValidationEnabled) {
+        logger.warn('Validation skipped because it was disabled during proof verification');
+        return;
+    }
+
+    if ('allowedProofHashes' in options) {
+        const allowedProofHashes = new Set(options.allowedProofHashes.map(it => it.toLowerCase().trim()));
+        if (!allowedProofHashes.size) {
+            throw new ProofNotValidatedError('An empty list was provided as allowed proof hashes')
+        }
+        for (const proof of proofs) {
+            const claimParams = JSON.parse(proof.claimData.parameters);
+            const computedHashOfProof = hashProviderParams(claimParams).toLowerCase().trim();
+            if (!allowedProofHashes.has(computedHashOfProof)) {
+                throw new ProofNotValidatedError('Proof hash mismatch')
+            }
+        }
+        return true;
+    }
+
+    if ('reclaimSessionId' in options) {
+        const reclaimSessionId = options.reclaimSessionId;
+        const providerConfigResponse = await fetchProviderConfig(reclaimSessionId);
+
+        const requiredInterceptedRequests = providerConfigResponse.provider?.requestData ?? [];
+
+        const minimumProofsExpected = requiredInterceptedRequests?.length ?? 1;
+        if (proofs.length < minimumProofsExpected) {
+            throw new ProofNotValidatedError(`Expected ${minimumProofsExpected} proofs, but got ${proofs.length}`)
+        }
+
+        const validatedProofs = [];
+        const uncheckedProofs = [...proofs];
+
+        if (requiredInterceptedRequests?.length) {
+            for (const config of requiredInterceptedRequests) {
+                let matched = false;
+                for (const proof of uncheckedProofs) {
+                    if (await validateProofByInterceptorRequestSpec(proof, config)) {
+                        validatedProofs.push(proof);
+                        uncheckedProofs.splice(uncheckedProofs.indexOf(proof), 1);
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    // atleast 1 proof should match for this interceptor request spec
+                    throw new ProofNotValidatedError('No proof matched interceptor request spec')
+                }
+            }
+        }
+
+        const allowedInjectedRequestData = providerConfigResponse.provider?.allowedInjectedRequestData ?? [];
+        if (uncheckedProofs.length && allowedInjectedRequestData.length) {
+            // if we have unchecked proofs and we also have atleast 1 request in injected request spec, then we should validate
+            // each unchecked proof against injected request spec
+            for (const proof of uncheckedProofs) {
+                let matched = false;
+                for (const config of allowedInjectedRequestData) {
+                    if (await validateProofByInjectedRequestSpec(proof, config)) {
+                        validatedProofs.push(proof);
+                        uncheckedProofs.splice(uncheckedProofs.indexOf(proof), 1);
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    // proof should match with any injected request spec
+                    throw new ProofNotValidatedError('No proof matched injected request spec');
+                }
+            }
+        }
+
+        logger.warn(`some ${uncheckedProofs.length} proofs are not validated`);
+
+        return true;
+    }
+}
+
+export async function validateProofByInterceptorRequestSpec(proof: Proof, requestSpec: InterceptorRequestSpec): Promise<boolean> {
+    return true;
+}
+
+export async function validateProofByInjectedRequestSpec(proof: Proof, requestSpec: InjectedRequestSpec): Promise<boolean> {
+    return true;
 }
 
 /**
@@ -159,7 +303,7 @@ export class ReclaimProofRequest {
     private appCallbackUrl?: string;
     private sessionId: string;
     private options?: ProofRequestOptions;
-    private context: Context = { contextAddress: '0x0', contextMessage: 'sample context' };
+    private context: Context = { contextAddress: '0x0', contextMessage: 'sample context', reclaimSessionId: '' };
     private claimCreationType?: ClaimCreationType = ClaimCreationType.STANDALONE;
     private providerId: string;
     private resolvedProviderVersion?: string;
@@ -337,6 +481,7 @@ export class ReclaimProofRequest {
             const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion);
             proofRequestInstance.sessionId = data.sessionId
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
+            proofRequestInstance.context.reclaimSessionId = data.sessionId
 
             return proofRequestInstance
         } catch (error) {
@@ -699,7 +844,7 @@ export class ReclaimProofRequest {
                 { input: context, paramName: 'context', isString: false }
             ], 'setJsonContext');
             // ensure context is canonically json serializable
-            this.context = JSON.parse(canonicalStringify(context));
+            this.context = JSON.parse(canonicalStringify({ ...context, reclaimSessionId: this.sessionId }));
         } catch (error) {
             logger.info("Error setting context", error)
             throw new SetContextError("Error setting context", error as Error)
@@ -731,7 +876,7 @@ export class ReclaimProofRequest {
                 { input: address, paramName: 'address', isString: true },
                 { input: message, paramName: 'message', isString: true }
             ], 'setContext');
-            this.context = { contextAddress: address, contextMessage: message };
+            this.context = { contextAddress: address, contextMessage: message, reclaimSessionId: this.sessionId };
         } catch (error) {
             logger.info("Error setting context", error)
             throw new SetContextError("Error setting context", error as Error)
@@ -1417,7 +1562,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, this.options?.acceptAiProviders);
+                            const verified = await verifyProof(proofs, { reclaimSessionId: this.sessionId, isValidationEnabled: true });
                             if (!verified) {
                                 logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
                                 throw new ProofNotVerifiedError();

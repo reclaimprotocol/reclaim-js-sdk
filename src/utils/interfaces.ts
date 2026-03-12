@@ -43,6 +43,7 @@ export interface ProviderClaimData {
 export interface Context {
   contextAddress: string;
   contextMessage: string;
+  reclaimSessionId: string;
 }
 
 export interface Beacon {
