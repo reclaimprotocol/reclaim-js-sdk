@@ -52,7 +52,6 @@ describe('Request', () => {
             "providerId": "example",
             "sessionId": "123",
             "context": {
-                "reclaimSessionId": "123",
                 "user": "john@example.com"
             },
             "appCallbackUrl": "https://api.example.com/success?session=def",
@@ -104,7 +103,6 @@ describe('Request', () => {
             "providerId": "example",
             "sessionId": "123",
             "context": {
-                "reclaimSessionId": "123",
                 "user": "john@example.com"
             },
             "appCallbackUrl": "https://api.example.com/success?session=def",
