@@ -1,4 +1,4 @@
-import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage, WitnessData } from './utils/interfaces'
+import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage } from './utils/interfaces'
 import {
     ProofRequestOptions,
     StartSessionParams,
@@ -38,22 +38,17 @@ import {
 } from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchProviderHashRequirementsBy, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
-import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
+import { assertVerifiedProof, createLinkWithTemplateData, getAttestors } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
-import { assertValidProofsByHash, ValidationConfig } from './utils/proofValidationUtils'
+import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
 import { ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
-
-/**
- * Verification options
- */
-export type VerificationConfig = ValidationConfig;
 
 /**
  * Verifies one or more Reclaim proofs by validating signatures and witness information
@@ -98,48 +93,6 @@ export async function verifyProof(
         logger.error('error in validating proof', error)
         return false
     }
-}
-
-/**
- * Asserts that the proof is verified by checking the signatures and witness information
- * @param proof - The proof to verify
- * @param attestors - The attestors to check against
- * @throws {ProofNotVerifiedError} When the proof is not verified
- */
-export async function assertVerifiedProof(
-    proof: Proof,
-    attestors: WitnessData[],
-) {
-    const signers = recoverSignersOfSignedClaim({
-        claim: proof.claimData,
-        signatures: proof.signatures
-            .map(signature => ethers.getBytes(signature))
-    })
-    // ensure at least one signer is an attestor
-    if (
-        !attestors
-            .some(attestor => signers.includes(attestor.id.toLowerCase()))
-    ) {
-        throw new ProofNotVerifiedError('Identifier mismatch')
-    }
-}
-
-/**
- * Asserts that the proof is validated by checking the content of proof with with expectations from provider config or hash based on [options]
- * @param proofs - The proofs to validate
- * @param config - The validation config
- * @throws {ProofNotValidatedError} When the proof is not validated
- */
-export function assertValidateProof(proofs: Proof[], config: VerificationConfig) {
-    if ('dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
-        logger.warn('Validation skipped because it was disabled during proof verification');
-        return;
-    }
-
-    return assertValidProofsByHash(proofs, {
-        requiredHashes: 'requiredHashes' in config && Array.isArray(config?.requiredHashes) ? config.requiredHashes : [],
-        allowedHashes: 'allowedHashes' in config && Array.isArray(config?.allowedHashes) ? config.allowedHashes : []
-    });
 }
 
 /**

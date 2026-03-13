@@ -4,9 +4,9 @@ import { createSignDataForClaim } from "../witness";
 import { BACKEND_BASE_URL, constants } from "./constants";
 import { replaceAll } from "./helper";
 import { validateURL } from "./validationUtils";
-import { BackendServerError } from "./errors";
+import { BackendServerError, ProofNotVerifiedError } from "./errors";
 import loggerModule from './logger';
-import { WitnessData } from "./interfaces";
+import { WitnessData, type Proof } from "./interfaces";
 import { http } from "./fetch";
 
 const logger = loggerModule.logger;
@@ -94,3 +94,26 @@ export function recoverSignersOfSignedClaim({
   )
   return signers;
 }
+
+/**
+ * Asserts that the proof is verified by checking the signatures and witness information
+ * @param proof - The proof to verify
+ * @param attestors - The attestors to check against
+ * @throws {ProofNotVerifiedError} When the proof is not verified
+ */
+export async function assertVerifiedProof(
+    proof: Proof,
+    attestors: WitnessData[]
+) {
+    const signers = recoverSignersOfSignedClaim({
+        claim: proof.claimData,
+        signatures: proof.signatures
+            .map(signature => ethers.getBytes(signature))
+    })
+    // ensure at least one signer is an attestor
+    if (!attestors
+        .some(attestor => signers.includes(attestor.id.toLowerCase()))) {
+        throw new ProofNotVerifiedError('Identifier mismatch')
+    }
+}
+

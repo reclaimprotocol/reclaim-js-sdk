@@ -22,6 +22,8 @@ export interface ValidationConfigWithDisabledValidation { dangerouslyDisableCont
  */
 export type ValidationConfig = ValidationConfigWithHash | ValidationConfigWithDisabledValidation;
 
+export type VerificationConfig = ValidationConfig;
+
 export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {
     const requiredProofHashes = config.requiredHashes.map(it => it.toLowerCase().trim());
     const allowedHashesForExtraProofs = new Set(config.allowedHashes.map(it => it.toLowerCase().trim()));
@@ -102,3 +104,22 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
     } catch (_) { }
     throw new ProofNotValidatedError('Proof has no HTTP provider params to hash');
 }
+
+/**
+ * Asserts that the proof is validated by checking the content of proof with with expectations from provider config or hash based on [options]
+ * @param proofs - The proofs to validate
+ * @param config - The validation config
+ * @throws {ProofNotValidatedError} When the proof is not validated
+ */
+export function assertValidateProof(proofs: Proof[], config: VerificationConfig) {
+    if ('dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
+        logger.warn('Validation skipped because it was disabled during proof verification')
+        return
+    }
+
+    return assertValidProofsByHash(proofs, {
+        requiredHashes: 'requiredHashes' in config && Array.isArray(config?.requiredHashes) ? config.requiredHashes : [],
+        allowedHashes: 'allowedHashes' in config && Array.isArray(config?.allowedHashes) ? config.allowedHashes : []
+    })
+}
+
