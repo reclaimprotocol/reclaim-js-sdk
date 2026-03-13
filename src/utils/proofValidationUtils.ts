@@ -29,72 +29,63 @@ export type ValidationOptions = VerificationOptionsWithSessionId | VerificationO
 export function assertValidateProofByHash(proofs: Proof[], options: VerificationOptionsWithHash) {
     const allowedProofHashes = new Set(options.allowedProofHashes.map(it => it.toLowerCase().trim()));
     if (!allowedProofHashes.size) {
-        throw new ProofNotValidatedError('An empty list was provided as allowed proof hashes')
+        throw new ProofNotValidatedError('An empty list was provided as allowed proof hashes');
     }
+
     for (const proof of proofs) {
         const claimParams = getHttpProviderClaimParamsFromProof(proof);
         const computedHashOfProof = hashProviderParams(claimParams).toLowerCase().trim();
         if (!allowedProofHashes.has(computedHashOfProof)) {
-            throw new ProofNotValidatedError('Proof hash mismatch')
+            throw new ProofNotValidatedError('Proof hash mismatch');
         }
     }
     return true;
 }
 
 export async function assertValidateProofBySessionId(proofs: Proof[], options: VerificationOptionsWithSessionId) {
-    const reclaimSessionId = options.reclaimSessionId;
-    const providerConfigResponse = await fetchProviderConfig(reclaimSessionId);
-
+    const providerConfigResponse = await fetchProviderConfig(options.reclaimSessionId);
     const requiredInterceptedRequests = providerConfigResponse.provider?.requestData ?? [];
 
-    const minimumProofsExpected = requiredInterceptedRequests?.length ?? 1;
+    const minimumProofsExpected = requiredInterceptedRequests.length || 1;
     if (proofs.length < minimumProofsExpected) {
-        throw new ProofNotValidatedError(`Expected ${minimumProofsExpected} proofs, but got ${proofs.length}`)
+        throw new ProofNotValidatedError(`Expected ${minimumProofsExpected} proofs, but got ${proofs.length}`);
     }
 
-    const validatedProofs: Set<Proof> = new Set<Proof>();
-    const getUncheckedProofs = () => {
-        return proofs.filter(proof => !validatedProofs.has(proof));
-    }
+    const validatedProofs = new Set<Proof>();
 
-    if (requiredInterceptedRequests?.length) {
-        for (const config of requiredInterceptedRequests) {
-            const matched = getUncheckedProofs().find(proof => {
-                if (validateProofByRequestSpec(proof, config)) {
-                    validatedProofs.add(proof);
-                    return true;
-                }
-                return false;
-            });
-            if (!matched) {
-                // atleast 1 proof should match for this interceptor request spec
-                // not a single proof matched this request spec
-                throw new ProofNotValidatedError('No proof matched interceptor request spec')
-            }
+    // Validate against interceptor requests
+    for (const config of requiredInterceptedRequests) {
+        const matchedProof = proofs.find(
+            proof => !validatedProofs.has(proof) && validateProofByRequestSpec(proof, config)
+        );
+
+        if (!matchedProof) {
+            // atleast 1 proof should match for this interceptor request spec
+            // not a single proof matched this request spec
+            throw new ProofNotValidatedError('No proof matched interceptor request spec');
         }
+        validatedProofs.add(matchedProof);
     }
 
+    // Validate remaining against injected requests
     const allowedInjectedRequestData = providerConfigResponse.provider?.allowedInjectedRequestData ?? [];
-    if (allowedInjectedRequestData.length) {
-        const uncheckedProofs = getUncheckedProofs();
-        if (uncheckedProofs.length) {
-            // if we have unchecked proofs and we also have atleast 1 request in injected request spec, then we should validate
-            // each unchecked proof against injected request spec
-            for (const proof of uncheckedProofs) {
-                const matched = allowedInjectedRequestData.find(config => validateProofByRequestSpec(proof, config))
-                if (!matched) {
-                    // proof should match with any injected request spec
-                    // not a single injected request spec matched with this proof
-                    throw new ProofNotValidatedError('No proof matched injected request spec');
-                }
-                validatedProofs.add(proof);
+    if (allowedInjectedRequestData.length > 0) {
+        const uncheckedProofs = proofs.filter(proof => !validatedProofs.has(proof));
+        // if we have unchecked proofs and we also have atleast 1 request in injected request spec, then we should validate
+        // each unchecked proof against injected request spec
+        for (const proof of uncheckedProofs) {
+            const isMatch = allowedInjectedRequestData.some(config => validateProofByRequestSpec(proof, config));
+            if (!isMatch) {
+                // proof should match with any injected request spec
+                // not a single injected request spec matched with this proof
+                throw new ProofNotValidatedError('No proof matched injected request spec');
             }
+            validatedProofs.add(proof);
         }
     }
 
-    const uncheckedProofsCount = getUncheckedProofs().length;
-
-    if (uncheckedProofsCount) {
+    const uncheckedProofsCount = proofs.length - validatedProofs.size;
+    if (uncheckedProofsCount > 0) {
         logger.warn(`${uncheckedProofsCount} proof(s) are not validated`);
     }
 
@@ -103,23 +94,16 @@ export async function assertValidateProofBySessionId(proofs: Proof[], options: V
 
 export function validateProofByRequestSpec(proof: Proof, requestSpec: RequestSpec): boolean {
     const providerParams = getHttpProviderClaimParamsFromProof(proof);
-    if (!providerParams) {
-        return false;
-    }
-    if (!isExactOrPatternMatch(providerParams.url, requestSpec.url)) {
-        return false;
-    }
-    if (!isExactOrPatternMatch(providerParams.method, requestSpec.method)) {
-        return false;
-    }
-    if (requestSpec.bodySniff.enabled && !isExactOrPatternMatch(providerParams.body, requestSpec.bodySniff.template)) {
-        return false;
-    }
 
-    return validateResponseSelection(providerParams, requestSpec);
+    return !!providerParams &&
+        isExactOrPatternMatch(providerParams.url, requestSpec.url) &&
+        isExactOrPatternMatch(providerParams.method, requestSpec.method) &&
+        (!requestSpec.bodySniff.enabled || isExactOrPatternMatch(providerParams.body, requestSpec.bodySniff.template)) &&
+        validateResponseSelection(providerParams, requestSpec);
 }
 
 const allowedHttpMethods = new Set(["GET", "POST", "PUT", "PATCH"]);
+
 export function isHttpProviderClaimParams(claimParams: unknown): claimParams is HttpProviderClaimParams {
     // Fail fast on non-objects
     if (!claimParams || typeof claimParams !== 'object' || Array.isArray(claimParams)) {
@@ -131,9 +115,11 @@ export function isHttpProviderClaimParams(claimParams: unknown): claimParams is 
 
     return (
         typeof params.url === 'string' &&
-        typeof params.method === 'string' && allowedHttpMethods.has(params.method) &&
+        typeof params.method === 'string' &&
+        allowedHttpMethods.has(params.method) &&
         typeof params.body === 'string' &&
-        Array.isArray(params.responseMatches) && params.responseMatches.length > 0 &&
+        Array.isArray(params.responseMatches) &&
+        params.responseMatches.length > 0 &&
         Array.isArray(params.responseRedactions)
     );
 }
@@ -150,74 +136,53 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
     return null;
 }
 
-
 function isExactOrPatternMatch(input: string, patternOrString: string): boolean {
-    if (input === patternOrString) return true;
-
-    return false;
+    return input === patternOrString;
 }
 
-export function isResponseMatchSpecMatch(responseMatchSpec: ResponseMatch, responseMatch: ResponseMatch): boolean {
-    const type = responseMatch.type ?? 'contains';
-    const typeSpec = responseMatchSpec.type ?? 'contains';
-    const value = responseMatch.value ?? '';
-    const valueSpec = responseMatchSpec.value ?? '';
-    const invert = responseMatch.invert ?? false;
-    const invertSpec = responseMatchSpec.invert ?? false;
-    return type === typeSpec && value === valueSpec && invert === invertSpec;
+export function isResponseMatchSpecMatch(spec: ResponseMatch, match: ResponseMatch): boolean {
+    return (spec.type ?? 'contains') === (match.type ?? 'contains') &&
+        (spec.value ?? '') === (match.value ?? '') &&
+        (spec.invert ?? false) === (match.invert ?? false);
 }
 
-export function isResponseRedactionSpecMatch(responseRedactionSpec: ResponseRedaction, responseRedaction: ResponseRedaction): boolean {
-    const hash = responseRedaction.hash || undefined;
-    const hashSpec = responseRedactionSpec.hash || undefined;
-    const jsonPath = responseRedaction.jsonPath ?? '';
-    const jsonPathSpec = responseRedactionSpec.jsonPath ?? '';
-    const regex = responseRedaction.regex ?? '';
-    const regexSpec = responseRedactionSpec.regex ?? '';
-    const xPath = responseRedaction.xPath ?? '';
-    const xPathSpec = responseRedactionSpec.xPath ?? '';
-    return hash === hashSpec && jsonPath === jsonPathSpec && regex === regexSpec && xPath === xPathSpec;
+export function isResponseRedactionSpecMatch(spec: ResponseRedaction, match: ResponseRedaction): boolean {
+    return (spec.hash || undefined) === (match.hash || undefined) &&
+        (spec.jsonPath ?? '') === (match.jsonPath ?? '') &&
+        (spec.regex ?? '') === (match.regex ?? '') &&
+        (spec.xPath ?? '') === (match.xPath ?? '');
 }
 
-export function validateResponseSelection(providerParams: HttpProviderClaimParams, requestSpec: RequestSpec) {
-    const skippedResponseMatchIndices = new Set<number>();
-
-    // Response match is required for validation
+export function validateResponseSelection(providerParams: HttpProviderClaimParams, requestSpec: RequestSpec): boolean {
     if (!providerParams.responseMatches.length || !requestSpec.responseMatches.length) {
         return false;
     }
 
-    if (requestSpec.responseMatches.length) {
-        let index = -1;
-        for (const responseMatchSpec of requestSpec.responseMatches) {
-            index++;
+    const skippedResponseMatchIndices = new Set<number>();
 
-            const match = providerParams.responseMatches.find(it => isResponseMatchSpecMatch(responseMatchSpec, it));
+    for (let i = 0; i < requestSpec.responseMatches.length; i++) {
+        const spec = requestSpec.responseMatches[i];
+        const match = providerParams.responseMatches.some(it => isResponseMatchSpecMatch(spec, it));
 
-            if (!match) {
-                if (responseMatchSpec.isOptional !== true) {
-                    return false;
-                } else {
-                    skippedResponseMatchIndices.add(index);
-                }
-            }
-        }
-    }
-    if (requestSpec.responseRedactions.length) {
-        let index = -1;
-        for (const responseRedactionSpec of requestSpec.responseRedactions) {
-            index++;
-
-            if (skippedResponseMatchIndices.has(index)) {
-                continue;
-            }
-
-            const match = providerParams.responseRedactions.find(it => isResponseRedactionSpecMatch(responseRedactionSpec, it));
-
-            if (!match) {
+        if (!match) {
+            if (spec.isOptional) {
+                skippedResponseMatchIndices.add(i);
+            } else {
                 return false;
             }
         }
     }
+
+    for (let i = 0; i < requestSpec.responseRedactions.length; i++) {
+        if (skippedResponseMatchIndices.has(i)) continue;
+
+        const spec = requestSpec.responseRedactions[i];
+        const match = providerParams.responseRedactions.some(it => isResponseRedactionSpecMatch(spec, it));
+
+        if (!match) {
+            return false;
+        }
+    }
+
     return true;
 }
