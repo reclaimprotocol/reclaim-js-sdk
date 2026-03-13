@@ -18,7 +18,7 @@ describe('Validation', () => {
                 }
             }
 
-            const providerResponse: ProviderConfigResponse = {
+            return {
                 provider: {
                     loginUrl: "",
                     customInjection: "",
@@ -28,34 +28,45 @@ describe('Validation', () => {
                     verificationType: "",
                     requestData: [
                         {
-                            url: "https://www.kaggle.com/api/i/users.UsersService/GetCurrentUser",
-                            urlType: "TEMPLATE",
-                            method: "POST",
-                            responseMatches: [
+                            "url": "https://www.kaggle.com/api/i/users.UsersService/GetCurrentUser",
+                            "expectedPageUrl": "",
+                            "urlType": "TEMPLATE",
+                            "method": "POST",
+                            "responseMatches": [
                                 {
-                                    "type": "contains",
                                     "value": "\"userName\":\"{{username}}\"",
-                                    invert: false,
+                                    "type": "contains",
+                                    "invert": false,
+                                    "description": null,
+                                    "order": null,
+                                    "isOptional": false
                                 }
                             ],
-                            responseRedactions: [
+                            "responseRedactions": [
                                 {
+                                    "xPath": "",
                                     "jsonPath": "$.userName",
                                     "regex": "\"userName\":\"(.*)\"",
-                                    "xPath": ""
+                                    "hash": ""
                                 }
                             ],
-                            bodySniff: {
-                                enabled: true,
-                                template: "{\"includeGroups\":false,\"includeLogins\":false,\"includeVerificationStatus\":true}",
-                            }
+                            "bodySniff": {
+                                "enabled": true,
+                                "template": "{\"includeGroups\":false,\"includeLogins\":false,\"includeVerificationStatus\":true}"
+                            },
+                            "requestHash": "0x8f3ebf2865a1dce8f5c070ea087a3af86ee9127b82dc79cefff76c45d8968c42",
+                            "responseVariables": [
+                                "username"
+                            ],
+                            "additionalClientOptions": null,
+                            "writeRedactionMode": null,
+                            "credentials": null
                         }
                     ],
                     allowedInjectedRequestData: []
                 },
                 message: ""
             }
-            return providerResponse
         });
 
         // correct proofs

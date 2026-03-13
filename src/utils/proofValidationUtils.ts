@@ -168,8 +168,8 @@ export function isResponseMatchSpecMatch(responseMatchSpec: ResponseMatch, respo
 }
 
 export function isResponseRedactionSpecMatch(responseRedactionSpec: ResponseRedaction, responseRedaction: ResponseRedaction): boolean {
-    const hash = responseRedaction.hash ?? undefined;
-    const hashSpec = responseRedactionSpec.hash ?? undefined;
+    const hash = responseRedaction.hash || undefined;
+    const hashSpec = responseRedactionSpec.hash || undefined;
     const jsonPath = responseRedaction.jsonPath ?? '';
     const jsonPathSpec = responseRedactionSpec.jsonPath ?? '';
     const regex = responseRedaction.regex ?? '';

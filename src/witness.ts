@@ -63,7 +63,7 @@ function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams 
       xPath: it.xPath ?? '',
       jsonPath: it.jsonPath ?? '',
       regex: it.regex ?? '',
-      hash: it.hash ?? undefined,
+      hash: it.hash || undefined,
     })) ?? [],
   }
 
