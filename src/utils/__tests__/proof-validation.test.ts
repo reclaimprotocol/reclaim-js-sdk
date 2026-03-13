@@ -1,4 +1,6 @@
 import { verifyProof } from "../../Reclaim";
+import { getProviderHashRequirementsFromSpec } from "../proofValidationUtils";
+import { fetchProviderConfig, fetchProviderHashRequirementsBy } from "../sessionUtils";
 import { ProviderConfigResponse } from "../types";
 import { mockFetch, mockFetchBy } from "./mock-fetch";
 
@@ -19,7 +21,7 @@ describe('Validation', () => {
             }
 
             return {
-                provider: {
+                providers: {
                     loginUrl: "",
                     customInjection: "",
                     geoLocation: "",
@@ -69,6 +71,8 @@ describe('Validation', () => {
             }
         });
 
+        const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0');
+
         // correct proofs
         expect(await verifyProof({
             "identifier": "0x51c192777d45010e9318c0e1eb2fefc0bc5a444f59e3d3e5a11e9a3d1b98e10c",
@@ -90,6 +94,6 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { reclaimSessionId: '123' })).toEqual(true);
+        } as any, hashRequirements)).toEqual(true);
     });
 });

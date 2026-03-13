@@ -9,6 +9,7 @@ import { validateFunctionParams } from "./validationUtils";
 import { BACKEND_BASE_URL, constants } from './constants';
 import { http } from "./fetch";
 import loggerModule from './logger';
+import { getProviderHashRequirementsFromSpec, ProviderHashRequirementsConfig } from "./proofValidationUtils";
 const logger = loggerModule.logger;
 
 /**
@@ -150,4 +151,14 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
     logger.info(errorMessage, err);
     throw new ProviderConfigFetchError(`Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`);
   }
+}
+
+/**
+ * Fetches the provider config that was used for this session and returns the hash requirements
+ * @returns A promise that resolves to a ProviderHashRequirementsConfig
+ */
+export async function fetchProviderHashRequirementsBy(providerId: string, resolvedProviderVersion?: string): Promise<ProviderHashRequirementsConfig> {
+  const providerResponse = await fetchProviderConfig(providerId, resolvedProviderVersion ?? '');
+  const providerConfig = providerResponse.providers;
+  return getProviderHashRequirementsFromSpec({ requests: providerConfig?.requestData, injectedRequests: providerConfig?.allowedInjectedRequestData });
 }

@@ -38,7 +38,7 @@ import {
     ProofNotValidatedError
 } from './utils/errors'
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
-import { fetchProviderConfig, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
+import { fetchProviderConfig, fetchProviderHashRequirementsBy, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
@@ -1384,10 +1384,8 @@ export class ReclaimProofRequest {
      * Fetches the provider config that was used for this session and returns the hash requirements
      * @returns A promise that resolves to a ProviderHashRequirementsConfig
      */
-    async getProviderHashRequirements(): Promise<ProviderHashRequirementsConfig> {
-        const providerResponse = await fetchProviderConfig(this.providerId, this.resolvedProviderVersion ?? '');
-        const providerConfig = providerResponse.providers;
-        return getProviderHashRequirementsFromSpec({ requests: providerConfig?.requestData, injectedRequests: providerConfig?.allowedInjectedRequestData });
+    getProviderHashRequirements(): Promise<ProviderHashRequirementsConfig> {
+        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '');
     }
 
     /**

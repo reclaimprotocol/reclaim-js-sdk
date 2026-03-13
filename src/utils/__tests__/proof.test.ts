@@ -39,7 +39,7 @@ describe('Request', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { allowedProofHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(true);
+        } as any, { allowedHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(true);
 
         // fake proofs
         expect(await verifyProof({
@@ -64,7 +64,7 @@ describe('Request', () => {
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
             // $.identifier is ignored
-        } as any, { allowedProofHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(true);
+        } as any, { allowedHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(true);
 
         // fake proofs
         expect(await verifyProof({
@@ -90,7 +90,7 @@ describe('Request', () => {
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
             // idenfier is ignored
-        } as any, { allowedProofHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(true);
+        } as any, { allowedHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(true);
 
         // fake proofs
         expect(await verifyProof({
@@ -115,7 +115,7 @@ describe('Request', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { allowedProofHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(false);
+        } as any, { allowedHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(false);
 
         // fake proofs
         expect(await verifyProof({
@@ -139,7 +139,7 @@ describe('Request', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { allowedProofHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(false);
+        } as any, { allowedHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(false);
 
         // fake proofs
         expect(await verifyProof({
@@ -163,6 +163,6 @@ describe('Request', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { allowedProofHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(false);
+        } as any, { allowedHashes: ["0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"] })).toEqual(false);
     });
 });
