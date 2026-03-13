@@ -1,12 +1,11 @@
-import { HttpProviderClaimParams, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from "./types";
+import { HttpProviderClaimParams } from "./types";
 import { hashProofClaimParams } from "../witness";
 import { ProofNotValidatedError } from "./errors";
 import loggerModule from './logger';
 import { Proof } from "./interfaces";
+import { ProviderHashRequirementsConfig } from "./providerUtils";
 
 const logger = loggerModule.logger;
-
-export type ProviderHashRequirementsConfig = { requiredHashes: string[]; allowedHashes: string[] }
 
 /**
  * Content validation using any proof hash that matches with content's proof hash
@@ -104,18 +103,4 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
         // some json parse error which can be ignored
     }
     return null;
-}
-
-export function hashRequestSpec(request: RequestSpec) {
-    return hashProofClaimParams({
-        ...request,
-        body: request.bodySniff.enabled ? request.bodySniff.template : '',
-    });
-}
-
-export function getProviderHashRequirementsFromSpec({ requests, injectedRequests }: { requests: RequestSpec[] | undefined, injectedRequests: RequestSpec[] | undefined }): ProviderHashRequirementsConfig {
-    return {
-        requiredHashes: requests?.map(hashRequestSpec) || [],
-        allowedHashes: injectedRequests?.map(hashRequestSpec) || []
-    };
 }

@@ -9,7 +9,8 @@ import { validateFunctionParams } from "./validationUtils";
 import { BACKEND_BASE_URL, constants } from './constants';
 import { http } from "./fetch";
 import loggerModule from './logger';
-import { getProviderHashRequirementsFromSpec, ProviderHashRequirementsConfig } from "./proofValidationUtils";
+import { getProviderHashRequirementsFromSpec, ProviderHashRequirementsConfig } from "./providerUtils";
+
 const logger = loggerModule.logger;
 
 /**
@@ -157,8 +158,8 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
  * Fetches the provider config that was used for this session and returns the hash requirements
  * @returns A promise that resolves to a ProviderHashRequirementsConfig
  */
-export async function fetchProviderHashRequirementsBy(providerId: string, resolvedProviderVersion?: string): Promise<ProviderHashRequirementsConfig> {
-  const providerResponse = await fetchProviderConfig(providerId, resolvedProviderVersion ?? '');
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string): Promise<ProviderHashRequirementsConfig> {
+  const providerResponse = await fetchProviderConfig(providerId, exactProviderVersion);
   const providerConfig = providerResponse.providers;
-  return getProviderHashRequirementsFromSpec({ requests: providerConfig?.requestData, injectedRequests: providerConfig?.allowedInjectedRequestData });
+  return getProviderHashRequirementsFromSpec({ requiredRequests: providerConfig?.requestData, allowedRequests: providerConfig?.allowedInjectedRequestData });
 }

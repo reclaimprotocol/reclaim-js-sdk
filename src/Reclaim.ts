@@ -34,17 +34,17 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError,
     ErrorDuringVerificationError,
-    CallbackUrlRequiredError,
-    ProofNotValidatedError
-} from './utils/errors'
+    CallbackUrlRequiredError
+} from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
-import { fetchProviderConfig, fetchProviderHashRequirementsBy, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
+import { fetchProviderHashRequirementsBy, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
-import { assertValidProofsByHash, getProviderHashRequirementsFromSpec, ProviderHashRequirementsConfig, ValidationConfig } from './utils/proofValidationUtils'
+import { assertValidProofsByHash, ValidationConfig } from './utils/proofValidationUtils'
+import { ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
 

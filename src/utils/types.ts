@@ -1,4 +1,5 @@
 import type { Context, Proof, ProviderClaimData } from './interfaces';
+import { InjectedRequestSpec, InterceptorRequestSpec, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
@@ -290,36 +291,4 @@ export interface ReclaimProviderConfig {
   verificationType: string;
   requestData: InterceptorRequestSpec[];
   allowedInjectedRequestData: InjectedRequestSpec[];
-}
-
-export interface RequestSpec {
-  url: string;
-  urlType: string;
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  bodySniff: BodySniff;
-  responseMatches: ResponseMatchSpec[];
-  responseRedactions: ResponseRedactionSpec[];
-}
-
-export interface InterceptorRequestSpec extends RequestSpec { }
-
-export interface InjectedRequestSpec extends RequestSpec { }
-
-export interface BodySniff {
-  enabled: boolean;
-  template: string;
-}
-
-export interface ResponseMatchSpec {
-  invert: boolean | undefined;
-  isOptional: boolean | undefined;
-  type: "regex" | "contains";
-  value: string;
-}
-
-export interface ResponseRedactionSpec {
-  hash?: "oprf" | undefined;
-  jsonPath: string;
-  regex: string;
-  xPath: string;
 }

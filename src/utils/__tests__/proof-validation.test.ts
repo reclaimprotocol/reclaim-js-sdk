@@ -1,8 +1,6 @@
 import { verifyProof } from "../../Reclaim";
-import { getProviderHashRequirementsFromSpec } from "../proofValidationUtils";
-import { fetchProviderConfig, fetchProviderHashRequirementsBy } from "../sessionUtils";
-import { ProviderConfigResponse } from "../types";
-import { mockFetch, mockFetchBy } from "./mock-fetch";
+import { fetchProviderHashRequirementsBy } from "../sessionUtils";
+import { mockFetchBy } from "./mock-fetch";
 
 describe('Validation', () => {
     it('should validate proofs correctly', async () => {
