@@ -11,8 +11,8 @@ const logger = loggerModule.logger;
  * Content validation using any proof hash that matches with content's proof hash
  */
 export type ValidationConfigWithHash =
-    | { requiredHashes: string[]; allowedHashes?: string[] }
-    | { allowedHashes: string[] };
+    | { requiredHashes: string[]; allowedExtraHashes?: string[] }
+    | { allowedExtraHashes: string[] };
 /**
  * Legacy way of verification without proof validation
  */
@@ -26,9 +26,9 @@ export type VerificationConfig = ValidationConfig;
 
 export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {
     const requiredProofHashes = config.requiredHashes.map(it => it.toLowerCase().trim());
-    const allowedHashesForExtraProofs = new Set(config.allowedHashes.map(it => it.toLowerCase().trim()));
+    const allowedExtraProofHashes = new Set(config.allowedExtraHashes.map(it => it.toLowerCase().trim()));
 
-    if (!requiredProofHashes.length && !allowedHashesForExtraProofs.size) {
+    if (!requiredProofHashes.length && !allowedExtraProofHashes.size) {
         throw new ProofNotValidatedError('No proof hash was provided for validation');
     }
 
@@ -55,16 +55,16 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
         }
     }
 
-    if (allowedHashesForExtraProofs.size > 0) {
+    if (allowedExtraProofHashes.size > 0) {
         for (const [i, proofHash] of unvalidatedProofHashByIndex.entries()) {
-            if (!allowedHashesForExtraProofs.has(proofHash)) {
+            if (!allowedExtraProofHashes.has(proofHash)) {
                 throw new ProofNotValidatedError(`Proof by hash ${proofHash} is not allowed`);
             }
             unvalidatedProofHashByIndex.delete(i);
         }
         if (unvalidatedProofHashByIndex.size > 0) {
-            // if allowedHashesForExtraProofs was provided (not empty) and there are still unvalidated proofs, it means they are not allowed
-            throw new ProofNotValidatedError(`${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} aren't allowed`);
+            // if allowedExtraProofHashes was provided (not empty) and there are still unvalidated proofs, it means they are not allowed
+            throw new ProofNotValidatedError(`Extra ${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} aren't allowed`);
         }
     }
 
@@ -119,7 +119,6 @@ export function assertValidateProof(proofs: Proof[], config: VerificationConfig)
 
     return assertValidProofsByHash(proofs, {
         requiredHashes: 'requiredHashes' in config && Array.isArray(config?.requiredHashes) ? config.requiredHashes : [],
-        allowedHashes: 'allowedHashes' in config && Array.isArray(config?.allowedHashes) ? config.allowedHashes : []
+        allowedExtraHashes: 'allowedExtraHashes' in config && Array.isArray(config?.allowedExtraHashes) ? config.allowedExtraHashes : []
     })
 }
-

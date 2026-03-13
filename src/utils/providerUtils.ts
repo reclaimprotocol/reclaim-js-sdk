@@ -3,7 +3,7 @@ import { hashProofClaimParams } from "../witness";
 export function getProviderHashRequirementsFromSpec(spec: ProviderHashRequirementSpec): ProviderHashRequirementsConfig {
     return {
         requiredHashes: spec?.requiredRequests?.map(hashRequestSpec) || [],
-        allowedHashes: spec?.allowedRequests?.map(hashRequestSpec) || []
+        allowedExtraHashes: spec?.allowedExtraRequests?.map(hashRequestSpec) || []
     };
 }
 
@@ -17,10 +17,10 @@ export function hashRequestSpec(request: RequestSpec) {
 
 export interface ProviderHashRequirementSpec {
     requiredRequests: RequestSpec[] | undefined;
-    allowedRequests: RequestSpec[] | undefined;
+    allowedExtraRequests: RequestSpec[] | undefined;
 }
 
-export type ProviderHashRequirementsConfig = { requiredHashes: string[]; allowedHashes: string[] }
+export type ProviderHashRequirementsConfig = { requiredHashes: string[]; allowedExtraHashes: string[] }
 
 export interface InterceptorRequestSpec extends RequestSpec { }
 

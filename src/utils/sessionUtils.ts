@@ -161,5 +161,5 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
 export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string): Promise<ProviderHashRequirementsConfig> {
   const providerResponse = await fetchProviderConfig(providerId, exactProviderVersion);
   const providerConfig = providerResponse.providers;
-  return getProviderHashRequirementsFromSpec({ requiredRequests: providerConfig?.requestData, allowedRequests: providerConfig?.allowedInjectedRequestData });
+  return getProviderHashRequirementsFromSpec({ requiredRequests: providerConfig?.requestData, allowedExtraRequests: providerConfig?.allowedInjectedRequestData });
 }
