@@ -93,14 +93,12 @@ export function isHttpProviderClaimParams(claimParams: unknown): claimParams is 
     );
 }
 
-export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderClaimParams | null {
+export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderClaimParams {
     try {
         const claimParams = JSON.parse(proof.claimData.parameters);
         if (isHttpProviderClaimParams(claimParams)) {
             return claimParams;
         }
-    } catch (_) {
-        // some json parse error which can be ignored
-    }
-    return null;
+    } catch (_) { }
+    throw new ProofNotValidatedError('Proof has no HTTP provider params to hash');
 }

@@ -30,7 +30,7 @@ function getIdentifierFromClaimInfo(info: ClaimInfo): ClaimID {
   return ethers.keccak256(strToUint8Array(str)).toLowerCase();
 }
 
-export function hashProofClaimParams(params: HttpProviderClaimParams | null): string {
+export function hashProofClaimParams(params: HttpProviderClaimParams): string {
   const serializedParams = getProviderParamsAsCanonicalizedString(params);
 
   return ethers.keccak256(
@@ -42,11 +42,7 @@ function strToUint8Array(str: string): Uint8Array {
   return new TextEncoder().encode(str);
 }
 
-function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams | null): string {
-  // In case of AI witness proofs, we don't have any provider params
-  // Note: Should we allow this?
-  if (params == null) return '';
-
+function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams): string {
   const filteredParams: HttpProviderClaimParams = {
     url: params?.url ?? '',
     // METHOD needs to be explicitly specified and absence or unknown method should cause error, but we're choosing to ignore it in this case
