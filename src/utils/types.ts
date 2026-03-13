@@ -10,19 +10,9 @@ export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' |
 
 export interface HttpProviderClaimParams {
   body: string;
-  method: "GET" | "POST" | "PUT" | "PATCH";
-  responseMatches: {
-    invert: boolean | undefined;
-    isOptional: boolean | undefined;
-    type: "regex" | "contains";
-    value: string;
-  }[]
-  responseRedactions: {
-    hash?: "oprf" | undefined;
-    jsonPath: string;
-    regex: string;
-    xPath: string;
-  }[]
+  method: RequestSpec['method'];
+  responseMatches: ResponseMatchSpec[]
+  responseRedactions: ResponseRedactionSpec[]
   url: string;
 }
 
@@ -286,7 +276,7 @@ export type StatusUrlResponse = {
 
 export type ProviderConfigResponse = {
   message: string;
-  provider?: ReclaimProviderConfig;
+  providers?: ReclaimProviderConfig;
   providerId?: string;
   providerVersionString?: string;
 };
@@ -305,10 +295,10 @@ export interface ReclaimProviderConfig {
 export interface RequestSpec {
   url: string;
   urlType: string;
-  method: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   bodySniff: BodySniff;
-  responseMatches: ResponseMatch[];
-  responseRedactions: ResponseRedaction[];
+  responseMatches: ResponseMatchSpec[];
+  responseRedactions: ResponseRedactionSpec[];
 }
 
 export interface InterceptorRequestSpec extends RequestSpec { }
@@ -320,16 +310,16 @@ export interface BodySniff {
   template: string;
 }
 
-export interface ResponseMatch {
+export interface ResponseMatchSpec {
+  invert: boolean | undefined;
+  isOptional: boolean | undefined;
+  type: "regex" | "contains";
   value: string;
-  type: string;
-  invert?: boolean;
-  isOptional?: boolean;
 }
 
-export interface ResponseRedaction {
-  xPath: string;
+export interface ResponseRedactionSpec {
+  hash?: "oprf" | undefined;
   jsonPath: string;
   regex: string;
-  hash?: string;
+  xPath: string;
 }

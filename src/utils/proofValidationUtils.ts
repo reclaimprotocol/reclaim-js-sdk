@@ -1,107 +1,78 @@
-import { HttpProviderClaimParams, RequestSpec, ResponseMatch, ResponseRedaction } from "./types";
+import { HttpProviderClaimParams, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from "./types";
 import { hashProofClaimParams } from "../witness";
 import { ProofNotValidatedError } from "./errors";
 import loggerModule from './logger';
 import { Proof } from "./interfaces";
-import { fetchProviderConfig } from "./sessionUtils";
 
 const logger = loggerModule.logger;
 
-/**
- * Verification using reclaim session id
- */
-export interface ValidationConfigWithSessionId { reclaimSessionId: string }
+export type ProviderHashRequirementsConfig = { requiredHashes: string[]; allowedHashes: string[] }
+
 /**
  * Content validation using any proof hash that matches with content's proof hash
  */
-export interface ValidationConfigWithHash { allowedProofHashes: string[] }
+export type ValidationConfigWithHash =
+    | { requiredHashes: string[]; allowedHashes?: string[] }
+    | { allowedHashes: string[] };
 /**
  * Legacy way of verification without proof validation
  */
 export interface ValidationConfigWithDisabledValidation { dangerouslyDisableContentValidation: true }
-
 /**
  * Validation options
  */
-export type ValidationConfig = ValidationConfigWithSessionId | ValidationConfigWithHash | ValidationConfigWithDisabledValidation;
+export type ValidationConfig = ValidationConfigWithHash | ValidationConfigWithDisabledValidation;
 
-export function assertValidateProofByHash(proofs: Proof[], config: ValidationConfigWithHash) {
-    const allowedProofHashes = new Set(config.allowedProofHashes.map(it => it.toLowerCase().trim()));
-    if (!allowedProofHashes.size) {
-        throw new ProofNotValidatedError('An empty list was provided as allowed proof hashes');
+export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {
+    const requiredProofHashes = config.requiredHashes.map(it => it.toLowerCase().trim());
+    const allowedHashesForExtraProofs = new Set(config.allowedHashes.map(it => it.toLowerCase().trim()));
+
+    if (!requiredProofHashes.length && !allowedHashesForExtraProofs.size) {
+        throw new ProofNotValidatedError('No proof hash was provided for validation');
     }
 
-    for (const proof of proofs) {
+    const unvalidatedProofHashByIndex = new Map<number, string>();
+
+    for (let i = 0; i < proofs.length; i++) {
+        const proof = proofs[i];
         const claimParams = getHttpProviderClaimParamsFromProof(proof);
         const computedHashOfProof = hashProofClaimParams(claimParams).toLowerCase().trim();
-        if (!allowedProofHashes.has(computedHashOfProof)) {
-            throw new ProofNotValidatedError('Proof hash mismatch');
-        }
-    }
-    return true;
-}
-
-export async function assertValidateProofBySessionId(proofs: Proof[], config: ValidationConfigWithSessionId) {
-    const providerConfigResponse = await fetchProviderConfig(config.reclaimSessionId);
-    const requiredInterceptedRequests = providerConfigResponse.provider?.requestData ?? [];
-
-    const minimumProofsExpected = requiredInterceptedRequests.length || 1;
-    if (proofs.length < minimumProofsExpected) {
-        throw new ProofNotValidatedError(`Expected ${minimumProofsExpected} proofs, but got ${proofs.length}`);
+        unvalidatedProofHashByIndex.set(i, computedHashOfProof);
     }
 
-    const validatedProofs = new Set<Proof>();
-
-    // Validate against interceptor requests
-    for (const config of requiredInterceptedRequests) {
-        const matchedProof = proofs.find(
-            proof => !validatedProofs.has(proof) && validateProofByRequestSpec(proof, config)
-        );
-
-        if (!matchedProof) {
-            // atleast 1 proof should match for this interceptor request spec
-            // not a single proof matched this request spec
-            throw new ProofNotValidatedError('No proof matched interceptor request spec');
-        }
-        validatedProofs.add(matchedProof);
-    }
-
-    // Validate remaining against injected requests
-    const allowedInjectedRequestData = providerConfigResponse.provider?.allowedInjectedRequestData ?? [];
-    if (allowedInjectedRequestData.length > 0) {
-        const uncheckedProofs = proofs.filter(proof => !validatedProofs.has(proof));
-        // if we have unchecked proofs and we also have atleast 1 request in injected request spec, then we should validate
-        // each unchecked proof against injected request spec
-        for (const proof of uncheckedProofs) {
-            const isMatch = allowedInjectedRequestData.some(config => validateProofByRequestSpec(proof, config));
-            if (!isMatch) {
-                // proof should match with any injected request spec
-                // not a single injected request spec matched with this proof
-                throw new ProofNotValidatedError('No proof matched injected request spec');
+    for (const requiredProofHash of requiredProofHashes) {
+        let found = false;
+        for (const [i, proofHash] of unvalidatedProofHashByIndex.entries()) {
+            if (proofHash === requiredProofHash) {
+                unvalidatedProofHashByIndex.delete(i);
+                found = true;
+                break;
             }
-            validatedProofs.add(proof);
+        }
+        if (!found) {
+            throw new ProofNotValidatedError(`Proof by hash ${requiredProofHash} was not found`);
         }
     }
 
-    const uncheckedProofsCount = proofs.length - validatedProofs.size;
-    if (uncheckedProofsCount > 0) {
-        logger.warn(`${uncheckedProofsCount} proof(s) are not validated`);
+    if (allowedHashesForExtraProofs.size > 0) {
+        for (const [i, proofHash] of unvalidatedProofHashByIndex.entries()) {
+            if (!allowedHashesForExtraProofs.has(proofHash)) {
+                throw new ProofNotValidatedError(`Proof by hash ${proofHash} is not allowed`);
+            }
+            unvalidatedProofHashByIndex.delete(i);
+        }
+        if (unvalidatedProofHashByIndex.size > 0) {
+            // if allowedHashesForExtraProofs was provided (not empty) and there are still unvalidated proofs, it means they are not allowed
+            throw new ProofNotValidatedError(`${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} aren't allowed`);
+        }
     }
 
-    return true;
+    if (unvalidatedProofHashByIndex.size > 0) {
+        logger.warn(`${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} were not validated`);
+    }
 }
 
-export function validateProofByRequestSpec(proof: Proof, requestSpec: RequestSpec): boolean {
-    const providerParams = getHttpProviderClaimParamsFromProof(proof);
-
-    return !!providerParams &&
-        isExactOrPatternMatch(providerParams.url, requestSpec.url) &&
-        isExactOrPatternMatch(providerParams.method, requestSpec.method) &&
-        (!requestSpec.bodySniff.enabled || isExactOrPatternMatch(providerParams.body, requestSpec.bodySniff.template)) &&
-        validateResponseSelection(providerParams, requestSpec);
-}
-
-const allowedHttpMethods = new Set(["GET", "POST", "PUT", "PATCH"]);
+const allowedHttpMethods = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 export function isHttpProviderClaimParams(claimParams: unknown): claimParams is HttpProviderClaimParams {
     // Fail fast on non-objects
@@ -135,53 +106,16 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
     return null;
 }
 
-function isExactOrPatternMatch(input: string, patternOrString: string): boolean {
-    return input === patternOrString;
+export function hashRequestSpec(request: RequestSpec) {
+    return hashProofClaimParams({
+        ...request,
+        body: request.bodySniff.enabled ? request.bodySniff.template : '',
+    });
 }
 
-export function isResponseMatchSpecMatch(spec: ResponseMatch, match: ResponseMatch): boolean {
-    return (spec.type ?? 'contains') === (match.type ?? 'contains') &&
-        (spec.value ?? '') === (match.value ?? '') &&
-        (spec.invert ?? false) === (match.invert ?? false);
-}
-
-export function isResponseRedactionSpecMatch(spec: ResponseRedaction, match: ResponseRedaction): boolean {
-    return (spec.hash || undefined) === (match.hash || undefined) &&
-        (spec.jsonPath ?? '') === (match.jsonPath ?? '') &&
-        (spec.regex ?? '') === (match.regex ?? '') &&
-        (spec.xPath ?? '') === (match.xPath ?? '');
-}
-
-export function validateResponseSelection(providerParams: HttpProviderClaimParams, requestSpec: RequestSpec): boolean {
-    if (!providerParams.responseMatches.length || !requestSpec.responseMatches.length) {
-        return false;
-    }
-
-    const skippedResponseMatchIndices = new Set<number>();
-
-    for (let i = 0; i < requestSpec.responseMatches.length; i++) {
-        const spec = requestSpec.responseMatches[i];
-        const match = providerParams.responseMatches.some(it => isResponseMatchSpecMatch(spec, it));
-
-        if (!match) {
-            if (spec.isOptional) {
-                skippedResponseMatchIndices.add(i);
-            } else {
-                return false;
-            }
-        }
-    }
-
-    for (let i = 0; i < requestSpec.responseRedactions.length; i++) {
-        if (skippedResponseMatchIndices.has(i)) continue;
-
-        const spec = requestSpec.responseRedactions[i];
-        const match = providerParams.responseRedactions.some(it => isResponseRedactionSpecMatch(spec, it));
-
-        if (!match) {
-            return false;
-        }
-    }
-
-    return true;
+export function getProviderHashRequirementsFromSpec({ requests, injectedRequests }: { requests: RequestSpec[] | undefined, injectedRequests: RequestSpec[] | undefined }): ProviderHashRequirementsConfig {
+    return {
+        requiredHashes: requests?.map(hashRequestSpec) || [],
+        allowedHashes: injectedRequests?.map(hashRequestSpec) || []
+    };
 }

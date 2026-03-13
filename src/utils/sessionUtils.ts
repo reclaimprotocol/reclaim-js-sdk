@@ -1,7 +1,8 @@
 import {
   InitSessionError,
   UpdateSessionError,
-  StatusUrlError
+  StatusUrlError,
+  ProviderConfigFetchError
 } from "./errors";
 import { InitSessionResponse, ProviderConfigResponse, SessionStatus, StatusUrlResponse } from "./types";
 import { validateFunctionParams } from "./validationUtils";
@@ -120,14 +121,17 @@ export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlRespon
   }
 }
 
-export async function fetchProviderConfig(sessionId: string): Promise<ProviderConfigResponse> {
+export async function fetchProviderConfig(providerId: string, exactProviderVersionString: string): Promise<ProviderConfigResponse> {
   validateFunctionParams(
-    [{ input: sessionId, paramName: 'sessionId', isString: true }],
+    [
+      { input: providerId, paramName: 'providerId', isString: true },
+      { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true }
+    ],
     'fetchProviderConfig'
   );
 
   try {
-    const response = await http.client(`${constants.DEFAULT_RECLAIM_STATUS_URL}${sessionId}/provider`, {
+    const response = await http.client(constants.DEFAULT_PROVIDER_URL(providerId, exactProviderVersionString), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -135,15 +139,15 @@ export async function fetchProviderConfig(sessionId: string): Promise<ProviderCo
     const res = await response.json();
 
     if (!response.ok) {
-      const errorMessage = `Error fetching provider config for sessionId: ${sessionId}. Status Code: ${response.status}`;
+      const errorMessage = `Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}. Status Code: ${response.status}`;
       logger.info(errorMessage, res);
-      throw new StatusUrlError(errorMessage);
+      throw new ProviderConfigFetchError(errorMessage);
     }
 
     return res as ProviderConfigResponse;
   } catch (err) {
-    const errorMessage = `Failed to fetch provider config for sessionId: ${sessionId}`;
+    const errorMessage = `Failed to fetch provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`;
     logger.info(errorMessage, err);
-    throw new StatusUrlError(`Error fetching provider config for sessionId: ${sessionId}`);
+    throw new ProviderConfigFetchError(`Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`);
   }
 }

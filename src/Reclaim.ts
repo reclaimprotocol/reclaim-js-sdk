@@ -34,16 +34,17 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError,
     ErrorDuringVerificationError,
-    CallbackUrlRequiredError
+    CallbackUrlRequiredError,
+    ProofNotValidatedError
 } from './utils/errors'
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
-import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
+import { fetchProviderConfig, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
-import { assertValidateProofByHash, assertValidateProofBySessionId, ValidationConfig } from './utils/proofValidationUtils'
+import { assertValidProofsByHash, getProviderHashRequirementsFromSpec, ProviderHashRequirementsConfig, ValidationConfig } from './utils/proofValidationUtils'
 
 const logger = loggerModule.logger
 
@@ -126,22 +127,19 @@ export async function assertVerifiedProof(
 /**
  * Asserts that the proof is validated by checking the content of proof with with expectations from provider config or hash based on [options]
  * @param proofs - The proofs to validate
- * @param options - The validation options
+ * @param config - The validation config
  * @throws {ProofNotValidatedError} When the proof is not validated
  */
-export function assertValidateProof(proofs: Proof[], options: VerificationConfig) {
-    if ('dangerouslyDisableContentValidation' in options && options.dangerouslyDisableContentValidation) {
+export function assertValidateProof(proofs: Proof[], config: VerificationConfig) {
+    if ('dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
         logger.warn('Validation skipped because it was disabled during proof verification');
         return;
     }
 
-    if ('allowedProofHashes' in options) {
-        return assertValidateProofByHash(proofs, options);
-    }
-
-    if ('reclaimSessionId' in options) {
-        return assertValidateProofBySessionId(proofs, options);
-    }
+    return assertValidProofsByHash(proofs, {
+        requiredHashes: 'requiredHashes' in config && Array.isArray(config?.requiredHashes) ? config.requiredHashes : [],
+        allowedHashes: 'allowedHashes' in config && Array.isArray(config?.allowedHashes) ? config.allowedHashes : []
+    });
 }
 
 /**
@@ -1383,6 +1381,16 @@ export class ReclaimProofRequest {
     }
 
     /**
+     * Fetches the provider config that was used for this session and returns the hash requirements
+     * @returns A promise that resolves to a ProviderHashRequirementsConfig
+     */
+    async getProviderHashRequirements(): Promise<ProviderHashRequirementsConfig> {
+        const providerResponse = await fetchProviderConfig(this.providerId, this.resolvedProviderVersion ?? '');
+        const providerConfig = providerResponse.providers;
+        return getProviderHashRequirementsFromSpec({ requests: providerConfig?.requestData, injectedRequests: providerConfig?.allowedInjectedRequestData });
+    }
+
+    /**
      * Starts the proof request session and monitors for proof submission
      *
      * This method begins polling the session status to detect when
@@ -1463,7 +1471,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, { reclaimSessionId: this.sessionId });
+                            const verified = await verifyProof(proofs, await this.getProviderHashRequirements());
                             if (!verified) {
                                 logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
                                 throw new ProofNotVerifiedError();
