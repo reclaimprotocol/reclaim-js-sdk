@@ -98,7 +98,7 @@ export async function verifyProof(
     }
 }
 
-export function recoverReclaimSessionIdFromProof(proof: Proof) {
+function recoverReclaimSessionIdFromProof(proof: Proof) {
     const contextJson = JSON.parse(proof.claimData.context)
     const reclaimSessionId = contextJson?.reclaimSessionId;
     if (typeof reclaimSessionId === 'string') return reclaimSessionId;
