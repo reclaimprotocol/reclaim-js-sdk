@@ -1,7 +1,6 @@
 import { ethers } from 'ethers';
-import type { ClaimID, ClaimInfo, CompleteClaimData, HttpProviderParams } from './utils/types';
+import type { ClaimID, ClaimInfo, CompleteClaimData, HttpProviderClaimParams } from './utils/types';
 import { canonicalStringify } from './utils/strings';
-import { ProviderClaimData } from './utils/interfaces';
 
 export function createSignDataForClaim(data: CompleteClaimData): string {
   const identifier: ClaimID = getIdentifierFromClaimInfo(data);
@@ -31,18 +30,36 @@ function getIdentifierFromClaimInfo(info: ClaimInfo): ClaimID {
   return ethers.keccak256(strToUint8Array(str)).toLowerCase();
 }
 
-export function hashProviderParams(params: HttpProviderParams): string {
-  const filteredParams: HttpProviderParams = {
-    url: params.url ?? '',
-    method: params.method ?? '',
-    body: params.body ?? '',
-    responseMatches: params.responseMatches?.map(it => ({
+export function hashProviderParams(params: HttpProviderClaimParams | null): string {
+  const serializedParams = getProviderParamsAsCanonicalizedString(params);
+
+  return ethers.keccak256(
+    strToUint8Array(serializedParams)
+  ).toLowerCase()
+}
+
+function strToUint8Array(str: string): Uint8Array {
+  return new TextEncoder().encode(str);
+}
+
+function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams | null): string {
+  // In case of AI witness proofs, we don't have any provider params
+  // Note: Should we allow this?
+  if (params == null) return '';
+
+  const filteredParams: HttpProviderClaimParams = {
+    url: params?.url ?? '',
+    // METHOD needs to be explicitly specified and absence or unknown method should cause error, but we're choosing to ignore it in this case
+    method: params?.method ?? 'GET',
+    body: params?.body ?? '',
+    responseMatches: params?.responseMatches?.map(it => ({
       value: it.value ?? '',
-      type: it.type ?? 'regex',
+      // This needs to be explicitly specified and absence should cause error, but we're choosing to ignore it in this case
+      type: it.type ?? 'contains',
       invert: it.invert ?? false,
       isOptional: it.isOptional ?? false,
     })) ?? [],
-    responseRedactions: params.responseRedactions?.map(it => ({
+    responseRedactions: params?.responseRedactions?.map(it => ({
       xPath: it.xPath ?? '',
       jsonPath: it.jsonPath ?? '',
       regex: it.regex ?? '',
@@ -51,11 +68,6 @@ export function hashProviderParams(params: HttpProviderParams): string {
   }
 
   const serializedParams = canonicalStringify(filteredParams)
-  return ethers.keccak256(
-    strToUint8Array(serializedParams)
-  ).toLowerCase()
-}
 
-function strToUint8Array(str: string): Uint8Array {
-  return new TextEncoder().encode(str);
+  return serializedParams;
 }

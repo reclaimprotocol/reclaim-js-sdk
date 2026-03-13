@@ -4,12 +4,12 @@ import { createSignDataForClaim } from "../witness";
 import { BACKEND_BASE_URL, constants } from "./constants";
 import { replaceAll } from "./helper";
 import { validateURL } from "./validationUtils";
-import { BackendServerError, ProofNotVerifiedError } from "./errors";
+import { BackendServerError } from "./errors";
 import loggerModule from './logger';
 import { WitnessData } from "./interfaces";
 import { http } from "./fetch";
-const logger = loggerModule.logger;
 
+const logger = loggerModule.logger;
 
 /**
  * Retrieves a shortened URL for the given URL

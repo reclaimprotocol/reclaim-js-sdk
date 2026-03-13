@@ -1,5 +1,6 @@
 import { verifyProof } from "../../Reclaim";
-import { mockFetch } from "./mock-fetch";
+import { ProviderConfigResponse } from "../types";
+import { mockFetch, mockFetchBy } from "./mock-fetch";
 
 const testAppId = '0x9323eFec99973623932Db45438DCE4dEa9D9aE4c';
 const testAppSecret = '37e1d9da2f551ce0dac7e0eeda8a9e00daf62a3a3c548ed98cc80fc1a3983ad6';

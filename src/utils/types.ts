@@ -8,7 +8,7 @@ export type ClaimInfo = Pick<ProviderClaimData, 'context' | 'provider' | 'parame
 export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'>
   & ClaimInfo
 
-export interface HttpProviderParams {
+export interface HttpProviderClaimParams {
   body: string;
   method: "GET" | "POST" | "PUT" | "PATCH";
   responseMatches: {
@@ -302,22 +302,18 @@ export interface ReclaimProviderConfig {
   allowedInjectedRequestData: InjectedRequestSpec[];
 }
 
-export interface InterceptorRequestSpec {
+export interface RequestSpec {
   url: string;
   urlType: string;
   method: string;
+  bodySniff: BodySniff;
   responseMatches: ResponseMatch[];
   responseRedactions: ResponseRedaction[];
-  bodySniff: BodySniff;
 }
 
-export interface InjectedRequestSpec {
-  url: string;
-  method: string;
-  bodySniff: BodySniff;
-  responseMatches: ResponseMatch[];
-  responseRedactions: ResponseRedaction[];
-}
+export interface InterceptorRequestSpec extends RequestSpec { }
+
+export interface InjectedRequestSpec extends RequestSpec { }
 
 export interface BodySniff {
   enabled: boolean;
@@ -328,12 +324,12 @@ export interface ResponseMatch {
   value: string;
   type: string;
   invert: boolean;
-  description: null;
+  isOptional?: boolean;
 }
 
 export interface ResponseRedaction {
   xPath: string;
   jsonPath: string;
   regex: string;
-  hash: string;
+  hash?: string;
 }

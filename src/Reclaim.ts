@@ -10,8 +10,6 @@ import {
     ReclaimFlowLaunchOptions,
     HttpFormEntry,
     HttpRedirectionMethod,
-    InterceptorRequestSpec,
-    InjectedRequestSpec,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -28,7 +26,6 @@ import {
     InitError,
     InvalidParamError,
     ProofNotVerifiedError,
-    ProofNotValidatedError,
     ProofSubmissionFailedError,
     ProviderFailedError,
     SessionNotStartedError,
@@ -40,35 +37,22 @@ import {
     CallbackUrlRequiredError
 } from './utils/errors'
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
-import { fetchProviderConfig, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
+import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
-import { hashProviderParams } from './witness'
+import { assertValidateProofByHash, assertValidateProofBySessionId, ValidationOptions } from './utils/proofValidationUtils'
 
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
 
 /**
- * Verification using reclaim session id
- */
-export interface VerificationOptionsWithSessionId { reclaimSessionId: string, isValidationEnabled: true }
-/**
- * Verification using any proof hash
- */
-export interface VerificationOptionsWithHash { allowedProofHashes: string[], isValidationEnabled: true }
-/**
- * Legacy way of verification without proof validation
- */
-export interface VerificationOptionsWithDisabledValidation { isValidationEnabled: false }
-
-/**
  * Verification options
  */
-export type VerificationOptions = VerificationOptionsWithSessionId | VerificationOptionsWithHash | VerificationOptionsWithDisabledValidation;
+export type VerificationOptions = ValidationOptions;
 
 /**
  * Verifies one or more Reclaim proofs by validating signatures and witness information
@@ -131,10 +115,6 @@ export async function assertVerifiedProof(
     proof: Proof,
     attestors: WitnessData[],
 ) {
-    const canonicalizedContext = JSON.parse(proof.claimData.context)
-    if (!canonicalizedContext?.providerHash) {
-        throw new ProofNotVerifiedError('Provider hash not found in context')
-    }
     const signers = recoverSignersOfSignedClaim({
         claim: proof.claimData,
         signatures: proof.signatures
@@ -155,92 +135,19 @@ export async function assertVerifiedProof(
  * @param options - The validation options
  * @throws {ProofNotValidatedError} When the proof is not validated
  */
-export async function assertValidateProof(proofs: Proof[], options: VerificationOptions) {
+export function assertValidateProof(proofs: Proof[], options: VerificationOptions) {
     if (!options.isValidationEnabled) {
         logger.warn('Validation skipped because it was disabled during proof verification');
         return;
     }
 
     if ('allowedProofHashes' in options) {
-        const allowedProofHashes = new Set(options.allowedProofHashes.map(it => it.toLowerCase().trim()));
-        if (!allowedProofHashes.size) {
-            throw new ProofNotValidatedError('An empty list was provided as allowed proof hashes')
-        }
-        for (const proof of proofs) {
-            const claimParams = JSON.parse(proof.claimData.parameters);
-            const computedHashOfProof = hashProviderParams(claimParams).toLowerCase().trim();
-            if (!allowedProofHashes.has(computedHashOfProof)) {
-                throw new ProofNotValidatedError('Proof hash mismatch')
-            }
-        }
-        return true;
+        return assertValidateProofByHash(proofs, options);
     }
 
     if ('reclaimSessionId' in options) {
-        const reclaimSessionId = options.reclaimSessionId;
-        const providerConfigResponse = await fetchProviderConfig(reclaimSessionId);
-
-        const requiredInterceptedRequests = providerConfigResponse.provider?.requestData ?? [];
-
-        const minimumProofsExpected = requiredInterceptedRequests?.length ?? 1;
-        if (proofs.length < minimumProofsExpected) {
-            throw new ProofNotValidatedError(`Expected ${minimumProofsExpected} proofs, but got ${proofs.length}`)
-        }
-
-        const validatedProofs = [];
-        const uncheckedProofs = [...proofs];
-
-        if (requiredInterceptedRequests?.length) {
-            for (const config of requiredInterceptedRequests) {
-                let matched = false;
-                for (const proof of uncheckedProofs) {
-                    if (await validateProofByInterceptorRequestSpec(proof, config)) {
-                        validatedProofs.push(proof);
-                        uncheckedProofs.splice(uncheckedProofs.indexOf(proof), 1);
-                        matched = true;
-                        break;
-                    }
-                }
-                if (!matched) {
-                    // atleast 1 proof should match for this interceptor request spec
-                    throw new ProofNotValidatedError('No proof matched interceptor request spec')
-                }
-            }
-        }
-
-        const allowedInjectedRequestData = providerConfigResponse.provider?.allowedInjectedRequestData ?? [];
-        if (uncheckedProofs.length && allowedInjectedRequestData.length) {
-            // if we have unchecked proofs and we also have atleast 1 request in injected request spec, then we should validate
-            // each unchecked proof against injected request spec
-            for (const proof of uncheckedProofs) {
-                let matched = false;
-                for (const config of allowedInjectedRequestData) {
-                    if (await validateProofByInjectedRequestSpec(proof, config)) {
-                        validatedProofs.push(proof);
-                        uncheckedProofs.splice(uncheckedProofs.indexOf(proof), 1);
-                        matched = true;
-                        break;
-                    }
-                }
-                if (!matched) {
-                    // proof should match with any injected request spec
-                    throw new ProofNotValidatedError('No proof matched injected request spec');
-                }
-            }
-        }
-
-        logger.warn(`some ${uncheckedProofs.length} proofs are not validated`);
-
-        return true;
+        return assertValidateProofBySessionId(proofs, options);
     }
-}
-
-export async function validateProofByInterceptorRequestSpec(proof: Proof, requestSpec: InterceptorRequestSpec): Promise<boolean> {
-    return true;
-}
-
-export async function validateProofByInjectedRequestSpec(proof: Proof, requestSpec: InjectedRequestSpec): Promise<boolean> {
-    return true;
 }
 
 /**
