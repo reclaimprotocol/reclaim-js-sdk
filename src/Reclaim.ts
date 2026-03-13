@@ -74,11 +74,11 @@ export async function verifyProof(
     try {
         const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
         if (proofs.length === 0) {
-            throw new Error('No proofs provided')
+            throw new ProofNotVerifiedError('No proofs provided')
         }
 
         if (!config) {
-            throw new Error('Options `verifyProof(proof:,options:)` are required.');
+            throw new ProofNotVerifiedError('Options `verifyProof(proof:,options:)` are required.');
         }
 
         const attestors = await getAttestors()
