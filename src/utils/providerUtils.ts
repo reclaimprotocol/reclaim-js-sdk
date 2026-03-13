@@ -1,9 +1,11 @@
 import { hashProofClaimParams } from "../witness";
+import { CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT } from "./proofValidationUtils";
 
 export function getProviderHashRequirementsFromSpec(spec: ProviderHashRequirementSpec): ProviderHashRequirementsConfig {
     return {
         requiredHashes: spec?.requiredRequests?.map(hashRequestSpec) || [],
-        allowedExtraHashes: spec?.allowedExtraRequests?.map(hashRequestSpec) || []
+        allowedExtraHashes: spec?.allowedExtraRequests?.map(hashRequestSpec) || [],
+        allowArbitraryExtras: spec?.allowArbitraryExtras ?? CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT,
     };
 }
 
@@ -18,9 +20,10 @@ export function hashRequestSpec(request: RequestSpec) {
 export interface ProviderHashRequirementSpec {
     requiredRequests: RequestSpec[] | undefined;
     allowedExtraRequests: RequestSpec[] | undefined;
+    allowArbitraryExtras: boolean;
 }
 
-export type ProviderHashRequirementsConfig = { requiredHashes: string[]; allowedExtraHashes: string[] }
+export type ProviderHashRequirementsConfig = { requiredHashes: string[]; allowedExtraHashes: string[]; allowArbitraryExtras: boolean }
 
 export interface InterceptorRequestSpec extends RequestSpec { }
 

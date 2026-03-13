@@ -43,7 +43,7 @@ import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
-import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
+import { assertValidateProof, CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT, VerificationConfig } from './utils/proofValidationUtils'
 import { ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
@@ -1337,8 +1337,8 @@ export class ReclaimProofRequest {
      * Fetches the provider config that was used for this session and returns the hash requirements
      * @returns A promise that resolves to a ProviderHashRequirementsConfig
      */
-    getProviderHashRequirements(): Promise<ProviderHashRequirementsConfig> {
-        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '');
+    getProviderHashRequirements(opt: { allowArbitraryExtraProofs: boolean }): Promise<ProviderHashRequirementsConfig> {
+        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', opt.allowArbitraryExtraProofs);
     }
 
     /**
@@ -1422,7 +1422,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, await this.getProviderHashRequirements());
+                            const verified = await verifyProof(proofs, await this.getProviderHashRequirements({ allowArbitraryExtraProofs: CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT }));
                             if (!verified) {
                                 logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
                                 throw new ProofNotVerifiedError();

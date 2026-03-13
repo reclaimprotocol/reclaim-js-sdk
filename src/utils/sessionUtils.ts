@@ -158,8 +158,8 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
  * Fetches the provider config that was used for this session and returns the hash requirements
  * @returns A promise that resolves to a ProviderHashRequirementsConfig
  */
-export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string): Promise<ProviderHashRequirementsConfig> {
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string, allowArbitraryExtraProofs: boolean): Promise<ProviderHashRequirementsConfig> {
   const providerResponse = await fetchProviderConfig(providerId, exactProviderVersion);
   const providerConfig = providerResponse.providers;
-  return getProviderHashRequirementsFromSpec({ requiredRequests: providerConfig?.requestData, allowedExtraRequests: providerConfig?.allowedInjectedRequestData });
+  return getProviderHashRequirementsFromSpec({ requiredRequests: providerConfig?.requestData, allowedExtraRequests: providerConfig?.allowedInjectedRequestData, allowArbitraryExtras: allowArbitraryExtraProofs });
 }

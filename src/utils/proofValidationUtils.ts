@@ -11,8 +11,8 @@ const logger = loggerModule.logger;
  * Content validation using any proof hash that matches with content's proof hash
  */
 export type ValidationConfigWithHash =
-    | { requiredHashes: string[]; allowedExtraHashes?: string[] }
-    | { allowedExtraHashes: string[] };
+    | { requiredHashes: string[]; allowedExtraHashes?: string[]; allowArbitraryExtras?: boolean }
+    | { allowedExtraHashes: string[]; allowArbitraryExtras?: boolean };
 /**
  * Legacy way of verification without proof validation
  */
@@ -69,7 +69,11 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
     }
 
     if (unvalidatedProofHashByIndex.size > 0) {
-        logger.warn(`${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} were not validated`);
+        if (config.allowArbitraryExtras) {
+            logger.warn(`${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} were not validated`);
+        } else {
+            throw new ProofNotValidatedError(`Extra ${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} are not allowed`);
+        }
     }
 }
 
@@ -105,6 +109,8 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
     throw new ProofNotValidatedError('Proof has no HTTP provider params to hash');
 }
 
+export const CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT = true;
+
 /**
  * Asserts that the proof is validated by checking the content of proof with with expectations from provider config or hash based on [options]
  * @param proofs - The proofs to validate
@@ -119,6 +125,7 @@ export function assertValidateProof(proofs: Proof[], config: VerificationConfig)
 
     return assertValidProofsByHash(proofs, {
         requiredHashes: 'requiredHashes' in config && Array.isArray(config?.requiredHashes) ? config.requiredHashes : [],
-        allowedExtraHashes: 'allowedExtraHashes' in config && Array.isArray(config?.allowedExtraHashes) ? config.allowedExtraHashes : []
+        allowedExtraHashes: 'allowedExtraHashes' in config && Array.isArray(config?.allowedExtraHashes) ? config.allowedExtraHashes : [],
+        allowArbitraryExtras: ('allowArbitraryExtras' in config ? config.allowArbitraryExtras : null) ?? CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT,
     })
 }
