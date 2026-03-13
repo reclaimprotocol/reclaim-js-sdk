@@ -1,5 +1,5 @@
-import { HttpProviderClaimParams, InjectedRequestSpec, InterceptorRequestSpec, RequestSpec, ResponseMatch, ResponseRedaction } from "./types";
-import { hashProviderParams } from "../witness";
+import { HttpProviderClaimParams, RequestSpec, ResponseMatch, ResponseRedaction } from "./types";
+import { hashProofClaimParams } from "../witness";
 import { ProofNotValidatedError } from "./errors";
 import loggerModule from './logger';
 import { Proof } from "./interfaces";
@@ -10,31 +10,30 @@ const logger = loggerModule.logger;
 /**
  * Verification using reclaim session id
  */
-export interface VerificationOptionsWithSessionId { reclaimSessionId: string, isValidationEnabled: true }
+export interface ValidationConfigWithSessionId { reclaimSessionId: string }
 /**
- * Verification using any proof hash
+ * Content validation using any proof hash that matches with content's proof hash
  */
-export interface VerificationOptionsWithHash { allowedProofHashes: string[], isValidationEnabled: true }
+export interface ValidationConfigWithHash { allowedProofHashes: string[] }
 /**
  * Legacy way of verification without proof validation
  */
-export interface VerificationOptionsWithDisabledValidation { isValidationEnabled: false }
+export interface ValidationConfigWithDisabledValidation { dangerouslyDisableContentValidation: true }
 
 /**
  * Validation options
  */
-export type ValidationOptions = VerificationOptionsWithSessionId | VerificationOptionsWithHash | VerificationOptionsWithDisabledValidation;
+export type ValidationConfig = ValidationConfigWithSessionId | ValidationConfigWithHash | ValidationConfigWithDisabledValidation;
 
-
-export function assertValidateProofByHash(proofs: Proof[], options: VerificationOptionsWithHash) {
-    const allowedProofHashes = new Set(options.allowedProofHashes.map(it => it.toLowerCase().trim()));
+export function assertValidateProofByHash(proofs: Proof[], config: ValidationConfigWithHash) {
+    const allowedProofHashes = new Set(config.allowedProofHashes.map(it => it.toLowerCase().trim()));
     if (!allowedProofHashes.size) {
         throw new ProofNotValidatedError('An empty list was provided as allowed proof hashes');
     }
 
     for (const proof of proofs) {
         const claimParams = getHttpProviderClaimParamsFromProof(proof);
-        const computedHashOfProof = hashProviderParams(claimParams).toLowerCase().trim();
+        const computedHashOfProof = hashProofClaimParams(claimParams).toLowerCase().trim();
         if (!allowedProofHashes.has(computedHashOfProof)) {
             throw new ProofNotValidatedError('Proof hash mismatch');
         }
@@ -42,8 +41,8 @@ export function assertValidateProofByHash(proofs: Proof[], options: Verification
     return true;
 }
 
-export async function assertValidateProofBySessionId(proofs: Proof[], options: VerificationOptionsWithSessionId) {
-    const providerConfigResponse = await fetchProviderConfig(options.reclaimSessionId);
+export async function assertValidateProofBySessionId(proofs: Proof[], config: ValidationConfigWithSessionId) {
+    const providerConfigResponse = await fetchProviderConfig(config.reclaimSessionId);
     const requiredInterceptedRequests = providerConfigResponse.provider?.requestData ?? [];
 
     const minimumProofsExpected = requiredInterceptedRequests.length || 1;

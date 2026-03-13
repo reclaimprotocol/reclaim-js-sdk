@@ -30,7 +30,7 @@ function getIdentifierFromClaimInfo(info: ClaimInfo): ClaimID {
   return ethers.keccak256(strToUint8Array(str)).toLowerCase();
 }
 
-export function hashProviderParams(params: HttpProviderClaimParams | null): string {
+export function hashProofClaimParams(params: HttpProviderClaimParams | null): string {
   const serializedParams = getProviderParamsAsCanonicalizedString(params);
 
   return ethers.keccak256(
@@ -56,8 +56,8 @@ function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams 
       value: it.value ?? '',
       // This needs to be explicitly specified and absence should cause error, but we're choosing to ignore it in this case
       type: it.type ?? 'contains',
-      invert: it.invert ?? false,
-      isOptional: it.isOptional ?? false,
+      invert: it.invert || undefined,
+      isOptional: it.isOptional || undefined,
     })) ?? [],
     responseRedactions: params?.responseRedactions?.map(it => ({
       xPath: it.xPath ?? '',

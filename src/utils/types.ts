@@ -12,8 +12,8 @@ export interface HttpProviderClaimParams {
   body: string;
   method: "GET" | "POST" | "PUT" | "PATCH";
   responseMatches: {
-    invert: boolean;
-    isOptional: boolean;
+    invert: boolean | undefined;
+    isOptional: boolean | undefined;
     type: "regex" | "contains";
     value: string;
   }[]
@@ -323,7 +323,7 @@ export interface BodySniff {
 export interface ResponseMatch {
   value: string;
   type: string;
-  invert: boolean;
+  invert?: boolean;
   isOptional?: boolean;
 }
 

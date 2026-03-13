@@ -90,6 +90,6 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { reclaimSessionId: '123', isValidationEnabled: true })).toEqual(true);
+        } as any, { reclaimSessionId: '123' })).toEqual(true);
     });
 });
