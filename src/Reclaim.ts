@@ -100,7 +100,7 @@ export async function verifyProof(
             await assertVerifiedProof(proof, attestors)
         }
 
-        await assertValidateProof(proofs, config);
+        assertValidateProof(proofs, config);
 
         return true;
     } catch (error) {
