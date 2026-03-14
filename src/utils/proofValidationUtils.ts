@@ -8,20 +8,29 @@ import { ProviderHashRequirementsConfig } from "./providerUtils";
 const logger = loggerModule.logger;
 
 /**
- * Content validation using any proof hash that matches with content's proof hash
+ * Content validation configuration specifying essential required hashes and optional extra proofs.
+ * Used to explicitly validate that a generated proof matches the exact request structure expected.
  */
 export type ValidationConfigWithHash =
     | { requiredHashes: string[]; allowedExtraHashes?: string[]; allowArbitraryExtras?: boolean }
     | { allowedExtraHashes: string[]; allowArbitraryExtras?: boolean };
+
 /**
- * Legacy way of verification without proof validation
+ * Legacy configuration to completely bypass content validation during verification.
+ * Warning: Using this poses a risk as it avoids strictly matching proof parameters to expected hashes.
  */
 export interface ValidationConfigWithDisabledValidation { dangerouslyDisableContentValidation: true }
+
 /**
- * Validation options
+ * Represents the configuration options applied when validating proof contents, allowing
+ * strict hash checking or intentionally skipping validation if flagged.
  */
 export type ValidationConfig = ValidationConfigWithHash | ValidationConfigWithDisabledValidation;
 
+/**
+ * Describes the comprehensive configuration required to initialize the proof verification process.
+ * Aligns with `ValidationConfig` options for verifying signatures alongside proof contents.
+ */
 export type VerificationConfig = ValidationConfig;
 
 export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {

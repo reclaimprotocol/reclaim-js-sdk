@@ -155,11 +155,21 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
 }
 
 /**
- * Fetches the provider config that was used for this session and returns the hash requirements
- * @returns A promise that resolves to a ProviderHashRequirementsConfig
+ * Fetches the provider configuration by the providerId and its version; and constructs the robust hash requirements needed for proof validation.
+ * It resolves both explicitly required HTTP requests and allowed injected requests based on the provider version.
+ *
+ * @param providerId - The unique identifier of the selected provider.
+ * @param exactProviderVersion - The specific version string of the provider configuration to ensure deterministic validation.
+ * @param allowArbitraryExtraProofs - Determines whether non-specified extra proofs are permitted alongside the expected ones when extra requests are not declared in provider configuration.
+ * @returns A promise that resolves to `ProviderHashRequirementsConfig` representing the expected hashes for proof validation.
  */
 export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string, allowArbitraryExtraProofs: boolean): Promise<ProviderHashRequirementsConfig> {
   const providerResponse = await fetchProviderConfig(providerId, exactProviderVersion);
   const providerConfig = providerResponse.providers;
-  return getProviderHashRequirementsFromSpec({ requiredRequests: providerConfig?.requestData, allowedExtraRequests: providerConfig?.allowedInjectedRequestData, allowArbitraryExtras: allowArbitraryExtraProofs });
+
+  return getProviderHashRequirementsFromSpec({
+    requiredRequests: providerConfig?.requestData,
+    allowedExtraRequests: providerConfig?.allowedInjectedRequestData,
+    allowArbitraryExtras: allowArbitraryExtraProofs
+  });
 }

@@ -34,7 +34,8 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError,
     ErrorDuringVerificationError,
-    CallbackUrlRequiredError
+    CallbackUrlRequiredError,
+    ProofNotValidatedError
 } from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchProviderHashRequirementsBy, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
@@ -51,34 +52,40 @@ const logger = loggerModule.logger
 const sdkVersion = require('../package.json').version;
 
 /**
- * Verifies one or more Reclaim proofs by validating signatures and witness information
+ * Verifies one or more Reclaim proofs by validating signatures, verifying witness information,
+ * and performing content validation against the expected configuration.
  *
- * @param proofOrProofs - A single proof object or an array of proof objects to verify
- * @param config - verification options. Validation is disabled by default only when proofs don't have reclaimSessionId in context.
- * @returns Promise<boolean> - Returns true if all proofs are valid, false otherwise
- * @throws {SignatureNotFoundError} When proof has no signatures
- * @throws {ProofNotVerifiedError} When identifier mismatch occurs
- * @throws {ProofNotValidatedError} When proof content mismatch occurs with expectations
+ * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
+ * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation.
+ * @returns Promise<boolean> - Returns `true` if all proofs are successfully verified and validated, `false` otherwise.
+ * @throws {ProofNotVerifiedError} When signature validation or identifier mismatch occurs.
+ * @throws {ProofNotValidatedError} When no proofs are provided, when the configuration is missing, or when proof content does not match the expectations set in the config.
  *
  * @example
  * ```typescript
- * const isValid = await verifyProof(proof);
- * const areAllValid = await verifyProof([proof1, proof2, proof3]);
- * const isValidWithAI = await verifyProof(proof, true);
+ * // Validate a single proof against expected required hashes
+ * const isValid = await verifyProof(proof, { requiredHashes: ['0xAbC...'] });
+ * 
+ * // Validate multiple proofs allowing extra arbitrary proofs
+ * const areAllValid = await verifyProof([proof1, proof2], { 
+ *   requiredHashes: ['0xAbC...'], 
+ *   allowArbitraryExtras: true 
+ * });
  * ```
  */
 export async function verifyProof(
     proofOrProofs: Proof | Proof[],
     config: VerificationConfig
-) {
+): Promise<boolean> {
     try {
-        const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
+        const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
+
         if (proofs.length === 0) {
-            throw new ProofNotVerifiedError('No proofs provided')
+            throw new ProofNotValidatedError('No proofs provided');
         }
 
         if (!config) {
-            throw new ProofNotVerifiedError('Options `verifyProof(proof:,options:)` are required.');
+            throw new ProofNotValidatedError('Verification configuration is required for `verifyProof(proof, config)`');
         }
 
         const attestors = await getAttestors()
@@ -86,12 +93,12 @@ export async function verifyProof(
             await assertVerifiedProof(proof, attestors)
         }
 
-        await assertValidateProof(proofs, config)
+        await assertValidateProof(proofs, config);
 
-        return true
+        return true;
     } catch (error) {
-        logger.error('error in validating proof', error)
-        return false
+        logger.error('Error in validating proof:', error);
+        return false;
     }
 }
 
