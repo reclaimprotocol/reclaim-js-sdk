@@ -17,6 +17,7 @@ function createErrorClass(name: string) {
 
 export const TimeoutError = createErrorClass('TimeoutError');
 export const ProofNotVerifiedError = createErrorClass('ProofNotVerifiedError');
+export const ProofNotValidatedError = createErrorClass('ProofNotValidatedError');
 export const SessionNotStartedError = createErrorClass('SessionNotStartedError');
 export const ProviderNotFoundError = createErrorClass('ProviderNotFoundError');
 export const SignatureGeneratingError = createErrorClass('SignatureGeneratingError');
@@ -36,6 +37,7 @@ export const SetContextError = createErrorClass('SetContextError');
 export const SetSignatureError = createErrorClass('SetSignatureError');
 export const GetAppCallbackUrlError = createErrorClass("GetAppCallbackUrlError");
 export const StatusUrlError = createErrorClass('StatusUrlError');
+export const ProviderConfigFetchError = createErrorClass('ProviderConfigFetchError');
 export const InavlidParametersError = createErrorClass('InavlidParametersError');
 export const ProofSubmissionFailedError = createErrorClass('ProofSubmissionFailedError');
 export const ErrorDuringVerificationError = createErrorClass('ErrorDuringVerificationError');

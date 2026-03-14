@@ -1,13 +1,16 @@
 import {
   InitSessionError,
   UpdateSessionError,
-  StatusUrlError
+  StatusUrlError,
+  ProviderConfigFetchError
 } from "./errors";
-import { InitSessionResponse, SessionStatus, StatusUrlResponse } from "./types";
+import { InitSessionResponse, ProviderConfigResponse, SessionStatus, StatusUrlResponse } from "./types";
 import { validateFunctionParams } from "./validationUtils";
 import { BACKEND_BASE_URL, constants } from './constants';
 import { http } from "./fetch";
 import loggerModule from './logger';
+import { getProviderHashRequirementsFromSpec, ProviderHashRequirementsConfig } from "./providerUtils";
+
 const logger = loggerModule.logger;
 
 /**
@@ -120,4 +123,58 @@ export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlRespon
   }
 }
 
+export async function fetchProviderConfig(providerId: string, exactProviderVersionString: string): Promise<ProviderConfigResponse> {
+  validateFunctionParams(
+    [
+      { input: providerId, paramName: 'providerId', isString: true },
+      { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true }
+    ],
+    'fetchProviderConfig'
+  );
 
+  try {
+    const response = await http.client(constants.DEFAULT_PROVIDER_URL(providerId, exactProviderVersionString), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const res = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = `Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}. Status Code: ${response.status}`;
+      logger.info(errorMessage, res);
+      throw new ProviderConfigFetchError(errorMessage);
+    }
+
+    return res as ProviderConfigResponse;
+  } catch (err) {
+    const errorMessage = `Failed to fetch provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`;
+    logger.info(errorMessage, err);
+    throw new ProviderConfigFetchError(`Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`);
+  }
+}
+
+/**
+ * Fetches the provider configuration by the providerId and its version; and constructs the robust hash requirements needed for proof validation.
+ * It resolves both explicitly required HTTP requests and allowed injected requests based on the provider version.
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderHashRequirements()` - An alternative of this function to get the expected hashes for a proof request. The result can be provided in verifyProof function's `config` parameter for proof validation.
+ * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
+ * 
+ * @param providerId - The unique identifier of the selected provider.
+ * @param exactProviderVersion - The specific version string of the provider configuration to ensure deterministic validation.
+ * @param allowArbitraryExtraProofs - Determines whether non-specified extra proofs are permitted alongside the expected ones when extra requests are not declared in provider configuration.
+ * @returns A promise that resolves to `ProviderHashRequirementsConfig` representing the expected hashes for proof validation.
+ */
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string, allowArbitraryExtraProofs: boolean): Promise<ProviderHashRequirementsConfig> {
+  const providerResponse = await fetchProviderConfig(providerId, exactProviderVersion);
+  const providerConfig = providerResponse.providers;
+
+  return getProviderHashRequirementsFromSpec({
+    requiredRequests: providerConfig?.requestData,
+    allowedExtraRequests: providerConfig?.allowedInjectedRequestData,
+    allowArbitraryExtras: allowArbitraryExtraProofs
+  });
+}
