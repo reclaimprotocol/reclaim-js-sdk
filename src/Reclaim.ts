@@ -54,6 +54,13 @@ const sdkVersion = require('../package.json').version;
 /**
  * Verifies one or more Reclaim proofs by validating signatures, verifying witness information,
  * and performing content validation against the expected configuration.
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderHashRequirements()` - To get the expected proof hash requirements for a proof request.
+ * * `fetchProviderHashRequirementsBy()` - To get the expected proof hash requirements for a provider version by providing providerId and exactProviderVersionString.
+ * * `getProviderHashRequirementsFromSpec()` - To get the expected proof hash requirements from a provider spec.
+ * * All 3 functions above are alternatives of each other and result from these functions can be directly used as `config` parameter in this function for proof validation.
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation.
@@ -1342,6 +1349,11 @@ export class ReclaimProofRequest {
 
     /**
      * Fetches the provider config that was used for this session and returns the hash requirements
+     * 
+     * See also:
+     * * `fetchProviderHashRequirementsBy()` - An alternative of this function to get the expected hashes for a provider version by providing providerId and exactProviderVersionString. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     *
      * @returns A promise that resolves to a ProviderHashRequirementsConfig
      */
     getProviderHashRequirements(opt: { allowArbitraryExtraProofs: boolean }): Promise<ProviderHashRequirementsConfig> {

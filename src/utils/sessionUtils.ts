@@ -157,7 +157,12 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
 /**
  * Fetches the provider configuration by the providerId and its version; and constructs the robust hash requirements needed for proof validation.
  * It resolves both explicitly required HTTP requests and allowed injected requests based on the provider version.
- *
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderHashRequirements()` - An alternative of this function to get the expected hashes for a proof request. The result can be provided in verifyProof function's `config` parameter for proof validation.
+ * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
+ * 
  * @param providerId - The unique identifier of the selected provider.
  * @param exactProviderVersion - The specific version string of the provider configuration to ensure deterministic validation.
  * @param allowArbitraryExtraProofs - Determines whether non-specified extra proofs are permitted alongside the expected ones when extra requests are not declared in provider configuration.

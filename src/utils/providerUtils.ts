@@ -4,6 +4,11 @@ import { CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT } from "./proofValidationUtils";
 /**
  * Transforms a raw provider hash requirement specification into a structured configuration for proof validation.
  * It computes the proof hashes for both required and allowed extra requests to correctly match uploaded proofs.
+ * 
+ * See also:
+ * 
+ * * `fetchProviderHashRequirementsBy()` - An alternative of this function to get the expected hashes for a provider version by providing providerId and exactProviderVersionString. The result can be provided in verifyProof function's `config` parameter for proof validation.
+ * * `ReclaimProofRequest.getProviderHashRequirements()` - An alternative of this function to get the expected hashes for a proof request. The result can be provided in verifyProof function's `config` parameter for proof validation.
  *
  * @param spec - The raw provider specifications including required and allowed requests.
  * @returns A structured configuration containing computed required and allowed hashes for validation.
