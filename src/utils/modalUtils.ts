@@ -1,3 +1,4 @@
+import QRCode from 'qrcode';
 import loggerModule from './logger';
 import { ModalOptions } from './types';
 import { constants } from './constants';
@@ -237,21 +238,24 @@ export class QRCodeModal {
 
     private async generateQRCode(text: string, containerId: string): Promise<void> {
         try {
-            // Simple QR code generation using a public API
-            // In production, you might want to use a proper QR code library
-            const qrCodeUrl = `${constants.QR_CODE_API_URL}?size=200x200&data=${encodeURIComponent(text)}`;
+            const dataUrl = await QRCode.toDataURL(text, {
+                width: 200,
+                margin: 1,
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                }
+            });
 
             const container = document.getElementById(containerId);
             const styles = this.getThemeStyles();
 
             if (container) {
                 container.innerHTML = `
-                    <img src="${qrCodeUrl}" 
-                         alt="QR Code for Reclaim verification" 
-                         style="width: 200px; height: 200px; border-radius: 4px;"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <img src="${dataUrl}"
+                         alt="QR Code for Reclaim verification"
+                         style="width: 200px; height: 200px; border-radius: 4px;">
                     <div style="display: none; padding: 20px; color: ${styles.textColor}; font-size: 14px;">
-                        QR code could not be loaded.<br>
                         <a href="${text}" target="_blank" style="color: ${styles.linkColor}; text-decoration: underline;">
                             Click here to open verification link
                         </a>
