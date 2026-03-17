@@ -44,7 +44,7 @@ import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
-import { assertValidateProof, CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT, VerificationConfig } from './utils/proofValidationUtils'
+import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
 import { ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
@@ -70,13 +70,17 @@ const sdkVersion = require('../package.json').version;
  *
  * @example
  * ```typescript
- * // Validate a single proof against expected required hashes
- * const isValid = await verifyProof(proof, { requiredHashes: ['0xAbC...'] });
+ * // Validate a single proof against expected hash
+ * const isValid = await verifyProof(proof, { hashes: ['0xAbC...'] });
  * 
- * // Validate multiple proofs allowing extra arbitrary proofs
+ * // Validate multiple proofs
  * const areAllValid = await verifyProof([proof1, proof2], { 
- *   requiredHashes: ['0xAbC...'], 
- *   allowArbitraryExtras: true 
+ *   hashes: ['0xAbC...', '0xF22..'],
+ * });
+ * 
+ * // Validate 1 required proofs, any number of multiple with same hash, and one optional
+ * const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
+ *   hashes: ['0xAbC...', { value: '0xF22..', multiple: true }, { value: '0xE33..', required: false }],
  * });
  * ```
  */
@@ -1356,8 +1360,8 @@ export class ReclaimProofRequest {
      *
      * @returns A promise that resolves to a ProviderHashRequirementsConfig
      */
-    getProviderHashRequirements(opt: { allowArbitraryExtraProofs: boolean }): Promise<ProviderHashRequirementsConfig> {
-        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', opt.allowArbitraryExtraProofs);
+    getProviderHashRequirements(): Promise<ProviderHashRequirementsConfig> {
+        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '');
     }
 
     /**
@@ -1441,7 +1445,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, await this.getProviderHashRequirements({ allowArbitraryExtraProofs: CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT }));
+                            const verified = await verifyProof(proofs, await this.getProviderHashRequirements());
                             if (!verified) {
                                 logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
                                 throw new ProofNotVerifiedError();

@@ -1,19 +1,26 @@
 import { HttpProviderClaimParams } from "./types";
 import { hashProofClaimParams } from "../witness";
-import { ProofNotValidatedError } from "./errors";
+import { ProofNotValidatedError, UnknownProofsNotValidatedError } from "./errors";
 import loggerModule from './logger';
 import { Proof } from "./interfaces";
-import { ProviderHashRequirementsConfig } from "./providerUtils";
+import { HashRequirement, ProviderHashRequirementsConfig } from "./providerUtils";
 
 const logger = loggerModule.logger;
+
 
 /**
  * Content validation configuration specifying essential required hashes and optional extra proofs.
  * Used to explicitly validate that a generated proof matches the exact request structure expected.
  */
-export type ValidationConfigWithHash =
-    | { requiredHashes: string[]; allowedExtraHashes?: string[]; allowArbitraryExtras?: boolean }
-    | { allowedExtraHashes: string[]; allowArbitraryExtras?: boolean };
+export type ValidationConfigWithHash = {
+    /**
+     * Array of computed hashes that must be satisfied by the proofs.
+     * 
+     * An element can be a `HashRequirement` object or a string that is equivalent to
+     * a `{ value: '<hash>', required: true, multiple: false }` as `HashRequirement`.
+     */
+    hashes: (string | HashRequirement)[]
+};
 
 /**
  * Legacy configuration to completely bypass content validation during verification.
@@ -33,11 +40,12 @@ export type ValidationConfig = ValidationConfigWithHash | ValidationConfigWithDi
  */
 export type VerificationConfig = ValidationConfig;
 
-export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {
-    const requiredProofHashes = config.requiredHashes.map(it => it.toLowerCase().trim());
-    const allowedExtraProofHashes = new Set(config.allowedExtraHashes.map(it => it.toLowerCase().trim()));
 
-    if (!requiredProofHashes.length && !allowedExtraProofHashes.size) {
+const HASH_REQUIRED_DEFAULT = true;
+const HASH_MATCH_MULTIPLE_DEFAULT = false;
+
+export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {
+    if (!config.hashes) {
         throw new ProofNotValidatedError('No proof hash was provided for validation');
     }
 
@@ -50,39 +58,30 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
         unvalidatedProofHashByIndex.set(i, computedHashOfProof);
     }
 
-    for (const requiredProofHash of requiredProofHashes) {
+    for (const hashRequirement of config.hashes) {
         let found = false;
+        const expectedHash = hashRequirement.value.toLowerCase().trim()
+        const isRequired = hashRequirement.required ?? HASH_REQUIRED_DEFAULT;
+        const canMatchMultiple = hashRequirement.multiple ?? HASH_MATCH_MULTIPLE_DEFAULT;
         for (const [i, proofHash] of unvalidatedProofHashByIndex.entries()) {
-            if (proofHash === requiredProofHash) {
+            if (proofHash === expectedHash) {
                 unvalidatedProofHashByIndex.delete(i);
-                found = true;
-                break;
+                if (!found) {
+                    found = true;
+                } else if (!canMatchMultiple) {
+                    throw new ProofNotValidatedError(`Proof by hash '${expectedHash}' is not allowed to appear more than once`);
+                }
             }
         }
-        if (!found) {
-            throw new ProofNotValidatedError(`Proof by hash ${requiredProofHash} was not found`);
-        }
-    }
-
-    if (allowedExtraProofHashes.size > 0) {
-        for (const [i, proofHash] of unvalidatedProofHashByIndex.entries()) {
-            if (!allowedExtraProofHashes.has(proofHash)) {
-                throw new ProofNotValidatedError(`Proof by hash ${proofHash} is not allowed`);
-            }
-            unvalidatedProofHashByIndex.delete(i);
-        }
-        if (unvalidatedProofHashByIndex.size > 0) {
-            // if allowedExtraProofHashes was provided (not empty) and there are still unvalidated proofs, it means they are not allowed
-            throw new ProofNotValidatedError(`Extra ${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} aren't allowed`);
+        if (!found && isRequired) {
+            throw new ProofNotValidatedError(`Proof by required hash '${expectedHash}' was not found`);
         }
     }
 
     if (unvalidatedProofHashByIndex.size > 0) {
-        if (config.allowArbitraryExtras) {
-            logger.warn(`${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} were not validated`);
-        } else {
-            throw new ProofNotValidatedError(`Extra ${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} are not allowed`);
-        }
+        // if allowedExtraProofHashes was provided (not empty) and there are still unvalidated proofs, it means they are not allowed
+        const contactSupport = 'Please contact Reclaim Protocol Support team or mail us at support@reclaimprotocol.org.';
+        throw new UnknownProofsNotValidatedError(`Extra ${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} was found but could not be validated and indicates a security risk. ${contactSupport}`);
     }
 }
 
@@ -118,8 +117,6 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
     throw new ProofNotValidatedError('Proof has no HTTP provider params to hash');
 }
 
-export const CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT = true;
-
 /**
  * Asserts that the proof is validated by checking the content of proof with with expectations from provider config or hash based on [options]
  * @param proofs - The proofs to validate
@@ -132,9 +129,17 @@ export function assertValidateProof(proofs: Proof[], config: VerificationConfig)
         return
     }
 
+    const effectiveHashRequirement = ('hashes' in config && Array.isArray(config?.hashes) ? config.hashes : []).map(it => {
+        if (typeof it == 'string') {
+            return {
+                value: it,
+            }
+        } else {
+            return it
+        }
+    });
+
     return assertValidProofsByHash(proofs, {
-        requiredHashes: 'requiredHashes' in config && Array.isArray(config?.requiredHashes) ? config.requiredHashes : [],
-        allowedExtraHashes: 'allowedExtraHashes' in config && Array.isArray(config?.allowedExtraHashes) ? config.allowedExtraHashes : [],
-        allowArbitraryExtras: ('allowArbitraryExtras' in config ? config.allowArbitraryExtras : null) ?? CAN_ALLOW_ARBITRARY_EXTRAS_BY_DEFAULT,
+        hashes: effectiveHashRequirement,
     })
 }

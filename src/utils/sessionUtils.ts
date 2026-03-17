@@ -165,16 +165,13 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
  * 
  * @param providerId - The unique identifier of the selected provider.
  * @param exactProviderVersion - The specific version string of the provider configuration to ensure deterministic validation.
- * @param allowArbitraryExtraProofs - Determines whether non-specified extra proofs are permitted alongside the expected ones when extra requests are not declared in provider configuration.
  * @returns A promise that resolves to `ProviderHashRequirementsConfig` representing the expected hashes for proof validation.
  */
-export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string, allowArbitraryExtraProofs: boolean): Promise<ProviderHashRequirementsConfig> {
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string): Promise<ProviderHashRequirementsConfig> {
   const providerResponse = await fetchProviderConfig(providerId, exactProviderVersion);
   const providerConfig = providerResponse.providers;
 
   return getProviderHashRequirementsFromSpec({
-    requiredRequests: providerConfig?.requestData,
-    allowedExtraRequests: providerConfig?.allowedInjectedRequestData,
-    allowArbitraryExtras: allowArbitraryExtraProofs
+    requests: [...(providerConfig?.requestData ?? []), ...(providerConfig?.allowedInjectedRequestData ?? [])],
   });
 }

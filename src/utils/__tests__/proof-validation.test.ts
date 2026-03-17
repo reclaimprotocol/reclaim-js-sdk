@@ -69,7 +69,7 @@ describe('Validation', () => {
             }
         });
 
-        const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0', false);
+        const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0');
 
         // correct proofs
         expect(await verifyProof({
