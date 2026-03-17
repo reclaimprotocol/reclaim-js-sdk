@@ -58,4 +58,30 @@ export type BeaconState = {
   nextEpochTimestampS: number;
 };
 
-
+/**
+ * Information of the exact provider and its version used in the verification session.
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+ */
+export interface ProviderVersionInfo {
+  /**
+     * The identifier of provider used in verifications that resulted in a proof
+     * 
+     * See also:
+     * 
+     * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+     */
+  providerId: string;
+  /**
+   * The exact version of provider used in verifications that resulted in a proof.
+   * 
+   * This cannot be a version constaint or version expression.
+   * 
+   * See also:
+   * 
+   * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+   */
+  providerVersion: string;
+}

@@ -2,8 +2,9 @@ import { HttpProviderClaimParams } from "./types";
 import { hashProofClaimParams } from "../witness";
 import { ProofNotValidatedError, UnknownProofsNotValidatedError } from "./errors";
 import loggerModule from './logger';
-import { Proof } from "./interfaces";
+import { Proof, ProviderVersionInfo } from "./interfaces";
 import { HashRequirement, ProviderHashRequirementsConfig } from "./providerUtils";
+import { fetchProviderHashRequirementsBy } from "./sessionUtils";
 
 const logger = loggerModule.logger;
 
@@ -23,6 +24,16 @@ export type ValidationConfigWithHash = {
 };
 
 /**
+ * Content validation configuration specifying the provider id and version.
+ * Used to explicitly validate that a generated proof matches the exact request structure expected.
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+ */
+export type ValidationConfigWithProviderInformation = ProviderVersionInfo;
+
+/**
  * Legacy configuration to completely bypass content validation during verification.
  * Warning: Using this poses a risk as it avoids strictly matching proof parameters to expected hashes.
  */
@@ -32,7 +43,7 @@ export interface ValidationConfigWithDisabledValidation { dangerouslyDisableCont
  * Represents the configuration options applied when validating proof contents, allowing
  * strict hash checking or intentionally skipping validation if flagged.
  */
-export type ValidationConfig = ValidationConfigWithHash | ValidationConfigWithDisabledValidation;
+export type ValidationConfig = ValidationConfigWithHash | ValidationConfigWithProviderInformation | ValidationConfigWithDisabledValidation;
 
 /**
  * Describes the comprehensive configuration required to initialize the proof verification process.
@@ -123,10 +134,18 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
  * @param config - The validation config
  * @throws {ProofNotValidatedError} When the proof is not validated
  */
-export function assertValidateProof(proofs: Proof[], config: VerificationConfig) {
+export async function assertValidateProof(proofs: Proof[], config: VerificationConfig) {
     if ('dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
         logger.warn('Validation skipped because it was disabled during proof verification')
         return
+    }
+
+    if ('providerId' in config) {
+        if (!config.providerId || !config.providerVersion || typeof config.providerId !== 'string' || typeof config.providerVersion !== 'string') {
+            throw new ProofNotValidatedError('Provider id and version are required for proof validation');
+        }
+        const hashRequirementsFromProvider = await fetchProviderHashRequirementsBy(config.providerId, config.providerVersion);
+        return assertValidateProof(proofs, hashRequirementsFromProvider);
     }
 
     const effectiveHashRequirement = ('hashes' in config && Array.isArray(config?.hashes) ? config.hashes : []).map(it => {

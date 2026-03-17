@@ -1,6 +1,5 @@
 import { verifyProof } from "../../Reclaim";
 import { ProofNotValidatedError } from "../errors";
-import { assertVerifiedProof } from "../proofUtils";
 import { assertValidateProof } from "../proofValidationUtils";
 import { mockFetch } from "./mock-fetch";
 
@@ -230,7 +229,7 @@ describe('Request', () => {
             }
         }] as any, {
             hashes: ["0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"]
-        })).toThrow(new ProofNotValidatedError('Proof has no HTTP provider params to hash'));
+        })).rejects.toEqual(new ProofNotValidatedError('Proof has no HTTP provider params to hash'));
     });
 
     it('should reject proof which do not match hash', async () => {

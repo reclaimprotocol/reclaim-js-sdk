@@ -1,4 +1,4 @@
-import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage } from './utils/interfaces'
+import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage, ProviderVersionInfo } from './utils/interfaces'
 import {
     ProofRequestOptions,
     StartSessionParams,
@@ -104,7 +104,7 @@ export async function verifyProof(
             await assertVerifiedProof(proof, attestors)
         }
 
-        assertValidateProof(proofs, config);
+        await assertValidateProof(proofs, config);
 
         return true;
     } catch (error) {
@@ -1352,9 +1352,29 @@ export class ReclaimProofRequest {
     }
 
     /**
+     * Returns the provider id and exact version of the provider that was used in the verification session of this request. 
+     * 
+     * This can be provided as a config parameter to the `verifyProof` function to verify the proof.
+     * 
+     * See also:
+     * * `verifyProof()` - Verifies a proof against the expected provider configuration.
+     * * `getProviderHashRequirements()` - An alternative of this function to get the expected hashes for a provider version by providing providerId and exactProviderVersionString. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     */
+    public getProviderVersion(): ProviderVersionInfo {
+        // This should be exact version and not a version constraint/expression. This cannot be blank.
+        const exactProviderVersionString = this.resolvedProviderVersion ?? '';
+        return {
+            providerId: this.providerId,
+            providerVersion: exactProviderVersionString,
+        }
+    }
+
+    /**
      * Fetches the provider config that was used for this session and returns the hash requirements
      * 
      * See also:
+     * * `verifyProof()` - Verifies a proof against the expected provider configuration.
      * * `fetchProviderHashRequirementsBy()` - An alternative of this function to get the expected hashes for a provider version by providing providerId and exactProviderVersionString. The result can be provided in verifyProof function's `config` parameter for proof validation.
      * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
      *
@@ -1445,7 +1465,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, await this.getProviderHashRequirements());
+                            const verified = await verifyProof(proofs, this.getProviderVersion());
                             if (!verified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError();
