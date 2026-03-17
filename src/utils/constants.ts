@@ -31,6 +31,10 @@ export const constants = {
         return `${BACKEND_BASE_URL}/api/providers/${providerId}?versionNumber=${exactProviderVersionString}`
     },
 
+    DEFAULT_PROVIDER_HASH_REQUIREMENTS_URL(providerId: string, exactProviderVersionString: string) {
+        return `${BACKEND_BASE_URL}/api/providers/${providerId}/hash?versionNumber=${exactProviderVersionString}`
+    },
+
     // URL for sharing Reclaim templates
     RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template=',
 

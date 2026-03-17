@@ -1,5 +1,5 @@
 import type { Context, Proof, ProviderClaimData } from './interfaces';
-import { InjectedRequestSpec, InterceptorRequestSpec, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
+import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
@@ -292,3 +292,11 @@ export interface ReclaimProviderConfig {
   requestData: InterceptorRequestSpec[];
   allowedInjectedRequestData: InjectedRequestSpec[];
 }
+
+
+export type ProviderHashRequirementsResponse = {
+  message?: string;
+  hashRequirements?: ProviderHashRequirementsConfig;
+  providerId?: string;
+  providerVersionString?: string;
+};

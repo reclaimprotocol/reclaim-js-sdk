@@ -4,7 +4,7 @@ import {
   StatusUrlError,
   ProviderConfigFetchError
 } from "./errors";
-import { InitSessionResponse, ProviderConfigResponse, SessionStatus, StatusUrlResponse } from "./types";
+import { InitSessionResponse, ProviderConfigResponse, ProviderHashRequirementsResponse, SessionStatus, StatusUrlResponse } from "./types";
 import { validateFunctionParams } from "./validationUtils";
 import { BACKEND_BASE_URL, constants } from './constants';
 import { http } from "./fetch";
@@ -164,14 +164,41 @@ export async function fetchProviderConfig(providerId: string, exactProviderVersi
  * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
  * 
  * @param providerId - The unique identifier of the selected provider.
- * @param exactProviderVersion - The specific version string of the provider configuration to ensure deterministic validation.
+ * @param exactProviderVersionString - The specific version string of the provider configuration to ensure deterministic validation.
  * @returns A promise that resolves to `ProviderHashRequirementsConfig` representing the expected hashes for proof validation.
  */
-export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersion: string): Promise<ProviderHashRequirementsConfig> {
-  const providerResponse = await fetchProviderConfig(providerId, exactProviderVersion);
-  const providerConfig = providerResponse.providers;
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersionString: string): Promise<ProviderHashRequirementsConfig> {
+  validateFunctionParams(
+    [
+      { input: providerId, paramName: 'providerId', isString: true },
+      { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true }
+    ],
+    'fetchProviderConfig'
+  );
 
-  return getProviderHashRequirementsFromSpec({
-    requests: [...(providerConfig?.requestData ?? []), ...(providerConfig?.allowedInjectedRequestData ?? [])],
-  });
+  try {
+    const response = await http.client(constants.DEFAULT_PROVIDER_HASH_REQUIREMENTS_URL(providerId, exactProviderVersionString), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', 'reclaim-client-api': '1' }
+    });
+
+    const res = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = `Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}. Status Code: ${response.status}`;
+      logger.info(errorMessage, res);
+      throw new ProviderConfigFetchError(errorMessage);
+    }
+
+    const typedResponse = res as ProviderHashRequirementsResponse;
+    const hashRequirements = typedResponse.hashRequirements;
+    if (!hashRequirements) {
+      throw new ProviderConfigFetchError(`Error fetching provider hash requirements for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}. Received the following response from remote: ${JSON.stringify(res)}`);
+    }
+    return hashRequirements;
+  } catch (err) {
+    const errorMessage = `Failed to fetch provider hash requirements for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`;
+    logger.info(errorMessage, err);
+    throw new ProviderConfigFetchError(`Error fetching provider hash requirements for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`);
+  }
 }
