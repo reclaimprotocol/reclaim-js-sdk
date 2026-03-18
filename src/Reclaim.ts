@@ -897,8 +897,8 @@ export class ReclaimProofRequest {
 
             return await wallet.signMessage(ethers.getBytes(messageHash));
         } catch (err) {
-            logger.info(`Error generating proof request for applicationId: ${this.applicationId}, providerId: ${this.providerId}, signature: ${this.signature}, timeStamp: ${this.timeStamp}`, err);
-            throw new SignatureGeneratingError(`Error generating signature for applicationSecret: ${applicationSecret}`)
+            logger.info(`Error generating proof request for applicationId: ${this.applicationId}, providerId: ${this.providerId}, timeStamp: ${this.timeStamp}`);
+            throw new SignatureGeneratingError(`Error generating signature for applicationId: ${this.applicationId}`)
         }
     }
 
@@ -1420,7 +1420,7 @@ export class ReclaimProofRequest {
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
                             const verified = await verifyProof(proofs, this.options?.acceptAiProviders);
                             if (!verified) {
-                                logger.info(`Proofs not verified: ${JSON.stringify(proofs)}`);
+                                logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError();
                             }
                         }

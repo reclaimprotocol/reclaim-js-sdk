@@ -3,8 +3,7 @@ import type { ClaimID, ClaimInfo, CompleteClaimData } from './utils/types';
 import { canonicalStringify } from './utils/strings';
 
 export function createSignDataForClaim(data: CompleteClaimData): string {
-  const identifier: ClaimID =
-    'identifier' in data ? data.identifier : getIdentifierFromClaimInfo(data);
+  const identifier: ClaimID = getIdentifierFromClaimInfo(data);
   const lines: string[] = [
     identifier,
     data.owner.toLowerCase(),

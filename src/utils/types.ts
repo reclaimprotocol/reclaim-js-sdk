@@ -5,9 +5,8 @@ export type ClaimID = ProviderClaimData['identifier'];
 
 export type ClaimInfo = Pick<ProviderClaimData, 'context' | 'provider' | 'parameters'>;
 
-export type AnyClaimInfo = ClaimInfo | { identifier: ClaimID };
-
-export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'> & AnyClaimInfo;
+export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'>
+	& ClaimInfo
 
 export type SignedClaim = {
   claim: CompleteClaimData;
@@ -49,21 +48,21 @@ export type ProofRequestOptions = {
   /**
    * Whether the verification client should automatically submit necessary proofs once they are generated.
    * If set to false, the user must manually click a button to submit.
-   * 
+   *
    * @since 4.7.0
    * @default true
    */
   canAutoSubmit?: boolean;
   /**
    * An identifier used to select a user's language and formatting preferences.
-   * 
-   * Locales are expected to be canonicalized according to the "preferred value" entries in the [IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry). 
+   *
+   * Locales are expected to be canonicalized according to the "preferred value" entries in the [IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry).
    * For example, `he`, and `iw` are equal and both have the languageCode `he`, because `iw` is a deprecated language subtag that was replaced by the subtag `he`.
-   * 
+   *
    * Defaults to the browser's locale if available, otherwise English (en).
-   * 
+   *
    * For more info, refer: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl#description
-   * 
+   *
    * @since 4.9.0
    */
   preferredLocale?: string;
@@ -71,11 +70,11 @@ export type ProofRequestOptions = {
    * Additional metadata to pass to the verification client frontend.
    * This can be used to customize the client UI experience, such as customizing themes or UI by passing context-specific information.
    * The keys and values must be strings. For most clients, this is not required and goes unused.
-   * 
+   *
    * This has no effect on the verification process.
-   * 
+   *
    * Example: `{ theme: 'dark', verify_another_way_link: 'https://exampe.org/alternative-verification?id=1234' }`
-   * 
+   *
    * @since 4.7.0
    */
   metadata?: Record<string, string>;
@@ -117,7 +116,7 @@ export enum ClaimCreationType {
   ON_ME_CHAIN = 'createClaimOnMechain'
 }
 
-// Device type enum 
+// Device type enum
 export enum DeviceType {
   ANDROID = 'android',
   IOS = 'ios',
@@ -189,10 +188,10 @@ export type HttpRedirectionMethod = 'GET' | 'POST';
 
 /**
  * Options for HTTP redirection.
- * 
+ *
  * Only supported by In-Browser SDK.
  * On other SDKs, this will be ignored and a GET redirection will be performed with the URL.
- * 
+ *
  * @since 4.11.0
  * @default "{ method: 'GET' }"
  */
@@ -201,18 +200,18 @@ export type HttpRedirectionOptions = {
    * List of name-value pairs to be sent as the body of the form request.
    * When `method` is set to `POST`, `body` will be sent with 'application/x-www-form-urlencoded' content type.
    * When `method` is set to `GET`, `body` will be sent as query parameters.
-   * 
+   *
    * @default undefined
    */
   body?: HttpFormEntry[] | null | undefined;
   /**
    * HTTP method to use for the redirection.
-   * 
+   *
    * POST will result in `body` being sent with 'application/x-www-form-urlencoded' content type.
    * GET will result in `body`, if present, being sent as query parameters.
-   * 
+   *
    * With `method` set to `GET` and no `body`, this will result in a simple GET redirection using `window.location.href`.
-   * 
+   *
    * @default 'GET'
    */
   method?: HttpRedirectionMethod;
