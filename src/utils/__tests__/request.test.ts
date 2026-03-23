@@ -193,6 +193,16 @@ describe('Request', () => {
             expect(output.options.portalUrl).toEqual('https://custom-portal.example.com');
         });
 
+        it('default portal URL survives round-trip', async () => {
+            // init with no portalUrl/customSharePageUrl → default applied
+            const request = await ReclaimProofRequest.init(testAppId, testAppSecret, 'example');
+            const json = request.toJsonString();
+            const restored = await ReclaimProofRequest.fromJsonString(json);
+            const output = JSON.parse(restored.toJsonString());
+
+            expect(output.options.customSharePageUrl).toEqual('https://portal.reclaimprotocol.org');
+        });
+
         it('takes precedence over customSharePageUrl', async () => {
             const request = await initWith({
                 customSharePageUrl: 'https://old.example.com',
