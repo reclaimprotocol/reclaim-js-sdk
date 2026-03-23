@@ -148,4 +148,59 @@ describe('Request', () => {
 
         expect(requestJson).toEqual(originalRequest);
     });
+
+    it('should default to portal URL and useAppClip false when no options provided', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '999',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example'
+        );
+
+        const output = JSON.parse(request.toJsonString());
+        expect(output.options.customSharePageUrl).toEqual('https://portal.reclaimprotocol.org');
+        expect(output.options.useAppClip).toEqual(false);
+    });
+
+    describe('portalUrl alias', () => {
+        const initMock = { sessionId: '456', resolvedProviderVersion: '1.0.0' };
+
+        const initWith = (opts: Record<string, string>) =>
+            ReclaimProofRequest.init(testAppId, testAppSecret, 'example', opts as any);
+
+        beforeEach(() => {
+            globalThis.fetch = mockFetch(initMock);
+        });
+
+        it('syncs to customSharePageUrl in serialized output', async () => {
+            const request = await initWith({ portalUrl: 'https://portal.reclaimprotocol.org' });
+            const output = JSON.parse(request.toJsonString());
+
+            expect(output.options.customSharePageUrl).toEqual('https://portal.reclaimprotocol.org');
+            expect(output.options.portalUrl).toEqual('https://portal.reclaimprotocol.org');
+        });
+
+        it('survives round-trip through fromJsonString', async () => {
+            const request = await initWith({ portalUrl: 'https://custom-portal.example.com' });
+            const restored = await ReclaimProofRequest.fromJsonString(request.toJsonString());
+            const output = JSON.parse(restored.toJsonString());
+
+            expect(output.options.customSharePageUrl).toEqual('https://custom-portal.example.com');
+            expect(output.options.portalUrl).toEqual('https://custom-portal.example.com');
+        });
+
+        it('takes precedence over customSharePageUrl', async () => {
+            const request = await initWith({
+                customSharePageUrl: 'https://old.example.com',
+                portalUrl: 'https://new.example.com',
+            });
+            const output = JSON.parse(request.toJsonString());
+
+            expect(output.options.customSharePageUrl).toEqual('https://new.example.com');
+        });
+    });
 });

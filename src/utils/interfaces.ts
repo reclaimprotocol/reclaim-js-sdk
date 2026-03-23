@@ -44,6 +44,8 @@ export interface Context {
   contextAddress: string;
   contextMessage: string;
   reclaimSessionId: string;
+  extractedParameters?: Record<string, string>;
+  providerHash?: string;
 }
 
 export interface Beacon {

@@ -10,6 +10,7 @@ import {
     ReclaimFlowLaunchOptions,
     HttpFormEntry,
     HttpRedirectionMethod,
+    type VerifyProofResult,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -54,9 +55,9 @@ const sdkVersion = require('../package.json').version;
 /**
  * Verifies one or more Reclaim proofs by validating signatures, verifying witness information,
  * and performing content validation against the expected configuration.
- * 
+ *
  * See also:
- * 
+ *
  * * `ReclaimProofRequest.getProviderHashRequirements()` - To get the expected proof hash requirements for a proof request.
  * * `fetchProviderHashRequirementsBy()` - To get the expected proof hash requirements for a provider version by providing providerId and exactProviderVersionString.
  * * `getProviderHashRequirementsFromSpec()` - To get the expected proof hash requirements from a provider spec.
@@ -64,33 +65,34 @@ const sdkVersion = require('../package.json').version;
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation.
- * @returns Promise<boolean> - Returns `true` if all proofs are successfully verified and validated, `false` otherwise.
- * @throws {ProofNotVerifiedError} When signature validation or identifier mismatch occurs.
- * @throws {ProofNotValidatedError} When no proofs are provided, when the configuration is missing, or when proof content does not match the expectations set in the config.
+ * @returns Verification result with `isVerified` and, on success, extracted `data` from each proof
  *
  * @example
  * ```typescript
  * // Validate a single proof against expected hash
- * const isValid = await verifyProof(proof, { hashes: ['0xAbC...'] });
- * 
+ * const { isVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] });
+ * if (isVerified) {
+ *   console.log(data[0].context);
+ *   console.log(data[0].extractedParameters);
+ * }
+ *
  * // Validate multiple proofs
- * const areAllValid = await verifyProof([proof1, proof2], { 
+ * const result = await verifyProof([proof1, proof2], {
  *   hashes: ['0xAbC...', '0xF22..'],
  * });
- * 
- * // Validate 1 required proofs, any number of multiple with same hash, and one optional
- * const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
- *   hashes: ['0xAbC...', { value: '0xF22..', multiple: true }, { value: '0xE33..', required: false }],
+ *
+ * // Validate 1 required proof, one that must appear exactly once, and one optional
+ * const result = await verifyProof([proof1, proof2, sameAsProof2], {
+ *   hashes: ['0xAbC...', { value: '0xF22..', multiple: false }, { value: '0xE33..', required: false }],
  * });
  * ```
  */
 export async function verifyProof(
     proofOrProofs: Proof | Proof[],
     config: VerificationConfig
-): Promise<boolean> {
+): Promise<VerifyProofResult> {
+    const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
     try {
-        const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
-
         if (proofs.length === 0) {
             throw new ProofNotValidatedError('No proofs provided');
         }
@@ -106,10 +108,32 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
-        return true;
+        return {
+            isVerified: true,
+            data: proofs.map(extractProofData),
+        }
     } catch (error) {
         logger.error('Error in validating proof:', error);
-        return false;
+        return {
+            isVerified: false,
+            data: [],
+        }
+    }
+}
+
+function extractProofData(proof: Proof): VerifyProofResult['data'][number] {
+    try {
+        const context = JSON.parse(proof.claimData.context)
+        const { extractedParameters, ...rest } = context
+        return {
+            context: rest,
+            extractedParameters: extractedParameters ?? {},
+        }
+    } catch {
+        return {
+            context: {},
+            extractedParameters: {},
+        }
     }
 }
 
@@ -218,21 +242,21 @@ export class ReclaimProofRequest {
         }
 
         if (options.useAppClip === undefined) {
-            options.useAppClip = true;
+            options.useAppClip = false;
         }
+
+        // portalUrl is an alias for customSharePageUrl (portalUrl takes precedence)
+        this.customSharePageUrl = options.portalUrl ?? options.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+        options.customSharePageUrl = this.customSharePageUrl;
 
         if (options?.envUrl) {
             setBackendBaseUrl(options.envUrl);
-        } else if (options?.customSharePageUrl?.includes('eu.portal.reclaimprotocol.org')) {
+        } else if (this.customSharePageUrl?.includes('eu.portal.reclaimprotocol.org')) {
             setBackendBaseUrl('https://eu.api.reclaimprotocol.org');
         }
 
         if (options.extensionID) {
             this.extensionID = options.extensionID;
-        }
-
-        if (options?.customSharePageUrl) {
-            this.customSharePageUrl = options.customSharePageUrl;
         }
 
         if (options?.customAppClipUrl) {
@@ -246,13 +270,13 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Initializes a new Reclaim proof request instance with automatic signature generation and session creation
+     * Initializes a new Reclaim proof request instance with automatic signature generation and session creation.
      *
      * @param applicationId - Your Reclaim application ID
      * @param appSecret - Your application secret key for signing requests
      * @param providerId - The ID of the provider to use for proof generation
      * @param options - Optional configuration options for the proof request
-     * @returns Promise<ReclaimProofRequest> - A fully initialized proof request instance
+     * @returns A fully initialized proof request instance
      * @throws {InitError} When initialization fails due to invalid parameters or session creation errors
      *
      * @example
@@ -261,7 +285,7 @@ export class ReclaimProofRequest {
      *   'your-app-id',
      *   'your-app-secret',
      *   'provider-id',
-     *   { log: true, acceptAiProviders: true }
+     *   { portalUrl: 'https://portal.reclaimprotocol.org', log: true }
      * );
      * ```
      */
@@ -313,6 +337,11 @@ export class ReclaimProofRequest {
                 if (options.envUrl) {
                     validateFunctionParams([
                         { paramName: 'envUrl', input: options.envUrl, isString: true }
+                    ], 'the constructor')
+                }
+                if (options.portalUrl) {
+                    validateFunctionParams([
+                        { paramName: 'portalUrl', input: options.portalUrl, isString: true }
                     ], 'the constructor')
                 }
                 if (options.customSharePageUrl) {
@@ -1466,7 +1495,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, this.getProviderVersion());
+                            const { isVerified: verified } = await verifyProof(proofs, this.getProviderVersion());
                             if (!verified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError();

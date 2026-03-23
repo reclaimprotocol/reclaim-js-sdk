@@ -51,7 +51,16 @@ export type ProofRequestOptions = {
   useBrowserExtension?: boolean;
   extensionID?: string;
   providerVersion?: string;
+  /**
+   * @deprecated Use `portalUrl` instead.
+   */
   customSharePageUrl?: string;
+  /**
+   * URL of the portal/share page for the verification flow.
+   *
+   * @default 'https://portal.reclaimprotocol.org'
+   */
+  portalUrl?: string;
   customAppClipUrl?: string;
   launchOptions?: ReclaimFlowLaunchOptions;
   /**
@@ -250,6 +259,15 @@ export type TemplateData = {
   metadata?: Record<string, string>;
   preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
+
+// Verify proof result type
+export type VerifyProofResult = {
+  isVerified: boolean;
+  data: {
+    context: Record<string, unknown>;
+    extractedParameters: Record<string, string>;
+  }[];
+}
 
 export type ProviderVersionConfig = {
   major?: number;

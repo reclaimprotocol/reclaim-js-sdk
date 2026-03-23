@@ -66,7 +66,7 @@ describe('Validation', () => {
         const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0');
 
         // correct proofs
-        expect(await verifyProof({
+        expect((await verifyProof({
             "identifier": "0x51c192777d45010e9318c0e1eb2fefc0bc5a444f59e3d3e5a11e9a3d1b98e10c",
             "claimData": {
                 "provider": "http",
@@ -86,10 +86,10 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, hashRequirements)).toEqual(true);
+        } as any, hashRequirements)).isVerified).toEqual(true);
 
         // correct proofs
-        expect(await verifyProof({
+        expect((await verifyProof({
             "identifier": "0x51c192777d45010e9318c0e1eb2fefc0bc5a444f59e3d3e5a11e9a3d1b98e10c",
             "claimData": {
                 "provider": "http",
@@ -109,7 +109,7 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0' })).toEqual(true);
+        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0' })).isVerified).toEqual(true);
     });
 
     it('should validate invalid proofs and return false', async () => {
@@ -144,7 +144,7 @@ describe('Validation', () => {
         const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0');
 
         // invalid proofs
-        expect(await verifyProof({
+        expect((await verifyProof({
             "identifier": "0x51c192777d45010e9318c0e1eb2fefc0bc5a444f59e3d3e5a11e9a3d1b98e10c",
             "claimData": {
                 "provider": "http",
@@ -164,10 +164,10 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, hashRequirements)).toEqual(false);
+        } as any, hashRequirements)).isVerified).toEqual(false);
 
         // invalid proofs
-        expect(await verifyProof({
+        expect((await verifyProof({
             "identifier": "0x51c192777d45010e9318c0e1eb2fefc0bc5a444f59e3d3e5a11e9a3d1b98e10c",
             "claimData": {
                 "provider": "http",
@@ -187,6 +187,6 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0' })).toEqual(false);
+        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0' })).isVerified).toEqual(false);
     });
 });
