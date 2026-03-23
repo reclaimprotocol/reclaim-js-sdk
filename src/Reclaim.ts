@@ -38,14 +38,14 @@ import {
     ProofNotValidatedError
 } from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
-import { fetchProviderHashRequirementsBy, fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
+import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertVerifiedProof, createLinkWithTemplateData, getAttestors } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
 import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
-import { ProviderHashRequirementsConfig } from './utils/providerUtils'
+import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
 
@@ -1380,8 +1380,8 @@ export class ReclaimProofRequest {
      *
      * @returns A promise that resolves to a ProviderHashRequirementsConfig
      */
-    getProviderHashRequirements(): Promise<ProviderHashRequirementsConfig> {
-        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '');
+    getProviderHashRequirements(proofs: Proof[]): Promise<ProviderHashRequirementsConfig> {
+        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', proofs);
     }
 
     /**

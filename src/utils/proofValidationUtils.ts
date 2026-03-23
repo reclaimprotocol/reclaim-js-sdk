@@ -3,8 +3,7 @@ import { hashProofClaimParams } from "../witness";
 import { ProofNotValidatedError, UnknownProofsNotValidatedError } from "./errors";
 import loggerModule from './logger';
 import { Proof, ProviderVersionInfo } from "./interfaces";
-import { HashRequirement, ProviderHashRequirementsConfig } from "./providerUtils";
-import { fetchProviderHashRequirementsBy } from "./sessionUtils";
+import { fetchProviderHashRequirementsBy, HashRequirement, ProviderHashRequirementsConfig } from "./providerUtils";
 
 const logger = loggerModule.logger;
 
@@ -53,7 +52,7 @@ export type VerificationConfig = ValidationConfig;
 
 
 const HASH_REQUIRED_DEFAULT = true;
-const HASH_MATCH_MULTIPLE_DEFAULT = false;
+const HASH_MATCH_MULTIPLE_DEFAULT = true;
 
 export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {
     if (!config.hashes) {
@@ -144,7 +143,7 @@ export async function assertValidateProof(proofs: Proof[], config: VerificationC
         if (!config.providerId || !config.providerVersion || typeof config.providerId !== 'string' || typeof config.providerVersion !== 'string') {
             throw new ProofNotValidatedError('Provider id and version are required for proof validation');
         }
-        const hashRequirementsFromProvider = await fetchProviderHashRequirementsBy(config.providerId, config.providerVersion);
+        const hashRequirementsFromProvider = await fetchProviderHashRequirementsBy(config.providerId, config.providerVersion, proofs);
         return assertValidateProof(proofs, hashRequirementsFromProvider);
     }
 

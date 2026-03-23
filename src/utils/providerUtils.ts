@@ -1,4 +1,51 @@
 import { hashProofClaimParams } from "../witness";
+import { ProviderConfigFetchError } from "./errors";
+import { fetchProviderConfig } from "./sessionUtils";
+import loggerModule from './logger';
+import { Proof } from "./interfaces";
+
+const logger = loggerModule.logger;
+
+/**
+ * Fetches the provider configuration by the providerId and its version; and constructs the robust hash requirements needed for proof validation.
+ * It resolves both explicitly required HTTP requests and allowed injected requests based on the provider version.
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderHashRequirements()` - An alternative of this function to get the expected hashes for a proof request. The result can be provided in verifyProof function's `config` parameter for proof validation.
+ * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
+ * 
+ * @param providerId - The unique identifier of the selected provider.
+ * @param exactProviderVersionString - The specific version string of the provider configuration to ensure deterministic validation.
+ * @returns A promise that resolves to `ProviderHashRequirementsConfig` representing the expected hashes for proof validation.
+ */
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersionString: string, proofs?: Proof[]): Promise<ProviderHashRequirementsConfig> {
+    const providerResponse = await fetchProviderConfig(providerId, exactProviderVersionString);
+
+    try {
+        const providerConfig = providerResponse.providers;
+
+        return getProviderHashRequirementsFromSpec({
+            requests: [...(providerConfig?.requestData ?? []), ...generateSpecsFromRequestSpecTemplate(providerConfig?.allowedInjectedRequestData ?? [], proofs)],
+        });
+    } catch (e) {
+        const errorMessage = `Failed to fetch provider hash requirements for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`;
+        logger.info(errorMessage, e);
+        throw new ProviderConfigFetchError(`Error fetching provider hash requirements for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`);
+    }
+}
+
+export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: RequestSpec[], proofs?: Proof[]): RequestSpec[] {
+    if (!requestSpecTemplates) return [];
+
+    return requestSpecTemplates;
+
+    // TODO: Implement request spec generation from templates
+
+    // const extractedParameters = proofs?.map(it => JSON.parse(it.claimData.context).extractedParameters as Record<string, string>).reduce((acc, it) => ({ ...acc, ...it }), {});
+    // const templateParams = requestSpecTemplates.map(it => it.templateParams).reduce((acc, it) => ([...(acc ?? []), ...(it ?? [])]), []);
+    // return []
+}
 
 /**
  * Transforms a raw provider hash requirement specification into a structured configuration for proof validation.
@@ -109,9 +156,13 @@ export interface RequestSpec {
     required?: boolean;
     /**
      * Whether request matching this spec is allowed to appear multiple times in list of proofs.
-     * Defaults to false.
+     * Defaults to true.
      */
     multiple?: boolean;
+    /**
+     * Template parameters for the request spec.
+     */
+    templateParams?: string[]
 }
 
 /**

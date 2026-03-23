@@ -1,5 +1,5 @@
 import { verifyProof } from "../../Reclaim";
-import { fetchProviderHashRequirementsBy } from "../sessionUtils";
+import { fetchProviderHashRequirementsBy } from "../providerUtils";
 import { mockFetchBy } from "./mock-fetch";
 
 describe('Validation', () => {
@@ -19,16 +19,47 @@ describe('Validation', () => {
             }
 
             return {
-                "message": "Provider hash requirements fetched successfully",
-                "hashRequirements": {
-                    "hashes": [
+                "message": "Provider fetched successfully",
+                "providers": {
+                    "requestData": [
                         {
-                            "value": "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"
+                            "url": "https://www.kaggle.com/api/i/users.UsersService/GetCurrentUser",
+                            "expectedPageUrl": "",
+                            "urlType": "TEMPLATE",
+                            "method": "POST",
+                            "responseMatches": [
+                                {
+                                    "value": "\"userName\":\"{{username}}\"",
+                                    "type": "contains",
+                                    "invert": false,
+                                    "description": null,
+                                    "order": null,
+                                    "isOptional": false
+                                }
+                            ],
+                            "responseRedactions": [
+                                {
+                                    "xPath": "",
+                                    "jsonPath": "$.userName",
+                                    "regex": "\"userName\":\"(.*)\"",
+                                    "hash": ""
+                                }
+                            ],
+                            "bodySniff": {
+                                "enabled": true,
+                                "template": "{\"includeGroups\":false,\"includeLogins\":false,\"includeVerificationStatus\":true}"
+                            },
+                            "requestHash": "0x8f3ebf2865a1dce8f5c070ea087a3af86ee9127b82dc79cefff76c45d8968c42",
+                            "responseVariables": [
+                                "username"
+                            ],
+                            "additionalClientOptions": null,
+                            "writeRedactionMode": null,
+                            "credentials": null
                         }
-                    ]
+                    ],
                 },
-                "providerId": "c94476a0-8a75-4563-b70a-bf6124d7c59b",
-                "providerVersionString": "1.0.0"
+                "isSuccess": true
             }
         });
 
