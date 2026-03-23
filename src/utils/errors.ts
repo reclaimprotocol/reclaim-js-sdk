@@ -18,6 +18,7 @@ function createErrorClass(name: string) {
 export const TimeoutError = createErrorClass('TimeoutError');
 export const ProofNotVerifiedError = createErrorClass('ProofNotVerifiedError');
 export const ProofNotValidatedError = createErrorClass('ProofNotValidatedError');
+export const InvalidRequestSpecError = createErrorClass('InvalidRequestSpecError');
 export const UnknownProofsNotValidatedError = createErrorClass('UnknownProofsNotValidatedError');
 export const SessionNotStartedError = createErrorClass('SessionNotStartedError');
 export const ProviderNotFoundError = createErrorClass('ProviderNotFoundError');

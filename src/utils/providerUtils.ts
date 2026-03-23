@@ -1,5 +1,5 @@
 import { hashProofClaimParams } from "../witness";
-import { ProviderConfigFetchError } from "./errors";
+import { InvalidRequestSpecError, ProviderConfigFetchError } from "./errors";
 import { fetchProviderConfig } from "./sessionUtils";
 import loggerModule from './logger';
 import { Proof } from "./interfaces";
@@ -26,7 +26,7 @@ export async function fetchProviderHashRequirementsBy(providerId: string, exactP
         const providerConfig = providerResponse.providers;
 
         return getProviderHashRequirementsFromSpec({
-            requests: [...(providerConfig?.requestData ?? []), ...generateSpecsFromRequestSpecTemplate(providerConfig?.allowedInjectedRequestData ?? [], proofs)],
+            requests: [...(providerConfig?.requestData ?? []), ...generateSpecsFromRequestSpecTemplate(providerConfig?.allowedInjectedRequestData ?? [], takeTemplateParametersFromProofs(proofs))],
         });
     } catch (e) {
         const errorMessage = `Failed to fetch provider hash requirements for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`;
@@ -35,16 +35,84 @@ export async function fetchProviderHashRequirementsBy(providerId: string, exactP
     }
 }
 
-export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: RequestSpec[], proofs?: Proof[]): RequestSpec[] {
+export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: RequestSpec[], templateParameters: Record<string, string[]>): RequestSpec[] {
     if (!requestSpecTemplates) return [];
 
-    return requestSpecTemplates;
+    const generatedRequestTemplate: RequestSpec[] = [];
 
-    // TODO: Implement request spec generation from templates
+    for (const template of requestSpecTemplates) {
+        const templateVariables = template.templateParams ?? [];
+        if (!templateVariables.length) {
+            generatedRequestTemplate.push(template);
+            continue;
+        }
 
-    // const extractedParameters = proofs?.map(it => JSON.parse(it.claimData.context).extractedParameters as Record<string, string>).reduce((acc, it) => ({ ...acc, ...it }), {});
-    // const templateParams = requestSpecTemplates.map(it => it.templateParams).reduce((acc, it) => ([...(acc ?? []), ...(it ?? [])]), []);
-    // return []
+        const templateParamsPairMatch = Object.entries(templateParameters).filter(([key, value]) => templateVariables.includes(key) && value.length)
+        const hasAllTemplateVariableMatch = templateParamsPairMatch.length === templateVariables.length;
+        if (!hasAllTemplateVariableMatch) {
+            throw new InvalidRequestSpecError(`Not all template variables are present for template`);
+        }
+
+        // check all template variables have same length
+        const templateParamsPairMatchLength = templateParamsPairMatch[0][1].length;
+        const allTemplateVariablesHaveSameLength = templateParamsPairMatch.every(([key, value]) => value.length === templateParamsPairMatchLength);
+        if (!allTemplateVariablesHaveSameLength) {
+            throw new InvalidRequestSpecError(`Not all template variables have same length for template`);
+        }
+
+        for (let i = 0; i < templateParamsPairMatchLength; i++) {
+            const currentTemplateParams: Record<string, string> = {};
+            for (const [key, values] of templateParamsPairMatch) {
+                currentTemplateParams[key] = values[i];
+            }
+
+            const spec: RequestSpec = {
+                ...template,
+            }
+
+            for (const match of spec.responseMatches) {
+                for (const [key, value] of Object.entries(currentTemplateParams)) {
+                    match.value = match.value.replace(key, value);
+                }
+            }
+
+            for (const redaction of spec.responseRedactions) {
+                for (const [key, value] of Object.entries(currentTemplateParams)) {
+                    redaction.jsonPath = redaction.jsonPath.replace(key, value);
+                    redaction.xPath = redaction.xPath.replace(key, value);
+                    redaction.regex = redaction.regex.replace(key, value);
+                }
+            }
+
+            generatedRequestTemplate.push(spec);
+        }
+    }
+
+    return generatedRequestTemplate
+}
+
+export function takeTemplateParametersFromProofs(proofs?: Proof[]): Record<string, string[]> {
+    return takePairsWhereValueIsArray(proofs?.map(it => JSON.parse(it.claimData.context).extractedParameters as Record<string, string>).reduce((acc, it) => ({ ...acc, ...it }), {}));
+}
+
+export function takePairsWhereValueIsArray(o: Record<string, string> | undefined): Record<string, string[]> {
+    if (!o) return {};
+    const pairs: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(o)) {
+        if (Array.isArray(value) && value.length) {
+            pairs[key] = value;
+        } else {
+            try {
+                const parsedValue = JSON.parse(value);
+                if (Array.isArray(parsedValue) && parsedValue.length) {
+                    pairs[key] = parsedValue;
+                }
+            } catch (_) {
+                // ignore parsing errors
+            }
+        }
+    }
+    return pairs;
 }
 
 /**
@@ -160,7 +228,8 @@ export interface RequestSpec {
      */
     multiple?: boolean;
     /**
-     * Template parameters for the request spec.
+     * Template parameter variables for the request spec that should be replaced with real values
+     * during dynamic request spec construction.
      */
     templateParams?: string[]
 }
