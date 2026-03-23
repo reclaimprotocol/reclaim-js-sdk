@@ -1,4 +1,4 @@
-import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage } from './utils/interfaces'
+import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage, ProviderVersionInfo } from './utils/interfaces'
 import {
     ProofRequestOptions,
     StartSessionParams,
@@ -34,69 +34,83 @@ import {
     SignatureGeneratingError,
     SignatureNotFoundError,
     ErrorDuringVerificationError,
-    CallbackUrlRequiredError
-} from './utils/errors'
+    CallbackUrlRequiredError,
+    ProofNotValidatedError
+} from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
-import { createLinkWithTemplateData, getAttestors, recoverSignersOfSignedClaim } from './utils/proofUtils'
+import { assertVerifiedProof, createLinkWithTemplateData, getAttestors } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
+import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
+import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
 
 /**
- * Verifies one or more Reclaim proofs by validating signatures and witness information
+ * Verifies one or more Reclaim proofs by validating signatures, verifying witness information,
+ * and performing content validation against the expected configuration.
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderHashRequirements()` - To get the expected proof hash requirements for a proof request.
+ * * `fetchProviderHashRequirementsBy()` - To get the expected proof hash requirements for a provider version by providing providerId and exactProviderVersionString.
+ * * `getProviderHashRequirementsFromSpec()` - To get the expected proof hash requirements from a provider spec.
+ * * All 3 functions above are alternatives of each other and result from these functions can be directly used as `config` parameter in this function for proof validation.
  *
- * @param proofOrProofs - A single proof object or an array of proof objects to verify
- * @param allowAiWitness - Optional flag to allow AI witness verification. Defaults to false
- * @returns Promise<boolean> - Returns true if all proofs are valid, false otherwise
- * @throws {SignatureNotFoundError} When proof has no signatures
- * @throws {ProofNotVerifiedError} When identifier mismatch occurs
+ * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
+ * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation.
+ * @returns Promise<boolean> - Returns `true` if all proofs are successfully verified and validated, `false` otherwise.
+ * @throws {ProofNotVerifiedError} When signature validation or identifier mismatch occurs.
+ * @throws {ProofNotValidatedError} When no proofs are provided, when the configuration is missing, or when proof content does not match the expectations set in the config.
  *
  * @example
  * ```typescript
- * const isValid = await verifyProof(proof);
- * const areAllValid = await verifyProof([proof1, proof2, proof3]);
- * const isValidWithAI = await verifyProof(proof, true);
+ * // Validate a single proof against expected hash
+ * const isValid = await verifyProof(proof, { hashes: ['0xAbC...'] });
+ * 
+ * // Validate multiple proofs
+ * const areAllValid = await verifyProof([proof1, proof2], { 
+ *   hashes: ['0xAbC...', '0xF22..'],
+ * });
+ * 
+ * // Validate 1 required proofs, any number of multiple with same hash, and one optional
+ * const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
+ *   hashes: ['0xAbC...', { value: '0xF22..', multiple: true }, { value: '0xE33..', required: false }],
+ * });
  * ```
  */
 export async function verifyProof(
-	proofOrProofs: Proof | Proof[],
-	allowAiWitness = false
-) {
-	try {
-		await assertValidProof(proofOrProofs, allowAiWitness)
-		return true
-	} catch (error) {
-		logger.error('error in validating proof', error)
-		return false
-	}
-}
+    proofOrProofs: Proof | Proof[],
+    config: VerificationConfig
+): Promise<boolean> {
+    try {
+        const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
 
-export async function assertValidProof(
-	proofOrProofs: Proof | Proof[],
-	allowAiWitness = false
-) {
-	const attestors = await getAttestors()
-	proofOrProofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
-	for (const proof of proofOrProofs) {
-		const signers = recoverSignersOfSignedClaim({
-			claim: proof.claimData,
-			signatures: proof.signatures
-				.map(signature => ethers.getBytes(signature))
-		})
-		// ensure at least one signer is an attestor
-		if (
-			!attestors
-				.some(attestor => signers.includes(attestor.id.toLowerCase()))
-		) {
-			throw new ProofNotVerifiedError('Identifier mismatch')
-		}
-	}
+        if (proofs.length === 0) {
+            throw new ProofNotValidatedError('No proofs provided');
+        }
+
+        if (!config) {
+            throw new ProofNotValidatedError('Verification configuration is required for `verifyProof(proof, config)`');
+        }
+
+        const attestors = await getAttestors()
+        for (const proof of proofs) {
+            await assertVerifiedProof(proof, attestors)
+        }
+
+        await assertValidateProof(proofs, config);
+
+        return true;
+    } catch (error) {
+        logger.error('Error in validating proof:', error);
+        return false;
+    }
 }
 
 /**
@@ -159,7 +173,7 @@ export class ReclaimProofRequest {
     private appCallbackUrl?: string;
     private sessionId: string;
     private options?: ProofRequestOptions;
-    private context: Context = { contextAddress: '0x0', contextMessage: 'sample context' };
+    private context: Context = { contextAddress: '0x0', contextMessage: 'sample context', reclaimSessionId: '' };
     private claimCreationType?: ClaimCreationType = ClaimCreationType.STANDALONE;
     private providerId: string;
     private resolvedProviderVersion?: string;
@@ -337,6 +351,7 @@ export class ReclaimProofRequest {
             const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion);
             proofRequestInstance.sessionId = data.sessionId
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
+            proofRequestInstance.context.reclaimSessionId = data.sessionId
 
             return proofRequestInstance
         } catch (error) {
@@ -699,7 +714,7 @@ export class ReclaimProofRequest {
                 { input: context, paramName: 'context', isString: false }
             ], 'setJsonContext');
             // ensure context is canonically json serializable
-            this.context = JSON.parse(canonicalStringify(context));
+            this.context = JSON.parse(canonicalStringify({ ...context, reclaimSessionId: this.sessionId }));
         } catch (error) {
             logger.info("Error setting context", error)
             throw new SetContextError("Error setting context", error as Error)
@@ -731,7 +746,7 @@ export class ReclaimProofRequest {
                 { input: address, paramName: 'address', isString: true },
                 { input: message, paramName: 'message', isString: true }
             ], 'setContext');
-            this.context = { contextAddress: address, contextMessage: message };
+            this.context = { contextAddress: address, contextMessage: message, reclaimSessionId: this.sessionId };
         } catch (error) {
             logger.info("Error setting context", error)
             throw new SetContextError("Error setting context", error as Error)
@@ -1337,6 +1352,39 @@ export class ReclaimProofRequest {
     }
 
     /**
+     * Returns the provider id and exact version of the provider that was used in the verification session of this request. 
+     * 
+     * This can be provided as a config parameter to the `verifyProof` function to verify the proof.
+     * 
+     * See also:
+     * * `verifyProof()` - Verifies a proof against the expected provider configuration.
+     * * `getProviderHashRequirements()` - An alternative of this function to get the expected hashes for a provider version by providing providerId and exactProviderVersionString. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     */
+    public getProviderVersion(): ProviderVersionInfo {
+        // This should be exact version and not a version constraint/expression. This cannot be blank.
+        const exactProviderVersionString = this.resolvedProviderVersion ?? '';
+        return {
+            providerId: this.providerId,
+            providerVersion: exactProviderVersionString,
+        }
+    }
+
+    /**
+     * Fetches the provider config that was used for this session and returns the hash requirements
+     * 
+     * See also:
+     * * `verifyProof()` - Verifies a proof against the expected provider configuration.
+     * * `fetchProviderHashRequirementsBy()` - An alternative of this function to get the expected hashes for a provider version by providing providerId and exactProviderVersionString. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
+     *
+     * @returns A promise that resolves to a ProviderHashRequirementsConfig
+     */
+    getProviderHashRequirements(proofs: Proof[]): Promise<ProviderHashRequirementsConfig> {
+        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', proofs);
+    }
+
+    /**
      * Starts the proof request session and monitors for proof submission
      *
      * This method begins polling the session status to detect when
@@ -1418,7 +1466,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, this.options?.acceptAiProviders);
+                            const verified = await verifyProof(proofs, this.getProviderVersion());
                             if (!verified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError();

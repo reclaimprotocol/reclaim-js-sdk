@@ -1,4 +1,5 @@
 import type { Context, Proof, ProviderClaimData } from './interfaces';
+import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
@@ -6,7 +7,15 @@ export type ClaimID = ProviderClaimData['identifier'];
 export type ClaimInfo = Pick<ProviderClaimData, 'context' | 'provider' | 'parameters'>;
 
 export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'>
-	& ClaimInfo
+  & ClaimInfo
+
+export interface HttpProviderClaimParams {
+  body: string;
+  method: RequestSpec['method'];
+  responseMatches: ResponseMatchSpec[]
+  responseRedactions: ResponseRedactionSpec[]
+  url: string;
+}
 
 export type SignedClaim = {
   claim: CompleteClaimData;
@@ -242,6 +251,14 @@ export type TemplateData = {
   preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
 
+export type ProviderVersionConfig = {
+  major?: number;
+  minor?: number;
+  patch?: number;
+  prereleaseTag?: string;
+  prereleaseNumber?: number;
+}
+
 // Add the new StatusUrlResponse type
 export type StatusUrlResponse = {
   message: string;
@@ -249,10 +266,38 @@ export type StatusUrlResponse = {
     id: string;
     appId: string;
     httpProviderId: string[];
+    providerId: string;
+    providerVersionString: string;
     sessionId: string;
     proofs?: Proof[];
     statusV2: string;
     error?: { type: string; message: string };
   };
   providerId?: string;
+};
+
+export type ProviderConfigResponse = {
+  message: string;
+  providers?: ReclaimProviderConfig;
+  providerId?: string;
+  providerVersionString?: string;
+};
+
+export interface ReclaimProviderConfig {
+  loginUrl: string;
+  customInjection: string;
+  geoLocation: string;
+  injectionType: string;
+  disableRequestReplay: boolean;
+  verificationType: string;
+  requestData: InterceptorRequestSpec[];
+  allowedInjectedRequestData: InjectedRequestSpec[];
+}
+
+
+export type ProviderHashRequirementsResponse = {
+  message?: string;
+  hashRequirements?: ProviderHashRequirementsConfig;
+  providerId?: string;
+  providerVersionString?: string;
 };
