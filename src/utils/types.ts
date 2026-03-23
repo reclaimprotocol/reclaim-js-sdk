@@ -271,6 +271,7 @@ export type StatusUrlResponse = {
     sessionId: string;
     proofs?: Proof[];
     statusV2: string;
+    error?: { type: string; message: string };
   };
   providerId?: string;
 };

@@ -1450,7 +1450,8 @@ export class ReclaimProofRequest {
                     if (!this.lastFailureTime) {
                         this.lastFailureTime = currentTime;
                     } else if (currentTime - this.lastFailureTime >= this.FAILURE_TIMEOUT) {
-                        throw new ProviderFailedError('Proof generation failed - timeout reached');
+                        const errorMessage = statusUrlResponse.session.error?.message || 'Proof generation failed - timeout reached';
+                        throw new ProviderFailedError(errorMessage);
                     }
                     return; // Continue monitoring if under timeout
                 }
@@ -1483,7 +1484,8 @@ export class ReclaimProofRequest {
                     }
                 } else {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
-                        throw new ProofSubmissionFailedError();
+                        const errorMessage = statusUrlResponse.session.error?.message || 'Proof submission failed';
+                        throw new ProofSubmissionFailedError(errorMessage);
                     }
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMITTED ||
                         statusUrlResponse.session.statusV2 === SessionStatus.AI_PROOF_SUBMITTED) {
