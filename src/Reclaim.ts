@@ -251,8 +251,12 @@ export class ReclaimProofRequest {
 
         if (options?.envUrl) {
             setBackendBaseUrl(options.envUrl);
-        } else if (this.customSharePageUrl?.includes('eu.portal.reclaimprotocol.org')) {
-            setBackendBaseUrl('https://eu.api.reclaimprotocol.org');
+        } else if (this.customSharePageUrl) {
+            try {
+                if (new URL(this.customSharePageUrl).hostname === 'eu.portal.reclaimprotocol.org') {
+                    setBackendBaseUrl('https://eu.api.reclaimprotocol.org');
+                }
+            } catch { /* invalid URL handled by validateURL in init */ }
         }
 
         if (options.extensionID) {
