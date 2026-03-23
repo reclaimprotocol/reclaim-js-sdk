@@ -6,3 +6,12 @@ export function mockFetch(data: any) {
         }),
     );
 }
+
+export function mockFetchBy(cb: (fetchUrl: string) => any) {
+    return jest.fn().mockImplementation((fetchUrl: string) => {
+        return Promise.resolve({
+            ok: true,
+            json: () => cb(fetchUrl),
+        });
+    });
+}
