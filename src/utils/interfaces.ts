@@ -1,3 +1,12 @@
+export interface TeeAttestation {
+  workload_digest: string;
+  verifier_digest: string;
+  nonce: string;
+  snp_report: string;
+  vlek_cert: string;
+  timestamp: string;
+}
+
 // Proof-related interfaces
 export interface Proof {
   identifier: string;
@@ -7,6 +16,7 @@ export interface Proof {
   extractedParameterValues: any;
   publicData?: { [key: string]: string };
   taskId?: number;
+  teeAttestation?: TeeAttestation | string;
 }
 
 // Extension Interactions
@@ -43,6 +53,12 @@ export interface ProviderClaimData {
 export interface Context {
   contextAddress: string;
   contextMessage: string;
+  attestationNonce?: string;
+  attestationNonceData?: {
+    applicationId: string;
+    sessionId: string;
+    timestamp: string;
+  };
 }
 
 export interface Beacon {

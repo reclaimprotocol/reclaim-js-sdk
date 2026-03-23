@@ -65,38 +65,38 @@ const sdkVersion = require('../package.json').version;
  * ```
  */
 export async function verifyProof(
-	proofOrProofs: Proof | Proof[],
-	allowAiWitness = false
+    proofOrProofs: Proof | Proof[],
+    allowAiWitness = false
 ) {
-	try {
-		await assertValidProof(proofOrProofs, allowAiWitness)
-		return true
-	} catch (error) {
-		logger.error('error in validating proof', error)
-		return false
-	}
+    try {
+        await assertValidProof(proofOrProofs, allowAiWitness)
+        return true
+    } catch (error) {
+        logger.error('error in validating proof', error)
+        return false
+    }
 }
 
 export async function assertValidProof(
-	proofOrProofs: Proof | Proof[],
-	allowAiWitness = false
+    proofOrProofs: Proof | Proof[],
+    allowAiWitness = false
 ) {
-	const attestors = await getAttestors()
-	proofOrProofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
-	for (const proof of proofOrProofs) {
-		const signers = recoverSignersOfSignedClaim({
-			claim: proof.claimData,
-			signatures: proof.signatures
-				.map(signature => ethers.getBytes(signature))
-		})
-		// ensure at least one signer is an attestor
-		if (
-			!attestors
-				.some(attestor => signers.includes(attestor.id.toLowerCase()))
-		) {
-			throw new ProofNotVerifiedError('Identifier mismatch')
-		}
-	}
+    const attestors = await getAttestors()
+    proofOrProofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
+    for (const proof of proofOrProofs) {
+        const signers = recoverSignersOfSignedClaim({
+            claim: proof.claimData,
+            signatures: proof.signatures
+                .map(signature => ethers.getBytes(signature))
+        })
+        // ensure at least one signer is an attestor
+        if (
+            !attestors
+                .some(attestor => signers.includes(attestor.id.toLowerCase()))
+        ) {
+            throw new ProofNotVerifiedError('Identifier mismatch')
+        }
+    }
 }
 
 /**
@@ -337,6 +337,20 @@ export class ReclaimProofRequest {
             const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion);
             proofRequestInstance.sessionId = data.sessionId
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
+            if (options?.acceptTeeAttestation) {
+                const wallet = new ethers.Wallet(appSecret)
+                const nonceData = `${applicationId}:${data.sessionId}:${proofRequestInstance.timeStamp}`
+                const nonceMsg = ethers.getBytes(ethers.keccak256(new TextEncoder().encode(nonceData)))
+                const nonceSignature = await wallet.signMessage(nonceMsg)
+
+                proofRequestInstance.context.attestationNonce = nonceSignature
+                proofRequestInstance.context.attestationNonceData = {
+                    applicationId,
+                    sessionId: data.sessionId,
+                    timestamp: proofRequestInstance.timeStamp
+                }
+            }
+
 
             return proofRequestInstance
         } catch (error) {
