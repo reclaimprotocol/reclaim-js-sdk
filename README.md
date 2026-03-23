@@ -37,7 +37,7 @@ Install the Reclaim Protocol SDK and a QR code generator:
 npm install @reclaimprotocol/js-sdk react-qr-code
 ```
 
-**Current SDK Version**: 4.14.0
+**Current SDK Version**: 5.0.0
 
 ## Step 3: Set up your React component
 
@@ -99,7 +99,7 @@ function App() {
           setProofs(proofs);
         }
       },
-      onFailure: (error) => {
+      onError: (error) => {
         console.error("Verification failed", error);
       },
     });
@@ -181,7 +181,7 @@ async function handleCreateClaim() {
           setProofs(proofs);
         }
       },
-      onFailure: (error) => {
+      onError: (error) => {
         console.error("Verification failed", error);
       },
     });
@@ -289,7 +289,7 @@ Your Reclaim SDK demo should now be running. Click the "Create Claim" button to 
 
 4. **Verification**: The `onSuccess` is called when verification is successful, providing the proof data. When using a custom callback url, the proof is returned to the callback url and we get an empty array instead of a proof.
 
-5. **Handling Failures**: The `onFailure` is called if verification fails, allowing you to handle errors gracefully.
+5. **Handling Failures**: The `onError` is called if verification fails, allowing you to handle errors gracefully.
 
 ## Advanced Configuration
 
@@ -436,16 +436,18 @@ For more details about response format, check out [official documentation of Err
    });
    ```
 
-9. **Custom Share Page and App Clip URLs**:
-   You can customize the share page and app clip URLs for your app:
+9. **Custom Portal URL and App Clip URLs**:
+   You can customize the portal/share page and app clip URLs for your app:
 
 ```javascript
 const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
-  customSharePageUrl: "https://your-custom-domain.com/verify", // Custom share page URL
+  portalUrl: "https://your-custom-domain.com/verify", // Custom portal URL
   customAppClipUrl: "https://appclip.apple.com/id?p=your.custom.app.clip", // Custom iOS App Clip URL
   // ... other options
 });
 ```
+
+> **Note:** `portalUrl` is the preferred option. The previous `customSharePageUrl` is deprecated but still supported. If both are provided, `portalUrl` takes precedence.
 
 10. **Platform-Specific Flow Control**:
    The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
@@ -556,26 +558,30 @@ The SDK provides a `verifyProof` function to manually verify proofs. This is use
 import { verifyProof } from "@reclaimprotocol/js-sdk";
 
 // Verify a single proof
-const isValid = await verifyProof(proof);
-if (isValid) {
+const { isVerified, data } = await verifyProof(proof);
+if (isVerified) {
   console.log("Proof is valid");
+  console.log("Context address:", data[0].contextAddress);
+  console.log("Context message:", data[0].contextMessage);
+  console.log("Extracted params:", data[0].extractedParameters);
 } else {
   console.log("Proof is invalid");
 }
 
 // Verify multiple proofs
-const areValid = await verifyProof([proof1, proof2, proof3]);
-if (areValid) {
-  console.log("All proofs are valid");
-} else {
-  console.log("One or more proofs are invalid");
+const result = await verifyProof([proof1, proof2, proof3]);
+if (result.isVerified) {
+  result.data.forEach((d, i) => {
+    console.log(`Proof ${i + 1} params:`, d.extractedParameters);
+  });
 }
 ```
 
 The `verifyProof` function:
 
 - Accepts either a single proof or an array of proofs
-- Returns a boolean indicating if the proof(s) are valid
+- Returns `{ isVerified: boolean, data: Array }` where `data` contains extracted context and parameters from each proof
+- On failure, `isVerified` is `false` and `data` is an empty array
 - Verifies signatures, witness integrity, and claim data
 - Handles both standalone and blockchain-based proofs
 

@@ -43,6 +43,8 @@ export interface ProviderClaimData {
 export interface Context {
   contextAddress: string;
   contextMessage: string;
+  extractedParameters?: Record<string, string>;
+  providerHash?: string;
 }
 
 export interface Beacon {

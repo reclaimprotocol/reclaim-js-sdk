@@ -97,6 +97,66 @@ describe('Request', () => {
         expect(actualOutput).toEqual(expectedOutput);
     });
 
+    it('should serialize portalUrl as customSharePageUrl', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '456',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example',
+            {
+                portalUrl: 'https://portal.reclaimprotocol.org',
+            });
+
+        const output = JSON.parse(request.toJsonString());
+        expect(output.options.customSharePageUrl).toEqual('https://portal.reclaimprotocol.org');
+        expect(output.options.portalUrl).toEqual('https://portal.reclaimprotocol.org');
+    });
+
+    it('should round-trip portalUrl through fromJsonString', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '789',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example',
+            {
+                portalUrl: 'https://custom-portal.example.com',
+            });
+
+        const json = request.toJsonString();
+        const restored = await ReclaimProofRequest.fromJsonString(json);
+        const restoredJson = JSON.parse(restored.toJsonString());
+
+        expect(restoredJson.options.customSharePageUrl).toEqual('https://custom-portal.example.com');
+        expect(restoredJson.options.portalUrl).toEqual('https://custom-portal.example.com');
+    });
+
+    it('portalUrl should take precedence over customSharePageUrl', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '101',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example',
+            {
+                customSharePageUrl: 'https://old.example.com',
+                portalUrl: 'https://new.example.com',
+            });
+
+        const output = JSON.parse(request.toJsonString());
+        expect(output.options.customSharePageUrl).toEqual('https://new.example.com');
+    });
+
     it('should create request from JSON correctly', async () => {
         const originalRequest = {
             "applicationId": "0x9323eFec99973623932Db45438DCE4dEa9D9aE4c",

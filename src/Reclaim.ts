@@ -10,6 +10,7 @@ import {
     ReclaimFlowLaunchOptions,
     HttpFormEntry,
     HttpRedirectionMethod,
+    type VerifyProofResult
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -49,31 +50,54 @@ const logger = loggerModule.logger
 const sdkVersion = require('../package.json').version;
 
 /**
- * Verifies one or more Reclaim proofs by validating signatures and witness information
+ * Verifies one or more Reclaim proofs by validating signatures and witness information.
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to verify
  * @param allowAiWitness - Optional flag to allow AI witness verification. Defaults to false
- * @returns Promise<boolean> - Returns true if all proofs are valid, false otherwise
- * @throws {SignatureNotFoundError} When proof has no signatures
- * @throws {ProofNotVerifiedError} When identifier mismatch occurs
+ * @returns Verification result with `isVerified` and, on success, extracted `data` from each proof
  *
  * @example
  * ```typescript
- * const isValid = await verifyProof(proof);
- * const areAllValid = await verifyProof([proof1, proof2, proof3]);
- * const isValidWithAI = await verifyProof(proof, true);
+ * const { isVerified, data } = await verifyProof(proof);
+ * if (isVerified) {
+ *   console.log(data[0].extractedParameters);
+ * }
  * ```
  */
 export async function verifyProof(
 	proofOrProofs: Proof | Proof[],
 	allowAiWitness = false
-) {
+): Promise<VerifyProofResult> {
+	const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
 	try {
-		await assertValidProof(proofOrProofs, allowAiWitness)
-		return true
+		await assertValidProof(proofs, allowAiWitness)
+		return {
+			isVerified: true,
+			data: proofs.map(extractProofData),
+		}
 	} catch (error) {
 		logger.error('error in validating proof', error)
-		return false
+		return {
+			isVerified: false,
+			data: [],
+		}
+	}
+}
+
+function extractProofData(proof: Proof): VerifyProofResult['data'][number] {
+	try {
+		const context: Context = JSON.parse(proof.claimData.context)
+		return {
+			contextAddress: context.contextAddress ?? '',
+			contextMessage: context.contextMessage ?? '',
+			extractedParameters: context.extractedParameters ?? {},
+		}
+	} catch {
+		return {
+			contextAddress: '',
+			contextMessage: '',
+			extractedParameters: {},
+		}
 	}
 }
 
@@ -82,8 +106,8 @@ export async function assertValidProof(
 	allowAiWitness = false
 ) {
 	const attestors = await getAttestors()
-	proofOrProofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
-	for (const proof of proofOrProofs) {
+	const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs]
+	for (const proof of proofs) {
 		const signers = recoverSignersOfSignedClaim({
 			claim: proof.claimData,
 			signatures: proof.signatures
@@ -207,18 +231,20 @@ export class ReclaimProofRequest {
             options.useAppClip = true;
         }
 
+        // portalUrl is an alias for customSharePageUrl (portalUrl takes precedence)
+        this.customSharePageUrl = options.portalUrl ?? options.customSharePageUrl;
+        if (this.customSharePageUrl) {
+            options.customSharePageUrl = this.customSharePageUrl;
+        }
+
         if (options?.envUrl) {
             setBackendBaseUrl(options.envUrl);
-        } else if (options?.customSharePageUrl?.includes('eu.portal.reclaimprotocol.org')) {
+        } else if (this.customSharePageUrl?.includes('eu.portal.reclaimprotocol.org')) {
             setBackendBaseUrl('https://eu.api.reclaimprotocol.org');
         }
 
         if (options.extensionID) {
             this.extensionID = options.extensionID;
-        }
-
-        if (options?.customSharePageUrl) {
-            this.customSharePageUrl = options.customSharePageUrl;
         }
 
         if (options?.customAppClipUrl) {
@@ -232,22 +258,31 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Initializes a new Reclaim proof request instance with automatic signature generation and session creation
+     * Initializes a new Reclaim proof request instance with automatic signature generation and session creation.
+     *
      *
      * @param applicationId - Your Reclaim application ID
      * @param appSecret - Your application secret key for signing requests
      * @param providerId - The ID of the provider to use for proof generation
      * @param options - Optional configuration options for the proof request
-     * @returns Promise<ReclaimProofRequest> - A fully initialized proof request instance
+     * @returns A fully initialized proof request instance
      * @throws {InitError} When initialization fails due to invalid parameters or session creation errors
      *
      * @example
      * ```typescript
+     * // useAppClip defaults to true
+     * const proofRequest = await ReclaimProofRequest.init(
+     *   'your-app-id',
+     *   'your-app-secret',
+     *   'provider-id'
+     * );
+     *
+     * // Custom portal URL via portalUrl alias
      * const proofRequest = await ReclaimProofRequest.init(
      *   'your-app-id',
      *   'your-app-secret',
      *   'provider-id',
-     *   { log: true, acceptAiProviders: true }
+     *   { portalUrl: 'https://custom-portal.example.com', log: true }
      * );
      * ```
      */
@@ -299,6 +334,11 @@ export class ReclaimProofRequest {
                 if (options.envUrl) {
                     validateFunctionParams([
                         { paramName: 'envUrl', input: options.envUrl, isString: true }
+                    ], 'the constructor')
+                }
+                if (options.portalUrl) {
+                    validateFunctionParams([
+                        { paramName: 'portalUrl', input: options.portalUrl, isString: true }
                     ], 'the constructor')
                 }
                 if (options.customSharePageUrl) {
@@ -1418,7 +1458,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, this.options?.acceptAiProviders);
+                            const { isVerified: verified } = await verifyProof(proofs, this.options?.acceptAiProviders);
                             if (!verified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError();

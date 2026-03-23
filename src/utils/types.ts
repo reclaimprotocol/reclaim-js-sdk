@@ -42,7 +42,14 @@ export type ProofRequestOptions = {
   useBrowserExtension?: boolean;
   extensionID?: string;
   providerVersion?: string;
+  /**
+   * @deprecated Use `portalUrl` instead.
+   */
   customSharePageUrl?: string;
+  /**
+   * URL of the portal/share page for the verification flow.
+   */
+  portalUrl?: string;
   customAppClipUrl?: string;
   launchOptions?: ReclaimFlowLaunchOptions;
   /**
@@ -241,6 +248,16 @@ export type TemplateData = {
   metadata?: Record<string, string>;
   preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
+
+// Verify proof result type
+export type VerifyProofResult = {
+  isVerified: boolean;
+  data: {
+    contextAddress: string;
+    contextMessage: string;
+    extractedParameters: Record<string, string>;
+  }[];
+}
 
 // Add the new StatusUrlResponse type
 export type StatusUrlResponse = {
