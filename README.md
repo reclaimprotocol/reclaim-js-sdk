@@ -561,9 +561,8 @@ import { verifyProof } from "@reclaimprotocol/js-sdk";
 const { isVerified, data } = await verifyProof(proof);
 if (isVerified) {
   console.log("Proof is valid");
-  console.log("Context address:", data[0].contextAddress);
-  console.log("Context message:", data[0].contextMessage);
-  console.log("Extracted params:", data[0].extractedParameters);
+  console.log("Context:", data[0].context);
+  console.log("Extracted parameters:", data[0].extractedParameters);
 } else {
   console.log("Proof is invalid");
 }
@@ -572,6 +571,7 @@ if (isVerified) {
 const result = await verifyProof([proof1, proof2, proof3]);
 if (result.isVerified) {
   result.data.forEach((d, i) => {
+    console.log(`Proof ${i + 1} context:`, d.context);
     console.log(`Proof ${i + 1} params:`, d.extractedParameters);
   });
 }
@@ -580,7 +580,7 @@ if (result.isVerified) {
 The `verifyProof` function:
 
 - Accepts either a single proof or an array of proofs
-- Returns `{ isVerified: boolean, data: Array }` where `data` contains extracted context and parameters from each proof
+- Returns `{ isVerified: boolean, data: Array }` where each entry has `context` (full context object without extractedParameters) and `extractedParameters`
 - On failure, `isVerified` is `false` and `data` is an empty array
 - Verifies signatures, witness integrity, and claim data
 - Handles both standalone and blockchain-based proofs

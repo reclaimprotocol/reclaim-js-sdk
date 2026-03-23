@@ -253,8 +253,7 @@ export type TemplateData = {
 export type VerifyProofResult = {
   isVerified: boolean;
   data: {
-    contextAddress: string;
-    contextMessage: string;
+    context: Record<string, unknown>;
     extractedParameters: Record<string, string>;
   }[];
 }

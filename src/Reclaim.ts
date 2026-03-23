@@ -60,6 +60,7 @@ const sdkVersion = require('../package.json').version;
  * ```typescript
  * const { isVerified, data } = await verifyProof(proof);
  * if (isVerified) {
+ *   console.log(data[0].context);
  *   console.log(data[0].extractedParameters);
  * }
  * ```
@@ -86,16 +87,15 @@ export async function verifyProof(
 
 function extractProofData(proof: Proof): VerifyProofResult['data'][number] {
 	try {
-		const context: Context = JSON.parse(proof.claimData.context)
+		const context = JSON.parse(proof.claimData.context)
+		const { extractedParameters, ...rest } = context
 		return {
-			contextAddress: context.contextAddress ?? '',
-			contextMessage: context.contextMessage ?? '',
-			extractedParameters: context.extractedParameters ?? {},
+			context: rest,
+			extractedParameters: extractedParameters ?? {},
 		}
 	} catch {
 		return {
-			contextAddress: '',
-			contextMessage: '',
+			context: {},
 			extractedParameters: {},
 		}
 	}

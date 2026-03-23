@@ -192,14 +192,15 @@ describe('Request', () => {
 
         expect(result.isVerified).toEqual(true);
         expect(result.data).toHaveLength(1);
-        expect(result.data[0]).toEqual({
-            contextAddress: '0x0',
-            contextMessage: 'sample context',
-            extractedParameters: {
-                DYNAMIC_GEO: 'IN',
-                username: 'mushaheedsyed',
-            },
+        expect(result.data[0].context.contextAddress).toEqual('0x0');
+        expect(result.data[0].context.contextMessage).toEqual('sample context');
+        expect(result.data[0].context.providerHash).toBeDefined();
+        expect(result.data[0].extractedParameters).toEqual({
+            DYNAMIC_GEO: 'IN',
+            username: 'mushaheedsyed',
         });
+        // extractedParameters should not be in context
+        expect(result.data[0].context.extractedParameters).toBeUndefined();
     });
 
     it('should return empty data on failed verification', async () => {
@@ -218,7 +219,7 @@ describe('Request', () => {
         expect(result.data).toEqual([]);
     });
 
-    it('should return empty strings when context has no contextAddress or contextMessage', async () => {
+    it('should extract context fields from valid proof', async () => {
         globalThis.fetch = mockFetch(mockAttestors);
 
         // modifying context invalidates the signature, so isVerified will be false
@@ -226,10 +227,10 @@ describe('Request', () => {
         // that happens to have minimal context fields
         const result = await verifyProof(validProof);
 
-        // the valid proof has contextAddress and contextMessage set
+        // the valid proof has contextAddress and contextMessage in context
         expect(result.isVerified).toEqual(true);
-        expect(result.data[0].contextAddress).toEqual('0x0');
-        expect(result.data[0].contextMessage).toEqual('sample context');
+        expect(result.data[0].context.contextAddress).toEqual('0x0');
+        expect(result.data[0].context.contextMessage).toEqual('sample context');
         expect(result.data[0].extractedParameters).toEqual({
             DYNAMIC_GEO: 'IN',
             username: 'mushaheedsyed',
