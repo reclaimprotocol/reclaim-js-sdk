@@ -112,6 +112,18 @@ export type ReclaimFlowLaunchOptions = {
    * once fully released. See: https://blog.reclaimprotocol.org/posts/moving-beyond-google-play-instant
    */
   canUseDeferredDeepLinksFlow?: boolean;
+  /**
+   * Verification mode for the flow.
+   *
+   * - `'portal'`: Opens the portal URL in the browser (remote browser verification).
+   * - `'app'`: Native app flow via the share page. If `useAppClip` is `true`, uses App Clip on iOS.
+   *
+   * Can be set at call time via `triggerReclaimFlow({ verificationMode })` or `getRequestUrl({ verificationMode })`,
+   * or at init time via `launchOptions: { verificationMode }`.
+   *
+   * @default 'portal'
+   */
+  verificationMode?: 'app' | 'portal';
 }
 
 // Modal customization options

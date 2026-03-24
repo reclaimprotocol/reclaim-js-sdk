@@ -193,17 +193,43 @@ async function handleCreateClaim() {
 
 ### How triggerReclaimFlow() Works
 
-The `triggerReclaimFlow()` method automatically detects the user's environment and chooses the optimal verification method:
+The `triggerReclaimFlow()` method supports two verification modes via `verificationMode`:
+
+- **`'portal'` (default)**: Opens the portal URL for remote browser verification on all platforms.
+- **`'app'`**: Native app flow via the share page. Uses App Clip on iOS if `useAppClip` is `true`.
+
+```javascript
+// Portal flow (default)
+await reclaimProofRequest.triggerReclaimFlow();
+
+// Native app flow
+await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+```
 
 #### On Desktop Browsers:
 
-1. **Browser Extension First**: If the Reclaim browser extension is installed, it will use the extension for a seamless in-browser verification experience.
-2. **QR Code Fallback**: If the extension is not available, it automatically displays a QR code modal for mobile scanning.
+1. **Browser Extension First**: If the Reclaim browser extension is installed, it will use the extension regardless of verification mode.
+2. **Portal mode** (no extension): Opens the portal in a new tab.
+3. **App mode** (no extension): Shows QR code modal with share page URL.
 
-#### On Mobile Devices:
+#### On Mobile Devices (portal mode):
 
-1. **iOS Devices**: Automatically redirects to the Reclaim App Clip for native iOS verification.
-2. **Android Devices**: Automatically redirects to the Reclaim Instant App for native Android verification.
+Opens the portal in a new tab.
+
+#### On Mobile Devices (app mode):
+
+1. **All platforms**: Redirects to the share page.
+2. **iOS with `useAppClip: true`**: Redirects to the Reclaim App Clip instead.
+
+The same `verificationMode` option works with `getRequestUrl()`:
+
+```javascript
+// Portal URL (default)
+const url = await reclaimProofRequest.getRequestUrl();
+
+// Native app URL
+const url = await reclaimProofRequest.getRequestUrl({ verificationMode: 'app' });
+```
 
 ### Browser Extension Support
 
@@ -450,16 +476,16 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 > **Note:** `portalUrl` defaults to `https://portal.reclaimprotocol.org` and `useAppClip` defaults to `false` when no options are provided. `portalUrl` is the preferred option. The previous `customSharePageUrl` is deprecated but still supported. If both are provided, `portalUrl` takes precedence.
 
 10. **Platform-Specific Flow Control**:
-   The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
+   Both `triggerReclaimFlow()` and `getRequestUrl()` support `verificationMode`:
 
    ```javascript
-   // Traditional approach with manual QR code handling
-   const requestUrl = await reclaimProofRequest.getRequestUrl();
-   // Display your own QR code implementation
-
-   // Or use the new streamlined approach
+   // Portal flow (default) — remote browser verification
    await reclaimProofRequest.triggerReclaimFlow();
-   // Automatically handles platform detection and optimal user experience
+   const portalUrl = await reclaimProofRequest.getRequestUrl();
+
+   // Native app flow
+   await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+   const appUrl = await reclaimProofRequest.getRequestUrl({ verificationMode: 'app' });
    ```
 
 11. **Exporting and Importing SDK Configuration**:

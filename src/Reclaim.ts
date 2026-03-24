@@ -958,13 +958,12 @@ export class ReclaimProofRequest {
     }
 
     private buildSharePageUrl(template: string): string {
-        const baseUrl = 'https://share.reclaimprotocol.org/verify';
+        return `https://share.reclaimprotocol.org/verify/?template=${template}`;
+    }
 
-        if (this.customSharePageUrl) {
-            return `${this.customSharePageUrl}/?template=${template}`;
-        }
-
-        return `${baseUrl}/?template=${template}`;
+    private buildPortalUrl(template: string): string {
+        const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+        return `${portalUrl}/?template=${template}`;
     }
 
     /**
@@ -1071,13 +1070,15 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Generates and returns the request URL for proof verification
+     * Generates and returns the request URL for proof verification.
      *
-     * This URL can be shared with users to initiate the proof generation process.
-     * The URL format varies based on device type:
-     * - Mobile iOS: Returns App Clip URL (if useAppClip is enabled)
-     * - Mobile Android: Returns Instant App URL (if useAppClip is enabled)
-     * - Desktop/Other: Returns standard verification URL
+     * Defaults to portal mode. Pass `{ verificationMode: 'app' }` for native app flow URLs.
+     *
+     * - Portal mode (default): returns portal URL on all platforms
+     * - App mode: returns share page URL on all platforms
+     * - App mode + `useAppClip: true` on iOS: returns App Clip URL instead
+     *
+     * Falls back to `launchOptions` set at init time if not passed at call time.
      *
      * @param launchOptions - Optional launch configuration to override default behavior
      * @returns Promise<string> - The generated request URL
@@ -1085,12 +1086,16 @@ export class ReclaimProofRequest {
      *
      * @example
      * ```typescript
-     * const requestUrl = await proofRequest.getRequestUrl();
-     * // Share this URL with users or display as QR code
+     * // Portal URL (default)
+     * const url = await proofRequest.getRequestUrl();
+     *
+     * // Native app flow URL
+     * const url = await proofRequest.getRequestUrl({ verificationMode: 'app' });
      * ```
      */
     async getRequestUrl(launchOptions?: ReclaimFlowLaunchOptions): Promise<string> {
         const options = launchOptions || this.options?.launchOptions || {};
+        const mode = options.verificationMode ?? 'portal';
 
         logger.info('Creating Request Url')
         if (!this.signature) {
@@ -1100,33 +1105,29 @@ export class ReclaimProofRequest {
         try {
             const templateData = this.getTemplateData()
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
-            const deviceType = getDeviceType();
-            if (this.options?.useAppClip && deviceType === DeviceType.MOBILE) {
+
+            if (mode === 'app') {
                 let template = encodeURIComponent(JSON.stringify(templateData));
                 template = replaceAll(template, '(', '%28');
                 template = replaceAll(template, ')', '%29');
 
-                // check if the app is running on iOS or Android
-                const isIos = getMobileDeviceType() === DeviceType.IOS;
-                if (!isIos) {
-                    let instantAppUrl = this.buildSharePageUrl(template);
-                    const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
-
-                    if (isDeferredDeeplinksFlowEnabled) {
-                        instantAppUrl = instantAppUrl.replace("/verifier", "/link");
-                    }
-                    logger.info('Instant App Url created successfully: ' + instantAppUrl);
-                    return instantAppUrl;
-                } else {
+                // App Clip only if useAppClip is true and iOS
+                if (this.options?.useAppClip && getDeviceType() === DeviceType.MOBILE && getMobileDeviceType() === DeviceType.IOS) {
                     const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
                     logger.info('App Clip Url created successfully: ' + appClipUrl);
                     return appClipUrl;
                 }
-            } else {
-                const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl)
-                logger.info('Request Url created successfully: ' + link);
-                return link;
+
+                // Share page for all other cases in app mode
+                const sharePageUrl = await createLinkWithTemplateData(templateData, 'https://share.reclaimprotocol.org/verify');
+                logger.info('Share page Url created successfully: ' + sharePageUrl);
+                return sharePageUrl;
             }
+
+            // Portal mode (default)
+            const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl)
+            logger.info('Request Url created successfully: ' + link);
+            return link;
         } catch (error) {
             logger.info('Error creating Request Url:', error)
             throw error
@@ -1134,13 +1135,16 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Triggers the appropriate Reclaim verification flow based on device type and configuration
+     * Triggers the appropriate Reclaim verification flow based on device type and configuration.
      *
-     * This method automatically detects the device type and initiates the optimal verification flow:
-     * - Desktop with browser extension: Triggers extension flow
-     * - Desktop without extension: Shows QR code modal
-     * - Mobile Android: Redirects to Instant App
-     * - Mobile iOS: Redirects to App Clip
+     * Defaults to portal mode (remote browser verification). Pass `{ verificationMode: 'app' }`
+     * for native app flow via the share page.
+     *
+     * - Desktop: browser extension takes priority in both modes
+     * - Desktop portal mode (no extension): opens portal in new tab
+     * - Desktop app mode (no extension): shows QR code modal with share page URL
+     * - Mobile portal mode: opens portal in new tab
+     * - Mobile app mode: opens share page (or App Clip on iOS if `useAppClip` is `true`)
      *
      * @param launchOptions - Optional launch configuration to override default behavior
      * @returns Promise<void>
@@ -1148,12 +1152,26 @@ export class ReclaimProofRequest {
      *
      * @example
      * ```typescript
+     * // Portal flow (default)
      * await proofRequest.triggerReclaimFlow();
-     * // The appropriate verification method will be triggered automatically
+     *
+     * // Native app flow
+     * await proofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+     *
+     * // App Clip on iOS (requires useAppClip: true at init)
+     * const request = await ReclaimProofRequest.init(APP_ID, SECRET, PROVIDER, { useAppClip: true });
+     * await request.triggerReclaimFlow({ verificationMode: 'app' });
+     *
+     * // Can also set verificationMode at init time via launchOptions
+     * const request = await ReclaimProofRequest.init(APP_ID, SECRET, PROVIDER, {
+     *   launchOptions: { verificationMode: 'app' }
+     * });
+     * await request.triggerReclaimFlow(); // uses 'app' mode from init
      * ```
      */
     async triggerReclaimFlow(launchOptions?: ReclaimFlowLaunchOptions): Promise<void> {
         const options = launchOptions || this.options?.launchOptions || {};
+        const mode = options.verificationMode ?? 'portal';
 
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
@@ -1164,36 +1182,48 @@ export class ReclaimProofRequest {
 
             this.templateData = templateData;
 
-            logger.info('Triggering Reclaim flow');
+            logger.info(`Triggering Reclaim flow (mode: ${mode})`);
 
-            // Get device type
             const deviceType = getDeviceType();
             updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
 
             if (deviceType === DeviceType.DESKTOP) {
+                // Extension has priority on desktop regardless of mode
                 const extensionAvailable = await this.isBrowserExtensionAvailable();
-                // Desktop flow
                 if (this.options?.useBrowserExtension && extensionAvailable) {
                     logger.info('Triggering browser extension flow');
                     this.triggerBrowserExtensionFlow();
                     return;
+                }
+
+                if (mode === 'portal') {
+                    // Portal mode: open in new tab
+                    const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+                    const link = await createLinkWithTemplateData(templateData, portalUrl);
+                    logger.info('Opening portal in new tab: ' + link);
+                    window.open(link, '_blank');
                 } else {
-                    // Show QR code popup modal
-                    logger.info('Browser extension not available, showing QR code modal');
-                    await this.showQRCodeModal();
+                    // App mode: QR code modal with share page URL
+                    logger.info('Showing QR code modal with share page URL');
+                    await this.showQRCodeModal('app');
                 }
             } else if (deviceType === DeviceType.MOBILE) {
-                // Mobile flow
-                const mobileDeviceType = getMobileDeviceType();
-
-                if (mobileDeviceType === DeviceType.ANDROID) {
-                    // Redirect to instant app URL
-                    logger.info('Redirecting to Android instant app');
-                    await this.redirectToInstantApp(options);
-                } else if (mobileDeviceType === DeviceType.IOS) {
-                    // Redirect to app clip URL
-                    logger.info('Redirecting to iOS app clip');
-                    this.redirectToAppClip();
+                if (mode === 'app') {
+                    // App Clip only if useAppClip is true and iOS
+                    if (this.options?.useAppClip && getMobileDeviceType() === DeviceType.IOS) {
+                        logger.info('Redirecting to iOS app clip');
+                        this.redirectToAppClip();
+                    } else {
+                        // Share page for Android and iOS without useAppClip
+                        logger.info('Redirecting to share page');
+                        await this.redirectToInstantApp(options);
+                    }
+                } else {
+                    // Portal mode on mobile: open portal URL in new tab
+                    const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+                    const link = await createLinkWithTemplateData(templateData, portalUrl);
+                    logger.info('Opening portal in new tab: ' + link);
+                    window.open(link, '_blank');
                 }
             }
         } catch (error) {
@@ -1264,9 +1294,10 @@ export class ReclaimProofRequest {
         logger.info('Browser extension flow triggered');
     }
 
-    private async showQRCodeModal(): Promise<void> {
+    private async showQRCodeModal(mode: 'portal' | 'app' = 'portal'): Promise<void> {
         try {
-            const requestUrl = await createLinkWithTemplateData(this.templateData, this.customSharePageUrl);
+            const url = mode === 'app' ? 'https://share.reclaimprotocol.org/verify' : this.customSharePageUrl;
+            const requestUrl = await createLinkWithTemplateData(this.templateData, url);
             this.modal = new QRCodeModal(this.modalOptions);
             await this.modal.show(requestUrl);
         } catch (error) {

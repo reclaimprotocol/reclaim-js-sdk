@@ -213,4 +213,70 @@ describe('Request', () => {
             expect(output.options.customSharePageUrl).toEqual('https://new.example.com');
         });
     });
+
+    describe('verificationMode', () => {
+        beforeEach(() => {
+            globalThis.fetch = mockFetch({
+                sessionId: '789',
+                resolvedProviderVersion: '1.0.0'
+            });
+        });
+
+        it('should default verificationMode to portal in launchOptions', async () => {
+            const request = await ReclaimProofRequest.init(
+                testAppId,
+                testAppSecret,
+                'example'
+            );
+
+            const output = JSON.parse(request.toJsonString());
+            // launchOptions not set — verificationMode resolved at call time, not in options
+            expect(output.options.launchOptions).toBeUndefined();
+        });
+
+        it('should serialize verificationMode in launchOptions', async () => {
+            const request = await ReclaimProofRequest.init(
+                testAppId,
+                testAppSecret,
+                'example',
+                {
+                    launchOptions: { verificationMode: 'app' }
+                }
+            );
+
+            const output = JSON.parse(request.toJsonString());
+            expect(output.options.launchOptions.verificationMode).toEqual('app');
+        });
+
+        it('should round-trip verificationMode through fromJsonString', async () => {
+            const request = await ReclaimProofRequest.init(
+                testAppId,
+                testAppSecret,
+                'example',
+                {
+                    launchOptions: { verificationMode: 'app' }
+                }
+            );
+
+            const restored = await ReclaimProofRequest.fromJsonString(request.toJsonString());
+            const output = JSON.parse(restored.toJsonString());
+            expect(output.options.launchOptions.verificationMode).toEqual('app');
+        });
+
+        it('should preserve useAppClip alongside verificationMode', async () => {
+            const request = await ReclaimProofRequest.init(
+                testAppId,
+                testAppSecret,
+                'example',
+                {
+                    useAppClip: true,
+                    launchOptions: { verificationMode: 'app' }
+                }
+            );
+
+            const output = JSON.parse(request.toJsonString());
+            expect(output.options.useAppClip).toEqual(true);
+            expect(output.options.launchOptions.verificationMode).toEqual('app');
+        });
+    });
 });
