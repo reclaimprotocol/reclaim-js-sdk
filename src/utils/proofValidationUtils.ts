@@ -59,39 +59,61 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
         throw new ProofNotValidatedError('No proof hash was provided for validation');
     }
 
-    const unvalidatedProofHashByIndex = new Map<number, string>();
+    const unvalidatedProofHashByIndex = new Map<number, string[]>();
 
     for (let i = 0; i < proofs.length; i++) {
         const proof = proofs[i];
         const claimParams = getHttpProviderClaimParamsFromProof(proof);
-        const computedHashOfProof = hashProofClaimParams(claimParams).toLowerCase().trim();
-        unvalidatedProofHashByIndex.set(i, computedHashOfProof);
+        const computedHashesOfProof = hashProofClaimParams(claimParams);
+        const proofHashes = Array.isArray(computedHashesOfProof) 
+            ? computedHashesOfProof.map(h => h.toLowerCase().trim()) 
+            : [computedHashesOfProof.toLowerCase().trim()];
+        unvalidatedProofHashByIndex.set(i, proofHashes);
     }
 
     for (const hashRequirement of config.hashes) {
         let found = false;
-        const expectedHash = hashRequirement.value.toLowerCase().trim()
-        const isRequired = hashRequirement.required ?? HASH_REQUIRED_DEFAULT;
-        const canMatchMultiple = hashRequirement.multiple ?? HASH_MATCH_MULTIPLE_DEFAULT;
-        for (const [i, proofHash] of unvalidatedProofHashByIndex.entries()) {
-            if (proofHash === expectedHash) {
+        
+        // The expectedHashes array incorporates multiple valid permutations when optional rule sets are defined in config.
+        const expectedHashes = Array.isArray(hashRequirement.value) 
+            ? hashRequirement.value.map(h => h.toLowerCase().trim()) 
+            : [hashRequirement.value.toLowerCase().trim()];
+        
+        const isRequired = typeof hashRequirement !== 'string' ? (hashRequirement.required ?? true) : true;
+        let canMatchMultiple = typeof hashRequirement !== 'string' ? (hashRequirement.multiple ?? false) : false;
+
+        // Iterate through unvalidated proofs to assert that the generated deterministic hash 
+        // derived from the User's actual matched elements structurally matches ANY of the permissible configurations.
+        for (const [i, proofHashes] of unvalidatedProofHashByIndex.entries()) {
+            const intersection = expectedHashes.filter(eh => proofHashes.includes(eh));
+            
+            // If the Proof's claim exactly replicates one of the Valid Config permutations:
+            if (intersection.length > 0) {
+                // Remove the proof so it can't validate subsequent independent requirements
                 unvalidatedProofHashByIndex.delete(i);
                 if (!found) {
                     found = true;
                 } else if (!canMatchMultiple) {
-                    throw new ProofNotValidatedError(`Proof by hash '${expectedHash}' is not allowed to appear more than once`);
+                    // Preclude an attack surface where User passes duplicated valid proofs 
+                    // matching permutations of the SAME underlying strict configuration.
+                    const expectedHashStr = expectedHashes.length === 1 ? expectedHashes[0] : `[${expectedHashes.join(', ')}]`;
+                    throw new ProofNotValidatedError(`Proof by hash '${expectedHashStr}' is not allowed to appear more than once`);
                 }
             }
         }
+        
         if (!found && isRequired) {
-            throw new ProofNotValidatedError(`Proof by required hash '${expectedHash}' was not found`);
+            const expectedHashStr = expectedHashes.length === 1 ? expectedHashes[0] : `[${expectedHashes.join(', ')}]`;
+            throw new ProofNotValidatedError(`Proof by required hash '${expectedHashStr}' was not found`);
         }
     }
 
     if (unvalidatedProofHashByIndex.size > 0) {
         // if allowedExtraProofHashes was provided (not empty) and there are still unvalidated proofs, it means they are not allowed
         const contactSupport = 'Please contact Reclaim Protocol Support team or mail us at support@reclaimprotocol.org.';
-        throw new UnknownProofsNotValidatedError(`Extra ${unvalidatedProofHashByIndex.size} proof(s) by hashes ${[...unvalidatedProofHashByIndex.values()].join(', ')} was found but could not be validated and indicates a security risk. ${contactSupport}`);
+        const unvalidatedHashesStrArr = [...unvalidatedProofHashByIndex.values()]
+            .map(h => h.length === 1 ? h[0] : `[${h.join(', ')}]`);
+        throw new UnknownProofsNotValidatedError(`Extra ${unvalidatedProofHashByIndex.size} proof(s) by hashes ${unvalidatedHashesStrArr.join(', ')} was found but could not be validated and indicates a security risk. ${contactSupport}`);
     }
 }
 

@@ -1,9 +1,5 @@
-import { ReclaimProofRequest } from "../../Reclaim";
 import { InvalidRequestSpecError } from "../errors";
 import { generateSpecsFromRequestSpecTemplate, RequestSpec } from "../providerUtils";
-import { ClaimCreationType } from "../types";
-import { validateSignature } from "../validationUtils";
-import { mockFetch } from "./mock-fetch";
 
 describe('generateSpecsFromRequestSpecTemplate', () => {
     const baseSpec: RequestSpec = {
@@ -89,10 +85,10 @@ describe('generateSpecsFromRequestSpecTemplate', () => {
         const result = generateSpecsFromRequestSpecTemplate([complexSpec], { 'param1': ['alex'] });
 
         expect(result).toHaveLength(1);
-        
+
         // Value occurrences are all replaced
         expect(result[0].responseMatches[0].value).toBe('"name":"{{alex}}", "nickname":"{{alex}}"');
-        
+
         // Redaction occurrences are all replaced
         expect(result[0].responseRedactions[0].jsonPath).toBe("$.employees[?(@.name == {{alex}} && @.alias == {{alex}})]");
         expect(result[0].responseRedactions[0].regex).toBe('"{{alex}}":"(?<{{alex}}>.*)"');

@@ -195,9 +195,9 @@ export type ProviderHashRequirementsConfig = {
  */
 export type HashRequirement = {
     /**
-     * The hash value to match
+     * The hash value(s) to match. An array represents multiple valid hashes for optional configurations.
      */
-    value: string;
+    value: string | string[];
     /**
      * Whether the hash is required to be present in the proof.
      * Defaults to true
