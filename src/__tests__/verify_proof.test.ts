@@ -1,7 +1,10 @@
-import { verifyTeeAttestation } from './src/utils/verifyTee';
-import { Proof } from './src/utils/interfaces';
-import { verifyProof } from './dist';
+/**
+ * @jest-environment node
+ */
 
+import { verifyProof } from '../Reclaim';
+import { Proof } from '../utils/interfaces';
+import { verifyTeeAttestation } from '../utils/verifyTee';
 const proofData = [
     {
         "identifier": "0x89db983329e3b597d1775f7ccbd01ccede980c35d1d620a517957d89a8e9f3b2",
@@ -27,30 +30,15 @@ const proofData = [
     }
 ]
 
-async function test() {
-    try {
-        const proof = proofData[0] as unknown as Proof;
-        // parse teeAttestation because it's a JSON string in the provided data
+describe('verifyProof', () => {
+    it('verifies proof and TEE attestation end-to-end', async () => {
+        const proof = proofData[0] as Proof;
         if (typeof proof.teeAttestation === 'string') {
             proof.teeAttestation = JSON.parse(proof.teeAttestation);
         }
-
-        console.log('--- Starting TEE Verification ---');
         const expectedApplicationId = "0xd116D518eacea61C7af9760E5d8D1b720a0CE8D5";
-        // Now use the unified verification function
-        // We pass dangerouslyDisableContentValidation: true because this is a standalone test proof without a provider spec
-        const verificationStatus = await verifyProof(proof, { dangerouslyDisableContentValidation: true })
-        if (verificationStatus) {
-            console.log('✅ Verification PASSED!');
-        } else {
-            console.log('❌ Verification FAILED!');
-        }
-        await verifyTeeAttestation(proof, expectedApplicationId);
-        console.log('✅ TEE Verification PASSED!');
-    } catch (err) {
-        console.error('❌ TEE Verification FAILED');
-        console.error(err);
-    }
-}
-
-test();
+        const verificationStatus = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
+        expect(verificationStatus).toBe(true);
+        await expect(verifyTeeAttestation(proof, expectedApplicationId)).resolves.toBeUndefined();
+    });
+});

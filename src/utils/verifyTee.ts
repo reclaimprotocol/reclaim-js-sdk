@@ -3,7 +3,77 @@ import { Proof, TeeAttestation } from './interfaces';
 import { ethers } from 'ethers';
 import { AMD_CERTS } from './amdCerts';
 
-const crlCache: Record<string, { buffer: Buffer, fetchedAt: number }> = {};
+const crlCache: Record<string, { buffer: Uint8Array, fetchedAt: number }> = {};
+
+type BinaryLike = Uint8Array | ArrayBuffer | Buffer;
+
+function toUint8Array(input: BinaryLike): Uint8Array {
+    if (typeof Buffer !== 'undefined' && typeof Buffer.isBuffer === 'function' && Buffer.isBuffer(input)) {
+        return new Uint8Array(input);
+    }
+    if (input instanceof Uint8Array) {
+        return new Uint8Array(input);
+    }
+    if (typeof ArrayBuffer !== 'undefined' && input instanceof ArrayBuffer) {
+        return new Uint8Array(input);
+    }
+    throw new Error('Unsupported binary data type');
+}
+
+function uint8ArrayToBinaryString(bytes: Uint8Array): string {
+    let result = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        result += String.fromCharCode(...chunk);
+    }
+    return result;
+}
+
+function binaryStringToUint8Array(binary: string): Uint8Array {
+    const result = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        result[i] = binary.charCodeAt(i);
+    }
+    return result;
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+    if (typeof atob === 'function') {
+        const binary = atob(base64);
+        return binaryStringToUint8Array(binary);
+    }
+    if (typeof Buffer !== 'undefined') {
+        return new Uint8Array(Buffer.from(base64, 'base64'));
+    }
+    throw new Error('Base64 decoding is not supported in this environment');
+}
+
+function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
+    const view = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    let hex = '';
+    for (let i = 0; i < view.length; i++) {
+        hex += view[i].toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+function concatUint8Arrays(parts: Uint8Array[]): Uint8Array {
+    const totalLength = parts.reduce((sum, arr) => sum + arr.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const arr of parts) {
+        result.set(arr, offset);
+        offset += arr.length;
+    }
+    return result;
+}
+
+function reverseBytes(bytes: Uint8Array): Uint8Array {
+    const copy = Uint8Array.from(bytes);
+    copy.reverse();
+    return copy;
+}
 
 function normalizeSerial(s: string) {
     let cleaned = s.toLowerCase().replace(/[^a-f0-9]/g, '');
@@ -23,10 +93,13 @@ interface ParsedCert {
     signature: Uint8Array;
     sigAlgOid: string;
     spkiDer: Uint8Array;
+    notBefore?: Date;
+    notAfter?: Date;
 }
 
-function parseCert(buffer: Buffer): ParsedCert {
-    const asn1 = forge.asn1.fromDer(buffer.toString('binary'));
+function parseCert(buffer: BinaryLike): ParsedCert {
+    const bytes = toUint8Array(buffer);
+    const asn1 = forge.asn1.fromDer(uint8ArrayToBinaryString(bytes));
     const certSeq = asn1.value as any[];
     const tbsAsn1 = certSeq[0];
     const sigAlgAsn1 = certSeq[1];
@@ -39,27 +112,37 @@ function parseCert(buffer: Buffer): ParsedCert {
     const serialNumber = forge.util.bytesToHex(serialAsn1.value);
     idx++; // sigAlg
     idx++; // issuer
-    idx++; // validity
+    const validityAsn1 = tbsFields[idx++];
     idx++; // subject
     const spkiAsn1 = tbsFields[idx];
 
+    if (!validityAsn1 || !Array.isArray(validityAsn1.value) || validityAsn1.value.length < 2) {
+        throw new Error('Certificate validity window is malformed');
+    }
+    const notBeforeNode = validityAsn1.value[0];
+    const notAfterNode = validityAsn1.value[1];
+    const notBefore = notBeforeNode ? parseAsn1Time(notBeforeNode) : undefined;
+    const notAfter = notAfterNode ? parseAsn1Time(notAfterNode) : undefined;
+
     const sigRaw = typeof sigValueAsn1.value === 'string' ? sigValueAsn1.value : '';
-    const signature = Uint8Array.from(Buffer.from(sigRaw.substring(1), 'binary'));
+    const signature = binaryStringToUint8Array(sigRaw.substring(1));
     const sigAlgOid = forge.asn1.derToOid((sigAlgAsn1.value as any[])[0].value);
 
     return {
         serialNumber: normalizeSerial(serialNumber),
-        tbsDer: Uint8Array.from(Buffer.from(forge.asn1.toDer(tbsAsn1).getBytes(), 'binary')),
+        tbsDer: binaryStringToUint8Array(forge.asn1.toDer(tbsAsn1).getBytes()),
         signature,
         sigAlgOid,
-        spkiDer: Uint8Array.from(Buffer.from(forge.asn1.toDer(spkiAsn1).getBytes(), 'binary'))
+        spkiDer: binaryStringToUint8Array(forge.asn1.toDer(spkiAsn1).getBytes()),
+        notBefore,
+        notAfter
     };
 }
 
 async function verifySignature(publicKeyPem: string, data: Uint8Array, signature: Uint8Array, sigAlgOid: string) {
     const cryptoSubtle = getSubtleCrypto();
     const forgeCert = forge.pki.certificateFromPem(publicKeyPem);
-    const spkiBuf = Uint8Array.from(Buffer.from(forge.asn1.toDer(forge.pki.publicKeyToAsn1(forgeCert.publicKey)).getBytes(), 'binary'));
+    const spkiBuf = binaryStringToUint8Array(forge.asn1.toDer(forge.pki.publicKeyToAsn1(forgeCert.publicKey)).getBytes());
 
     let importParams: any;
     let verifyParams: any;
@@ -175,14 +258,14 @@ export async function verifyTeeAttestation(proof: Proof, expectedApplicationId?:
     // The user requested: "same verification we do in the popcorn verficcation script".
     // Let's implement the generic parts first: Hardware Signature and TCB.
 
-    const reportBuffer = Buffer.from(teeAttestation.snp_report, 'base64');
+    const reportBuffer = base64ToUint8Array(teeAttestation.snp_report);
     const report = parseAttestationReport(reportBuffer);
 
     if (report.isDebugEnabled) {
         throw new Error("POLICY CHECK FAILED: Debug mode is ALLOWED. Environment is compromised.");
     }
 
-    const certBuffer = Buffer.from(teeAttestation.vlek_cert, 'base64');
+    const certBuffer = base64ToUint8Array(teeAttestation.vlek_cert);
 
     await verifyAMDChain(certBuffer);
     verifyTCB(certBuffer, report);
@@ -190,22 +273,23 @@ export async function verifyTeeAttestation(proof: Proof, expectedApplicationId?:
     await verifyReportData(teeAttestation, proof.claimData.context, report);
 }
 
-function parseAttestationReport(buffer: Buffer) {
+function parseAttestationReport(buffer: Uint8Array) {
     if (buffer.length < 1000) {
         throw new Error(`Report buffer is too small: ${buffer.length} bytes`);
     }
 
-    const policy = buffer.readBigUInt64LE(0x08);
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const policy = view.getBigUint64(0x08, true);
     const isDebugEnabled = (policy & (BigInt(1) << BigInt(19))) !== BigInt(0);
 
     const reported_tcb = {
-        bootloader: buffer.readUInt8(0x38),
-        tee: buffer.readUInt8(0x39),
-        snp: buffer.readUInt8(0x3E),
-        microcode: buffer.readUInt8(0x3F)
+        bootloader: buffer[0x38],
+        tee: buffer[0x39],
+        snp: buffer[0x3E],
+        microcode: buffer[0x3F]
     };
 
-    const reportData = buffer.subarray(0x50, 0x90).toString('hex'); // 64 bytes
+    const reportData = arrayBufferToHex(buffer.subarray(0x50, 0x90)); // 64 bytes
     return { policy, isDebugEnabled, reported_tcb, reportData };
 }
 
@@ -245,8 +329,8 @@ function getExtValue(certAsn1: any, oidString: string) {
     return null;
 }
 
-function verifyTCB(vlekCertBuffer: Buffer, report: any) {
-    const certAsn1 = forge.asn1.fromDer(forge.util.createBuffer(vlekCertBuffer.toString('binary')));
+function verifyTCB(vlekCertBuffer: Uint8Array, report: any) {
+    const certAsn1 = forge.asn1.fromDer(forge.util.createBuffer(uint8ArrayToBinaryString(vlekCertBuffer)));
 
     const OID_BOOTLOADER = '1.3.6.1.4.1.3704.1.3.1';
     const OID_TEE = '1.3.6.1.4.1.3704.1.3.2';
@@ -300,9 +384,9 @@ function parseAsn1Time(node: any): Date {
     }
 }
 
-async function verifyCRL(crlBuf: Buffer, arkPem: string, vlekSerial: string): Promise<void> {
+async function verifyCRL(crlBuf: Uint8Array, arkPem: string, vlekSerial: string): Promise<void> {
     // Parse CRL: CertificateList SEQUENCE { TBSCertList, signatureAlgorithm, signatureValue }
-    const crlAsn1 = forge.asn1.fromDer(forge.util.createBuffer(crlBuf.toString('binary')));
+    const crlAsn1 = forge.asn1.fromDer(forge.util.createBuffer(uint8ArrayToBinaryString(crlBuf)));
 
     if (!Array.isArray(crlAsn1.value) || crlAsn1.value.length < 3) {
         throw new Error('CRL ASN.1 structure is invalid: expected SEQUENCE with TBSCertList, AlgorithmIdentifier, BIT STRING');
@@ -379,25 +463,25 @@ async function verifyCRL(crlBuf: Buffer, arkPem: string, vlekSerial: string): Pr
     }
 
     // 3. Signature Verification (AMD CRL uses RSA-PSS with SHA-384, signed by ARK)
-    const tbsDerBuf = Buffer.from(forge.asn1.toDer(tbsAsn1).getBytes(), 'binary');
+    const tbsDerBuf = binaryStringToUint8Array(forge.asn1.toDer(tbsAsn1).getBytes());
     // BIT STRING first byte = unused bits count, skip it
     const sigRaw = typeof sigBitsAsn1.value === 'string' ? sigBitsAsn1.value : '';
-    const sigBuf = Buffer.from(sigRaw.substring(1), 'binary');
+    const sigBuf = binaryStringToUint8Array(sigRaw.substring(1));
 
     const cryptoSubtle = getSubtleCrypto();
-    const spkiBuf = Buffer.from(
-        forge.asn1.toDer(forge.pki.publicKeyToAsn1(arkForgeCert.publicKey)).getBytes(), 'binary'
+    const spkiBuf = binaryStringToUint8Array(
+        forge.asn1.toDer(forge.pki.publicKeyToAsn1(arkForgeCert.publicKey)).getBytes()
     );
     const arkCryptoKey = await cryptoSubtle.importKey(
-        'spki', Uint8Array.from(spkiBuf),
+        'spki', spkiBuf,
         { name: 'RSA-PSS', hash: 'SHA-384' },
         false, ['verify']
     );
     const isValid = await cryptoSubtle.verify(
         { name: 'RSA-PSS', saltLength: 48 }, // SHA-384 salt length is 48
         arkCryptoKey,
-        Uint8Array.from(sigBuf),
-        Uint8Array.from(tbsDerBuf)
+        sigBuf,
+        tbsDerBuf
     );
     if (!isValid) {
         throw new Error('CRL signature is INVALID — the CRL may be tampered or forged');
@@ -418,11 +502,22 @@ async function verifyCRL(crlBuf: Buffer, arkPem: string, vlekSerial: string): Pr
     }
 }
 
-async function verifyAMDChain(vlekCertBuffer: Buffer) {
+function assertCertValidity(label: string, cert: ParsedCert) {
+    const now = Date.now();
+    if (cert.notBefore && now < cert.notBefore.getTime()) {
+        throw new Error(`${label} certificate is not yet valid (notBefore: ${cert.notBefore.toISOString()})`);
+    }
+    if (cert.notAfter && now > cert.notAfter.getTime()) {
+        throw new Error(`${label} certificate expired on ${cert.notAfter.toISOString()}`);
+    }
+}
+
+async function verifyAMDChain(vlekCertBuffer: Uint8Array) {
     const processors = ['Milan', 'Genoa'];
     let chainVerified = false;
 
     const vlek = parseCert(vlekCertBuffer);
+    assertCertValidity('VLEK', vlek);
 
     for (const processor of processors) {
         let matchedChain = false;
@@ -438,8 +533,12 @@ async function verifyAMDChain(vlekCertBuffer: Buffer) {
             const askCert = forge.pki.certificateFromPem(certs[0]);
             const arkCert = forge.pki.certificateFromPem(certs[1]);
 
-            const ask = parseCert(Buffer.from(forge.asn1.toDer(forge.pki.certificateToAsn1(askCert)).getBytes(), 'binary'));
-            const ark = parseCert(Buffer.from(forge.asn1.toDer(forge.pki.certificateToAsn1(arkCert)).getBytes(), 'binary'));
+            const askDer = forge.asn1.toDer(forge.pki.certificateToAsn1(askCert)).getBytes();
+            const arkDer = forge.asn1.toDer(forge.pki.certificateToAsn1(arkCert)).getBytes();
+            const ask = parseCert(binaryStringToUint8Array(askDer));
+            const ark = parseCert(binaryStringToUint8Array(arkDer));
+            assertCertValidity('ASK', ask);
+            assertCertValidity('ARK', ark);
 
             // ARK -> ASK -> VLEK
             try {
@@ -457,7 +556,7 @@ async function verifyAMDChain(vlekCertBuffer: Buffer) {
             matchedChain = true;
 
             // Check CRL
-            let crlBuf: Buffer | undefined;
+            let crlBuf: Uint8Array | undefined;
             const now = Date.now();
             if (crlCache[processor] && now - crlCache[processor].fetchedAt < 3600000) {
                 crlBuf = crlCache[processor].buffer;
@@ -469,7 +568,7 @@ async function verifyAMDChain(vlekCertBuffer: Buffer) {
                 clearTimeout(timeoutId);
 
                 if (!crlResp.ok) continue;
-                crlBuf = Buffer.from(await crlResp.arrayBuffer());
+                crlBuf = new Uint8Array(await crlResp.arrayBuffer());
                 crlCache[processor] = { buffer: crlBuf, fetchedAt: now };
             }
 
@@ -492,26 +591,15 @@ async function verifyAMDChain(vlekCertBuffer: Buffer) {
     }
 }
 
-function toDerInt(bigIntBEBuffer: Buffer) {
-    let i = 0;
-    while (i < bigIntBEBuffer.length && bigIntBEBuffer[i] === 0) i++;
-    let val = bigIntBEBuffer.subarray(i);
-    if (val.length === 0) return Buffer.from([0x02, 0x01, 0x00]) as any;
-    if (val[0] & 0x80) {
-        val = Buffer.concat([Buffer.from([0x00]), val] as unknown as Uint8Array[]) as any;
-    }
-    return Buffer.concat([Buffer.from([0x02, val.length]), val] as unknown as Uint8Array[]) as any;
-}
-
-async function verifyHardwareSignature(reportBytes: Buffer, certBytes: Buffer) {
+async function verifyHardwareSignature(reportBytes: Uint8Array, certBytes: Uint8Array) {
     const vlek = parseCert(certBytes);
 
     const sigOffset = 0x2A0;
     const rLE = reportBytes.subarray(sigOffset, sigOffset + 72);
     const sLE = reportBytes.subarray(sigOffset + 72, sigOffset + 144);
 
-    const rBE = Buffer.from(Uint8Array.from(rLE)).reverse();
-    const sBE = Buffer.from(Uint8Array.from(sLE)).reverse();
+    const rBE = reverseBytes(rLE);
+    const sBE = reverseBytes(sLE);
 
     const signedData = reportBytes.subarray(0, 0x2A0);
 
@@ -538,13 +626,13 @@ async function verifyHardwareSignature(reportBytes: Buffer, certBytes: Buffer) {
 
     const r48 = rBE.subarray(rBE.length - 48);
     const s48 = sBE.subarray(sBE.length - 48);
-    const rawSignature = Buffer.concat([r48, s48] as unknown as Uint8Array[]) as any;
+    const rawSignature = concatUint8Arrays([r48, s48]);
 
     const isValid = await cryptoSubtle.verify(
         { name: "ECDSA", hash: { name: "SHA-384" } },
         importedKey,
-        Uint8Array.from(rawSignature),
-        Uint8Array.from(signedData)
+        rawSignature,
+        signedData
     );
 
     if (!isValid) {
@@ -576,13 +664,12 @@ async function verifyReportData(teeAttestation: TeeAttestation, proofContext: st
     // 2. Hash COSIGN public key as canonical DER SPKI bytes (not PEM text)
     const importedCosignKey = await cryptoSubtle.importKey(
         'spki',
-        Uint8Array.from(Buffer.from(
+        base64ToUint8Array(
             COSIGN_PUBLIC_KEY
                 .replace('-----BEGIN PUBLIC KEY-----', '')
                 .replace('-----END PUBLIC KEY-----', '')
-                .replace(/\s+/g, ''),
-            'base64'
-        )),
+                .replace(/\s+/g, '')
+        ),
         { name: 'ECDSA', namedCurve: 'P-256' },
         true,
         ['verify']
@@ -617,7 +704,7 @@ async function verifyReportData(teeAttestation: TeeAttestation, proofContext: st
 
     // 6. Compute SHA-256 of the binary payload, duplicate to 64 bytes, compare to report_data
     const hashBuffer = await cryptoSubtle.digest('SHA-256', payload);
-    const hashHex = Buffer.from(hashBuffer).toString('hex');
+    const hashHex = arrayBufferToHex(hashBuffer);
     const expected64ByteHex = hashHex + hashHex;
 
     if (report.reportData !== expected64ByteHex) {
