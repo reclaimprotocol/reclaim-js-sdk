@@ -78,9 +78,17 @@ const sdkVersion = require('../package.json').version;
  *   hashes: ['0xAbC...', '0xF22..'],
  * });
  * 
- * // Validate 1 required proofs, any number of multiple with same hash, and one optional
+ * // Validate multiple proofs and handle optional matches or repeated proofs
  * const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
- *   hashes: ['0xAbC...', { value: '0xF22..', multiple: true }, { value: '0xE33..', required: false }],
+ *   hashes: [
+ *     // A string hash is perfectly equivalent to { value: '...', required: true, multiple: true }
+ *     '0xStrict1...', 
+ *     // An array 'value' means 1 proof can have any 1 matching hash from this list.
+ *     // 'multiple: true' (the default) means any proof matching this hash is allowed to appear multiple times in the list of proofs.
+ *     { value: ['0xOpt1..', '0xOpt2..'], multiple: true }, 
+ *     // 'required: false' means there can be 0 proofs matching this hash. Such proofs may be optionally present. (Defaults to true).
+ *     { value: '0xE33..', required: false }
+ *   ],
  * });
  * ```
  */

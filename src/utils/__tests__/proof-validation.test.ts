@@ -190,25 +190,9 @@ describe('Validation', () => {
         } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0' })).toEqual(false);
     });
 
-    /**
-     * Test: Combinatorial Intersection Validation
-     * Explanation: When validating proofs, the configuration requirement (`hashRequirement.value`) may be an array
-     * representing multiple potentially valid configurations (typically when `isOptional` rules exist). 
-     * Simultaneously, the proof itself might evaluate to an array of hashes.
-     * The `assertValidProofsByHash` logic must successfully validate if ANY generated proof hash 
-     * intersects with ANY hash specified in the requirements.
-     */
-    it('should validate proof successfully if proof hash array intersects with expected hash array', async () => {
-        const { assertValidProofsByHash } = require('../proofValidationUtils');
+    describe('Array Values and Multiple Proofs Configurations', () => {
+        const { assertValidateProof } = require('../proofValidationUtils');
 
-        // We mock a proof that, when parsed, gives parameters generating ['hashA', 'hashB']
-        // Actually, since we're calling assertValidProofsByHash directly, we can just mock the whole flow, 
-        // but `hashProofClaimParams` generates actual hashes based on content.
-        // Let's use `verifyProof` or `assertValidateProof` with a known structure, or mock `hashProofClaimParams`.
-        
-        // Let's just create a test that supplies multiple expected hashes directly inside `hashes` 
-        // and provides a real proof with just one of those hashes matching.
-        
         const realProof = {
             "identifier": "0x51c192777d45010e9318c0e1eb2fefc0bc5a444f59e3d3e5a11e9a3d1b98e10c",
             "claimData": {
@@ -231,22 +215,100 @@ describe('Validation', () => {
             ]
         };
 
-        const { assertValidateProof } = require('../proofValidationUtils');
+        it('should validate proof successfully if proof hash intersects with expected hash array', async () => {
+            const requirementsWithArray = {
+                hashes: [
+                    {
+                        // value is an array because of isOptional in original request spec
+                        value: [
+                            "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b", // actual matching hash
+                            "0xfakehash1234567890abcdef1234567890abcdef1234567890abcdef12345678"  // optional variation
+                        ]
+                    }
+                ]
+            };
+            await expect(assertValidateProof([realProof] as any, requirementsWithArray)).resolves.toBeUndefined();
+        });
 
-        // Provide an array of expected hashes. ONE of them is the actual hash: "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"
-        // The other is a fake hash representing an alternate combinatorial configuration.
-        const requirementsWithArray = {
-            hashes: [
-                {
-                    value: [
-                        "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b", // the actual matching hash
-                        "0xfakehash1234567890abcdef1234567890abcdef1234567890abcdef12345678"  // an optional variation
-                    ]
-                }
-            ]
-        };
+        it('should accept duplicated proofs of the same hash when multiple is true', async () => {
+            const requirementsMultipleTrue = {
+                hashes: [
+                    {
+                        value: "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b",
+                        multiple: true
+                    }
+                ]
+            };
+            // Pass the same proof twice, representing multiple proofs in the list mapping to this single hash requirement
+            await expect(assertValidateProof([realProof, realProof] as any, requirementsMultipleTrue)).resolves.toBeUndefined();
+        });
 
-        // If intersection logic works, this should silently pass and not throw ProofNotValidatedError
-        await expect(assertValidateProof([realProof] as any, requirementsWithArray)).resolves.toBeUndefined();
+        it('should reject duplicated proofs of the same hash when multiple is false', async () => {
+            const requirementsMultipleFalse = {
+                hashes: [
+                    {
+                        value: "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b",
+                        multiple: false
+                    }
+                ]
+            };
+            // Should fail because multiple is false but we passed two proofs that match this single hash requirement
+            await expect(assertValidateProof([realProof, realProof] as any, requirementsMultipleFalse)).rejects.toThrow(/not allowed to appear more than once/);
+        });
+        it('should accept duplicated proofs of the same hash when multiple option is omitted (defaults to true)', async () => {
+            const requirementsMultipleOmitted = {
+                hashes: [
+                    {
+                        value: "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"
+                        // multiple is omitted, defaults to true
+                    }
+                ]
+            };
+            // Should pass because multiple defaults to true
+            await expect(assertValidateProof([realProof, realProof] as any, requirementsMultipleOmitted)).resolves.toBeUndefined();
+        });
+
+        it('should reject validation when a proof is missing and required option is omitted (defaults to true)', async () => {
+            const requirementsRequiredOmitted = {
+                hashes: [
+                    {
+                        value: "0xMISSINGHASH1234567890abcdef1234567890abcdef1234567890abcdef123"
+                        // required is omitted, defaults to true
+                    }
+                ]
+            };
+            // Should fail because the expected hash doesn't match our real proof, and required defaults to true
+            await expect(assertValidateProof([realProof] as any, requirementsRequiredOmitted)).rejects.toThrow(/was not found/);
+        });
+        it('should reject validation when a required proof is missing (required is true)', async () => {
+            const requirementsRequiredTrue = {
+                hashes: [
+                    {
+                        value: "0xMISSINGHASH1234567890abcdef1234567890abcdef1234567890abcdef123",
+                        required: true
+                    }
+                ]
+            };
+            // Should fail because the expected hash doesn't match our real proof, and required is explicitly true
+            await expect(assertValidateProof([realProof] as any, requirementsRequiredTrue)).rejects.toThrow(/was not found/);
+        });
+
+        it('should accept validation when an optional proof is missing (required is false)', async () => {
+            const requirementsRequiredFalse = {
+                hashes: [
+                    {
+                        // The actual proof satisfying the validation
+                        value: "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5b"
+                    },
+                    {
+                        // The missing hash
+                        value: "0xMISSINGHASH1234567890abcdef1234567890abcdef1234567890abcdef123",
+                        required: false // Explicitly marked as optional
+                    }
+                ]
+            };
+            // Should pass because the missing hash is not required, and all remaining proofs match permissible configurations
+            await expect(assertValidateProof([realProof] as any, requirementsRequiredFalse)).resolves.toBeUndefined();
+        });
     });
 });

@@ -65,28 +65,28 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
         const proof = proofs[i];
         const claimParams = getHttpProviderClaimParamsFromProof(proof);
         const computedHashesOfProof = hashProofClaimParams(claimParams);
-        const proofHashes = Array.isArray(computedHashesOfProof) 
-            ? computedHashesOfProof.map(h => h.toLowerCase().trim()) 
+        const proofHashes = Array.isArray(computedHashesOfProof)
+            ? computedHashesOfProof.map(h => h.toLowerCase().trim())
             : [computedHashesOfProof.toLowerCase().trim()];
         unvalidatedProofHashByIndex.set(i, proofHashes);
     }
 
     for (const hashRequirement of config.hashes) {
         let found = false;
-        
+
         // The expectedHashes array incorporates multiple valid permutations when optional rule sets are defined in config.
-        const expectedHashes = Array.isArray(hashRequirement.value) 
-            ? hashRequirement.value.map(h => h.toLowerCase().trim()) 
+        const expectedHashes = Array.isArray(hashRequirement.value)
+            ? hashRequirement.value.map(h => h.toLowerCase().trim())
             : [hashRequirement.value.toLowerCase().trim()];
-        
-        const isRequired = typeof hashRequirement !== 'string' ? (hashRequirement.required ?? true) : true;
-        let canMatchMultiple = typeof hashRequirement !== 'string' ? (hashRequirement.multiple ?? false) : false;
+
+        const isRequired = typeof hashRequirement !== 'string' ? (hashRequirement.required ?? HASH_REQUIRED_DEFAULT) : HASH_REQUIRED_DEFAULT;
+        let canMatchMultiple = typeof hashRequirement !== 'string' ? (hashRequirement.multiple ?? HASH_MATCH_MULTIPLE_DEFAULT) : HASH_MATCH_MULTIPLE_DEFAULT;
 
         // Iterate through unvalidated proofs to assert that the generated deterministic hash 
         // derived from the User's actual matched elements structurally matches ANY of the permissible configurations.
         for (const [i, proofHashes] of unvalidatedProofHashByIndex.entries()) {
             const intersection = expectedHashes.filter(eh => proofHashes.includes(eh));
-            
+
             // If the Proof's claim exactly replicates one of the Valid Config permutations:
             if (intersection.length > 0) {
                 // Remove the proof so it can't validate subsequent independent requirements
@@ -101,7 +101,7 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
                 }
             }
         }
-        
+
         if (!found && isRequired) {
             const expectedHashStr = expectedHashes.length === 1 ? expectedHashes[0] : `[${expectedHashes.join(', ')}]`;
             throw new ProofNotValidatedError(`Proof by required hash '${expectedHashStr}' was not found`);
