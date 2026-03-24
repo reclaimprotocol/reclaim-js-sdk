@@ -39,6 +39,6 @@ describe('verifyProof', () => {
         const expectedApplicationId = "0xd116D518eacea61C7af9760E5d8D1b720a0CE8D5";
         const verificationStatus = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(verificationStatus).toBe(true);
-        await expect(verifyTeeAttestation(proof, expectedApplicationId)).resolves.toBeUndefined();
+        await expect(verifyTeeAttestation(proof, expectedApplicationId)).resolves.toBe(true);
     });
 });

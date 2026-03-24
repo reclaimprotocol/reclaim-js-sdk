@@ -2,8 +2,10 @@ import forge from 'node-forge';
 import { Proof, TeeAttestation } from './interfaces';
 import { ethers } from 'ethers';
 import { AMD_CERTS } from './amdCerts';
+import loggerModule from './logger';
 
 const crlCache: Record<string, { buffer: Uint8Array, fetchedAt: number }> = {};
+const logger = loggerModule.logger;
 
 type BinaryLike = Uint8Array | ArrayBuffer | Buffer;
 
@@ -177,15 +179,16 @@ h9WbP33IvB3eFww+C1hoW0fwdZPiq4FxBtKNiZuFpmYuFngW/nJteBu9kQ==
  * Validates the hardware TEE attestation included in the proof.
  * Throws an error if the attestation is invalid or compromised.
  */
-export async function verifyTeeAttestation(proof: Proof, expectedApplicationId?: string) {
-    let teeAttestation = proof.teeAttestation;
-    if (!teeAttestation) {
-        throw new Error("Missing teeAttestation in proof");
-    }
+export async function verifyTeeAttestation(proof: Proof, expectedApplicationId?: string): Promise<boolean> {
+    try {
+        let teeAttestation = proof.teeAttestation;
+        if (!teeAttestation) {
+            throw new Error("Missing teeAttestation in proof");
+        }
 
-    if (typeof teeAttestation === 'string') {
-        teeAttestation = JSON.parse(teeAttestation) as TeeAttestation;
-    }
+        if (typeof teeAttestation === 'string') {
+            teeAttestation = JSON.parse(teeAttestation) as TeeAttestation;
+        }
 
     // 1. Verify Nonce Binding
     let expectedNonceSignature: string | undefined;
@@ -258,19 +261,25 @@ export async function verifyTeeAttestation(proof: Proof, expectedApplicationId?:
     // The user requested: "same verification we do in the popcorn verficcation script".
     // Let's implement the generic parts first: Hardware Signature and TCB.
 
-    const reportBuffer = base64ToUint8Array(teeAttestation.snp_report);
-    const report = parseAttestationReport(reportBuffer);
+        const reportBuffer = base64ToUint8Array(teeAttestation.snp_report);
+        const report = parseAttestationReport(reportBuffer);
 
-    if (report.isDebugEnabled) {
-        throw new Error("POLICY CHECK FAILED: Debug mode is ALLOWED. Environment is compromised.");
+        if (report.isDebugEnabled) {
+            throw new Error("POLICY CHECK FAILED: Debug mode is ALLOWED. Environment is compromised.");
+        }
+
+        const certBuffer = base64ToUint8Array(teeAttestation.vlek_cert);
+
+        await verifyAMDChain(certBuffer);
+        verifyTCB(certBuffer, report);
+        await verifyHardwareSignature(reportBuffer, certBuffer);
+        await verifyReportData(teeAttestation, proof.claimData.context, report);
+
+        return true;
+    } catch (error) {
+        logger.error('TEE attestation verification failed:', error);
+        return false;
     }
-
-    const certBuffer = base64ToUint8Array(teeAttestation.vlek_cert);
-
-    await verifyAMDChain(certBuffer);
-    verifyTCB(certBuffer, report);
-    await verifyHardwareSignature(reportBuffer, certBuffer);
-    await verifyReportData(teeAttestation, proof.claimData.context, report);
 }
 
 function parseAttestationReport(buffer: Uint8Array) {
