@@ -16,7 +16,7 @@ export interface Proof {
   extractedParameterValues: any;
   publicData?: { [key: string]: string };
   taskId?: number;
-  teeAttestation?: TeeAttestation | string;
+  teeAttestation?: TeeAttestation;
 }
 
 // Extension Interactions
