@@ -1,7 +1,7 @@
 import { ReclaimProofRequest } from "../../Reclaim";
 import { ClaimCreationType } from "../types";
 import { validateSignature } from "../validationUtils";
-import { mockFetch } from "./mock-fetch";
+import { mockFetch, mockFetchBy } from "./mock-fetch";
 
 const testAppId = '0x9323eFec99973623932Db45438DCE4dEa9D9aE4c';
 const testAppSecret = '37e1d9da2f551ce0dac7e0eeda8a9e00daf62a3a3c548ed98cc80fc1a3983ad6';
@@ -261,6 +261,37 @@ describe('Request', () => {
             const restored = await ReclaimProofRequest.fromJsonString(request.toJsonString());
             const output = JSON.parse(restored.toJsonString());
             expect(output.options.launchOptions.verificationMode).toEqual('app');
+        });
+
+        it('getRequestUrl should return portal URL by default', async () => {
+            let capturedUrl = '';
+            const request = await ReclaimProofRequest.init(testAppId, testAppSecret, 'example');
+            globalThis.fetch = mockFetchBy((url) => {
+                if (url.includes('shortener')) {
+                    // capture the body isn't available, but the shortener is called after building the full URL
+                    // return error to fall back to full URL
+                    return { error: true };
+                }
+                return { success: true };
+            });
+
+            const url = await request.getRequestUrl();
+            expect(url).toContain('portal.reclaimprotocol.org');
+            expect(url).not.toContain('share.reclaimprotocol.org');
+        });
+
+        it('getRequestUrl with verificationMode app should return share page URL', async () => {
+            const request = await ReclaimProofRequest.init(testAppId, testAppSecret, 'example');
+            globalThis.fetch = mockFetchBy((url) => {
+                if (url.includes('shortener')) {
+                    return { error: true };
+                }
+                return { success: true };
+            });
+
+            const url = await request.getRequestUrl({ verificationMode: 'app' });
+            expect(url).toContain('share.reclaimprotocol.org');
+            expect(url).not.toContain('portal.reclaimprotocol.org');
         });
 
         it('should preserve useAppClip alongside verificationMode', async () => {
