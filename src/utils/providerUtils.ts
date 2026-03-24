@@ -35,6 +35,23 @@ export async function fetchProviderHashRequirementsBy(providerId: string, exactP
     }
 }
 
+/**
+ * Generates an array of `RequestSpec` objects by replacing template parameters with their corresponding values.
+ * 
+ * If the input template includes `templateParams` (e.g., `['param1', 'param2']`), this function will 
+ * cartesian-map (or pairwise-map) the provided `templateParameters` record (e.g., `{ param1: ['v1', 'v2'], param2: ['a1', 'a2'] }`) 
+ * to generate multiple unique `RequestSpec` configurations.
+ * 
+ * The function ensures that:
+ * 1. Parameters strictly specified in `template.templateParams` are found.
+ * 2. All specified template parameters arrays have the exact same length (pairwise mapping).
+ * 3. String replacements are fully applied (all occurrences) to `responseMatches` (value) and `responseRedactions` (jsonPath, xPath, regex).
+ * 
+ * @param requestSpecTemplates - The base template `RequestSpec` containing parameter placeholders.
+ * @param templateParameters - A record mapping parameter names to arrays of strings representing the extracted values.
+ * @returns An array of fully constructed `RequestSpec` objects with templates replaced.
+ * @throws {InvalidRequestSpecError} If required parameters are missing or parameter value arrays have mismatched lengths.
+ */
 export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: RequestSpec[], templateParameters: Record<string, string[]>): RequestSpec[] {
     if (!requestSpecTemplates) return [];
 
@@ -68,19 +85,21 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
 
             const spec: RequestSpec = {
                 ...template,
+                responseMatches: template.responseMatches ? template.responseMatches.map(m => ({ ...m })) : [],
+                responseRedactions: template.responseRedactions ? template.responseRedactions.map(r => ({ ...r })) : [],
             }
 
             for (const match of spec.responseMatches) {
                 for (const [key, value] of Object.entries(currentTemplateParams)) {
-                    match.value = match.value.replace(key, value);
+                    match.value = match.value.split(key).join(value);
                 }
             }
 
             for (const redaction of spec.responseRedactions) {
                 for (const [key, value] of Object.entries(currentTemplateParams)) {
-                    redaction.jsonPath = redaction.jsonPath.replace(key, value);
-                    redaction.xPath = redaction.xPath.replace(key, value);
-                    redaction.regex = redaction.regex.replace(key, value);
+                    redaction.jsonPath = redaction.jsonPath.split(key).join(value);
+                    redaction.xPath = redaction.xPath.split(key).join(value);
+                    redaction.regex = redaction.regex.split(key).join(value);
                 }
             }
 
