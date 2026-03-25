@@ -27,7 +27,7 @@ export async function getShortenedUrl(url: string): Promise<string> {
     })
     const res = await response.json()
     if (!response.ok) {
-      logger.info(`Failed to shorten URL: ${url}, Response: ${JSON.stringify(res)}`);
+      logger.info(`Failed to shorten URL: status=${response.status}`);
       return url;
     }
     const shortenedVerificationUrl = res.result.shortUrl
