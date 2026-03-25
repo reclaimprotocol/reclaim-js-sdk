@@ -60,12 +60,12 @@ export default function Home() {
 
             // Verify proofs and get extracted data
             const providerVersion = reclaimProofRequest.getProviderVersion()
-            const result = await verifyProof(proofs, providerVersion)
-            setVerifyResult(result)
+            const { isVerified, data } = await verifyProof(proofs, providerVersion)
+            setVerifyResult({ isVerified, data })
 
-            if (result.isVerified) {
+            if (isVerified) {
               console.log('Proofs verified successfully')
-              result.data.forEach((d, i) => {
+              data.forEach((d, i) => {
                 console.log(`Proof ${i + 1} context:`, d.context)
                 console.log(`Proof ${i + 1} params:`, d.extractedParameters)
               })
