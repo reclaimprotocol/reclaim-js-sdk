@@ -1052,11 +1052,6 @@ export class ReclaimProofRequest {
         return `https://share.reclaimprotocol.org/verify/?template=${template}`;
     }
 
-    private buildPortalUrl(template: string): string {
-        const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
-        return `${portalUrl}/?template=${template}`;
-    }
-
     /**
      * Exports the Reclaim proof verification request as a JSON string
      *
