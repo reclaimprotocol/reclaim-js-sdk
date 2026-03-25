@@ -683,8 +683,7 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 Pass `true` as the third argument (`verifyTEE`) to `verifyProof` to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
 
 ```javascript
-import { verifyProof } from "@reclaimprotocol/js-sdk";
-import { TeeVerificationError } from "@reclaimprotocol/js-sdk";
+import { verifyProof, TeeVerificationError } from "@reclaimprotocol/js-sdk";
 
 // Pass true as the third argument (verifyTEE) to require TEE verification
 const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'] }, true);
