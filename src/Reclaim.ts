@@ -1375,6 +1375,7 @@ export class ReclaimProofRequest {
         return {
             providerId: this.providerId,
             providerVersion: exactProviderVersionString,
+            allowedTags: this.options?.acceptAiProviders ? ['ai'] : [],
         }
     }
 
@@ -1388,8 +1389,8 @@ export class ReclaimProofRequest {
      *
      * @returns A promise that resolves to a `ProviderHashRequirementsConfig` or `ProviderHashRequirementsConfig[]`
      */
-    getProviderHashRequirements(proofs: Proof[]): Promise<ProviderHashRequirementsConfig | ProviderHashRequirementsConfig[]> {
-        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', proofs);
+    getProviderHashRequirements(proofs: Proof[], allowedTags: string[] | null | undefined): Promise<ProviderHashRequirementsConfig | ProviderHashRequirementsConfig[]> {
+        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', allowedTags, proofs);
     }
 
     /**

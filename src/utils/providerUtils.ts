@@ -1,6 +1,6 @@
 import { hashProofClaimParams } from "../witness";
 import { InvalidRequestSpecError, ProviderConfigFetchError } from "./errors";
-import { fetchProviderConfig } from "./sessionUtils";
+import { fetchProviderConfigs } from "./sessionUtils";
 import loggerModule from './logger';
 import { Proof } from "./interfaces";
 
@@ -19,8 +19,8 @@ const logger = loggerModule.logger;
  * @param exactProviderVersionString - The specific version string of the provider configuration to ensure deterministic validation.
  * @returns A promise that resolves to `ProviderHashRequirementsConfig` representing the expected hashes for proof validation.
  */
-export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersionString: string | null | undefined, proofs?: Proof[]): Promise<ProviderHashRequirementsConfig[]> {
-    const providerResponse = await fetchProviderConfig(providerId, exactProviderVersionString);
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersionString: string | null | undefined, allowedTags: string[] | null | undefined, proofs?: Proof[]): Promise<ProviderHashRequirementsConfig[]> {
+    const providerResponse = await fetchProviderConfigs(providerId, exactProviderVersionString, allowedTags);
 
     try {
         const providerConfigs = providerResponse.providers;

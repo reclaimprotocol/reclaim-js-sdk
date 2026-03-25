@@ -50,6 +50,11 @@ export interface ValidationConfigWithProviderInformation {
      * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
      **/
     providerVersion?: string;
+    /**
+     * List of allowed tags expected pre-release tags.
+     * If you are using AI, provide `['ai']` to allow patch versions AI the provider and version.
+     */
+    allowedTags?: string[];
 }
 
 /**
@@ -188,7 +193,7 @@ export async function assertValidateProof(proofs: Proof[], config: VerificationC
         if (config.providerVersion && typeof config.providerVersion !== 'string') {
             throw new ProofNotValidatedError('Provider version must be a string');
         }
-        const hashRequirementsFromProvider = await fetchProviderHashRequirementsBy(config.providerId, config.providerVersion, proofs);
+        const hashRequirementsFromProvider = await fetchProviderHashRequirementsBy(config.providerId, config.providerVersion, config.allowedTags, proofs);
         if (!hashRequirementsFromProvider.length) {
             throw new ProofNotValidatedError('Could not find any provider information for the given provider id and version');
         }

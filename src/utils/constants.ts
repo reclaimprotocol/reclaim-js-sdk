@@ -27,8 +27,8 @@ export const constants = {
         return `${BACKEND_BASE_URL}/api/attestors`
     },
 
-    DEFAULT_PROVIDER_CONFIGS_URL(providerId: string, exactProviderVersionString: string | null | undefined) {
-        return `${BACKEND_BASE_URL}/api/providers/${providerId}/configs?versionNumber=${exactProviderVersionString || ''}`
+    DEFAULT_PROVIDER_CONFIGS_URL(providerId: string, exactProviderVersionString: string | null | undefined, allowedTags: string[] | null | undefined) {
+        return `${BACKEND_BASE_URL}/api/providers/${providerId}/configs?versionNumber=${exactProviderVersionString || ''}&allowedTags=${allowedTags?.join(',') || ''}`
     },
 
     // URL for sharing Reclaim templates
