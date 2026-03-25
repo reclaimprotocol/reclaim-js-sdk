@@ -70,11 +70,11 @@ const sdkVersion = require('../package.json').version;
  * @example
  * ```typescript
  * // Fast and simple automatically fetched verification
- * const isValid = await verifyProof(proof, request.getProviderVersion());
+ * const { isVerified, data } = await verifyProof(proof, request.getProviderVersion());
  * 
  * // Or, by manually providing the details:
  * 
- * const isValid = await verifyProof(proof, { 
+ * const { isVerified, data } = await verifyProof(proof, { 
  *   providerId: "YOUR_PROVIDER_ID", 
  *   // The exact provider version used in the session.
  *   providerVersion: "1.0.0",
@@ -90,12 +90,12 @@ const sdkVersion = require('../package.json').version;
  * }
  *
  * // Validate multiple proofs
- * const result = await verifyProof([proof1, proof2], {
+ * const { isVerified, data } = await verifyProof([proof1, proof2], {
  *   hashes: ['0xAbC...', '0xF22..'],
  * });
  * 
  * // Validate multiple proofs and handle optional matches or repeated proofs
- * const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
+ * const { isVerified, data } = await verifyProof([proof1, proof2, sameAsProof2], { 
  *   hashes: [
  *     // A string hash is perfectly equivalent to { value: '...', required: true, multiple: true }
  *     '0xStrict1...', 

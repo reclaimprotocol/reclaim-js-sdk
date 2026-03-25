@@ -601,7 +601,7 @@ if (isVerified) {
 
 Or, by manually providing the details:
 ```javascript
-const isValid = await verifyProof(proof, { 
+const { isVerified, data } = await verifyProof(proof, { 
   providerId: "YOUR_PROVIDER_ID", 
   // The exact provider version used in the session.
   providerVersion: "1.0.0",
