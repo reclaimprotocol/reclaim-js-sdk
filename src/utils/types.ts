@@ -1,4 +1,4 @@
-import { VerificationConfig } from './proofValidationUtils';
+import type { VerificationConfig } from './proofValidationUtils';
 import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
 import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
