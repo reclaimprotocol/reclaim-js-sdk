@@ -51,8 +51,8 @@ export interface ValidationConfigWithProviderInformation {
      **/
     providerVersion?: string;
     /**
-     * List of allowed tags expected pre-release tags.
-     * If you are using AI, provide `['ai']` to allow patch versions AI the provider and version.
+     * List of allowed pre-release tags.
+     * For example, if you are using AI, provide `['ai']` to allow AI patch versions of the provider.
      */
     allowedTags?: string[];
 }

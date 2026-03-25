@@ -1389,7 +1389,7 @@ export class ReclaimProofRequest {
      *
      * @returns A promise that resolves to a `ProviderHashRequirementsConfig` or `ProviderHashRequirementsConfig[]`
      */
-    getProviderHashRequirements(proofs: Proof[], allowedTags: string[] | null | undefined): Promise<ProviderHashRequirementsConfig | ProviderHashRequirementsConfig[]> {
+    getProviderHashRequirements(proofs: Proof[], allowedTags: string[] | null | undefined): Promise<ProviderHashRequirementsConfig[]> {
         return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', allowedTags, proofs);
     }
 

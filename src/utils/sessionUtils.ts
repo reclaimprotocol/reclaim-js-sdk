@@ -126,10 +126,18 @@ export async function fetchProviderConfigs(providerId: string, exactProviderVers
   validateFunctionParams(
     [
       { input: providerId, paramName: 'providerId', isString: true },
-      { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true },
     ],
-    'fetchProviderConfig'
+    'fetchProviderConfigs'
   );
+
+  if (exactProviderVersionString != null && exactProviderVersionString != undefined) {
+    validateFunctionParams(
+      [
+        { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true },
+      ],
+      'fetchProviderConfigs'
+    );
+  }
 
   try {
     const response = await http.client(constants.DEFAULT_PROVIDER_CONFIGS_URL(providerId, exactProviderVersionString, allowedTags), {
