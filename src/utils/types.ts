@@ -11,7 +11,7 @@ export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' |
   & ClaimInfo;
 
 export interface HttpProviderClaimParams {
-  body: string;
+  body?: string | null;
   method: RequestSpec['method'];
   responseMatches: ResponseMatchSpec[]
   responseRedactions: ResponseRedactionSpec[]
@@ -61,7 +61,16 @@ export type ProofRequestOptions = {
   useBrowserExtension?: boolean;
   extensionID?: string;
   providerVersion?: string;
+  /**
+   * @deprecated Use `portalUrl` instead.
+   */
   customSharePageUrl?: string;
+  /**
+   * URL of the portal/share page for the verification flow.
+   *
+   * @default 'https://portal.reclaimprotocol.org'
+   */
+  portalUrl?: string;
   customAppClipUrl?: string;
   launchOptions?: ReclaimFlowLaunchOptions;
   /**
@@ -117,6 +126,18 @@ export type ReclaimFlowLaunchOptions = {
    * once fully released. See: https://blog.reclaimprotocol.org/posts/moving-beyond-google-play-instant
    */
   canUseDeferredDeepLinksFlow?: boolean;
+  /**
+   * Verification mode for the flow.
+   *
+   * - `'portal'`: Opens the portal URL in the browser (remote browser verification).
+   * - `'app'`: Native app flow via the share page. If `useAppClip` is `true`, uses App Clip on iOS.
+   *
+   * Can be set at call time via `triggerReclaimFlow({ verificationMode })` or `getRequestUrl({ verificationMode })`,
+   * or at init time via `launchOptions: { verificationMode }`.
+   *
+   * @default 'portal'
+   */
+  verificationMode?: 'app' | 'portal';
 }
 
 // Modal customization options
@@ -265,6 +286,16 @@ export type TemplateData = {
   metadata?: Record<string, string>;
   preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
+
+// Verify proof result type
+export type VerifyProofResult = {
+  isVerified: boolean;
+  isTeeVerified?: boolean;
+  data: {
+    context: Record<string, unknown>;
+    extractedParameters: Record<string, string>;
+  }[];
+}
 
 export type ProviderVersionConfig = {
   major?: number;

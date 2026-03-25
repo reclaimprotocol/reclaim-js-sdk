@@ -99,7 +99,7 @@ function App() {
           setProofs(proofs);
         }
       },
-      onFailure: (error) => {
+      onError: (error) => {
         console.error("Verification failed", error);
       },
     });
@@ -181,7 +181,7 @@ async function handleCreateClaim() {
           setProofs(proofs);
         }
       },
-      onFailure: (error) => {
+      onError: (error) => {
         console.error("Verification failed", error);
       },
     });
@@ -193,17 +193,43 @@ async function handleCreateClaim() {
 
 ### How triggerReclaimFlow() Works
 
-The `triggerReclaimFlow()` method automatically detects the user's environment and chooses the optimal verification method:
+The `triggerReclaimFlow()` method supports two verification modes via `verificationMode`:
+
+- **`'portal'` (default)**: Opens the portal URL for remote browser verification on all platforms.
+- **`'app'`**: Native app flow via the share page. Uses App Clip on iOS if `useAppClip` is `true`.
+
+```javascript
+// Portal flow (default)
+await reclaimProofRequest.triggerReclaimFlow();
+
+// Native app flow
+await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+```
 
 #### On Desktop Browsers:
 
-1. **Browser Extension First**: If the Reclaim browser extension is installed, it will use the extension for a seamless in-browser verification experience.
-2. **QR Code Fallback**: If the extension is not available, it automatically displays a QR code modal for mobile scanning.
+1. **Browser Extension First**: If the Reclaim browser extension is installed, it will use the extension regardless of verification mode.
+2. **Portal mode** (no extension): Opens the portal in a new tab.
+3. **App mode** (no extension): Shows QR code modal with share page URL.
 
-#### On Mobile Devices:
+#### On Mobile Devices (portal mode):
 
-1. **iOS Devices**: Automatically redirects to the Reclaim App Clip for native iOS verification.
-2. **Android Devices**: Automatically redirects to the Reclaim Instant App for native Android verification.
+Opens the portal in a new tab.
+
+#### On Mobile Devices (app mode):
+
+1. **All platforms**: Redirects to the share page.
+2. **iOS with `useAppClip: true`**: Redirects to the Reclaim App Clip instead.
+
+The same `verificationMode` option works with `getRequestUrl()`:
+
+```javascript
+// Portal URL (default)
+const url = await reclaimProofRequest.getRequestUrl();
+
+// Native app URL
+const url = await reclaimProofRequest.getRequestUrl({ verificationMode: 'app' });
+```
 
 ### Browser Extension Support
 
@@ -289,7 +315,7 @@ Your Reclaim SDK demo should now be running. Click the "Create Claim" button to 
 
 4. **Verification**: The `onSuccess` is called when verification is successful, providing the proof data. When using a custom callback url, the proof is returned to the callback url and we get an empty array instead of a proof.
 
-5. **Handling Failures**: The `onFailure` is called if verification fails, allowing you to handle errors gracefully.
+5. **Handling Failures**: The `onError` is called if verification fails, allowing you to handle errors gracefully.
 
 ## Advanced Configuration
 
@@ -431,33 +457,35 @@ For more details about response format, check out [official documentation of Err
    const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
      useBrowserExtension: true, // Enable browser extension support (default: true)
      extensionID: "custom-extension-id", // Custom extension identifier
-     useAppClip: true, // Enable mobile app clips (default: true)
+     useAppClip: false, // Enable mobile app clips (default: false)
      log: true, // Enable troubleshooting mode and more verbose logging for debugging
    });
    ```
 
-9. **Custom Share Page and App Clip URLs**:
-   You can customize the share page and app clip URLs for your app:
+9. **Custom Portal URL and App Clip URLs**:
+   You can customize the portal/share page and app clip URLs for your app:
 
 ```javascript
 const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
-  customSharePageUrl: "https://your-custom-domain.com/verify", // Custom share page URL
+  portalUrl: "https://your-custom-domain.com/verify", // Custom portal URL
   customAppClipUrl: "https://appclip.apple.com/id?p=your.custom.app.clip", // Custom iOS App Clip URL
   // ... other options
 });
 ```
 
+> **Note:** `portalUrl` defaults to `https://portal.reclaimprotocol.org` and `useAppClip` defaults to `false` when no options are provided. `portalUrl` is the preferred option. The previous `customSharePageUrl` is deprecated but still supported. If both are provided, `portalUrl` takes precedence.
+
 10. **Platform-Specific Flow Control**:
-   The `triggerReclaimFlow()` method provides intelligent platform detection, but you can still use traditional methods for custom flows:
+   Both `triggerReclaimFlow()` and `getRequestUrl()` support `verificationMode`:
 
    ```javascript
-   // Traditional approach with manual QR code handling
-   const requestUrl = await reclaimProofRequest.getRequestUrl();
-   // Display your own QR code implementation
-
-   // Or use the new streamlined approach
+   // Portal flow (default) — remote browser verification
    await reclaimProofRequest.triggerReclaimFlow();
-   // Automatically handles platform detection and optimal user experience
+   const portalUrl = await reclaimProofRequest.getRequestUrl();
+
+   // Native app flow
+   await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+   const appUrl = await reclaimProofRequest.getRequestUrl({ verificationMode: 'app' });
    ```
 
 11. **Exporting and Importing SDK Configuration**:
@@ -560,11 +588,12 @@ The easiest way is to let the SDK retrieve the requirements automatically. If yo
 ```javascript
 import { verifyProof } from "@reclaimprotocol/js-sdk";
 
-// Fast and simple automatically fetched verification
-const isValid = await verifyProof(proof, request.getProviderVersion());
-
-if (isValid) {
+// Verify a single proof
+const { isVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] });
+if (isVerified) {
   console.log("Proof is valid");
+  console.log("Context:", data[0].context);
+  console.log("Extracted parameters:", data[0].extractedParameters);
 } else {
   console.log("Proof is invalid");
 }
@@ -572,7 +601,7 @@ if (isValid) {
 
 Or, by manually providing the details:
 ```javascript
-const isValid = await verifyProof(proof, { 
+const { isVerified, data } = await verifyProof(proof, { 
   providerId: "YOUR_PROVIDER_ID", 
   // The exact provider version used in the session.
   providerVersion: "1.0.0",
@@ -587,8 +616,8 @@ If you want to avoid network requests, you can manually feed the expected crypto
 
 ```javascript
 // Verify a proof against a known, strict expected hash
-const isValid = await verifyProof(proof, { 
-  hashes: ['0x1abc2def3456...'] 
+const { isVerified, data } = await verifyProof(proof, {
+  hashes: ['0x1abc2def3456...']
 });
 ```
 
@@ -596,36 +625,95 @@ const isValid = await verifyProof(proof, {
 When building advanced use-cases, you might process multiple distinct proofs at once or deal with providers that yield a few valid hash possibilities (e.g., due to optional data fields).
 
 ```javascript
-const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
+const result = await verifyProof([proof1, proof2, sameAsProof2], {
   hashes: [
     // A string hash is equivalent to an object with { value: '...', required: true, multiple: true }.
-    '0xStrictHash123...', 
-    { 
-       // An array 'value' means that 1 proof can have any 1 matching hash 
+    '0xStrictHash123...',
+    {
+       // An array 'value' means that 1 proof can have any 1 matching hash
        // from this list, typically because of optional variables in the original request.
-       value: ['0xOptHash1...', '0xOptHashA...'], 
-       // 'multiple' being true (which is the default) means any proof matching this hash 
+       value: ['0xOptHash1...', '0xOptHashA...'],
+       // 'multiple' being true (which is the default) means any proof matching this hash
        // is allowed to appear multiple times in the list of proofs you are verifying.
-       multiple: true 
-    }, 
-    { 
-       value: '0xE33...', 
-       // 'required: false' means there can be 0 proofs matching this hash. 
+       multiple: true
+    },
+    {
+       value: '0xE33...',
+       // 'required: false' means there can be 0 proofs matching this hash.
        // Such proofs may be optionally present in the list of proofs.
        // (By default, 'required' is true).
-       required: false 
+       required: false
     }
   ]
 });
+
+if (result.isVerified) {
+  result.data.forEach((d, i) => {
+    console.log(`Proof ${i + 1} context:`, d.context);
+    console.log(`Proof ${i + 1} params:`, d.extractedParameters);
+  });
+}
 ```
 
 ### 4. Danger Zone: Disabled Content Validation
 If you only want to verify the attestor signature but wish to dangerously bypass the parameter/content match (Not Recommended):
 
 ```javascript
-const isValidSignature = await verifyProof(proof, { 
-  dangerouslyDisableContentValidation: true 
+const { isVerified } = await verifyProof(proof, {
+  dangerouslyDisableContentValidation: true
 });
+```
+
+## TEE Attestation Verification
+
+The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. This provides hardware-level assurance that the proof was generated inside a secure enclave (AMD SEV-SNP).
+
+### Enabling TEE Attestation
+
+To request TEE attestation during proof generation, enable it during initialization:
+
+```javascript
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+  acceptTeeAttestation: true,
+});
+```
+
+### Verifying TEE Attestation
+
+Pass `true` as the third argument (`verifyTEE`) to `verifyProof` to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail.
+
+```javascript
+import { verifyProof } from "@reclaimprotocol/js-sdk";
+
+// Pass true as the third argument (verifyTEE) to require TEE verification
+const { isVerified, isTeeVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] }, true);
+
+if (isVerified) {
+  console.log("Proof is fully verified with hardware attestation");
+  console.log("TEE verified:", isTeeVerified);
+  console.log("Extracted parameters:", data[0].extractedParameters);
+}
+```
+
+When `verifyTEE` is `true`, the result includes `isTeeVerified`. The overall `isVerified` will be `false` if TEE data is missing or TEE verification fails.
+
+The TEE verification validates:
+- **Nonce binding**: Ensures the attestation nonce matches the proof context
+- **Application ID**: Confirms the attestation was generated for your application (optional)
+- **Timestamp**: Verifies the attestation timestamp is within an acceptable range of the proof timestamp
+- **SNP report**: Validates the AMD SEV-SNP hardware attestation report
+- **VLEK certificate**: Verifies the certificate chain against AMD's root of trust
+- **Report data**: Confirms the workload and verifier digests match the attestation
+
+You can also verify TEE attestation separately using the lower-level `verifyTeeAttestation` function:
+
+```javascript
+import { verifyTeeAttestation } from "@reclaimprotocol/js-sdk";
+
+const isTeeValid = await verifyTeeAttestation(proof, APP_ID);
+if (isTeeValid) {
+  console.log("TEE attestation verified — proof was generated in a secure enclave");
+}
 ```
 
 ## Error Handling
@@ -676,6 +764,10 @@ try {
 - `SessionNotStartedError`: Session could not be started
 - `ProofSubmissionFailedError`: Proof submission to callback failed
 - `ErrorDuringVerificationError`: An abort error during verification which was caused by the user aborting the verification process or provider's JS script raising a validation error
+
+## Example Repos
+
+- [Reclaim Demo Website](https://github.com/reclaimprotocol/reclaim-demo-website-v3)
 
 ## Next Steps
 

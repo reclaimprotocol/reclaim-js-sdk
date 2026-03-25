@@ -10,6 +10,7 @@ import {
     ReclaimFlowLaunchOptions,
     HttpFormEntry,
     HttpRedirectionMethod,
+    type VerifyProofResult,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
@@ -45,6 +46,7 @@ import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
 import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
+import { verifyTeeAttestation } from './utils/verifyTee'
 import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
@@ -54,9 +56,9 @@ const sdkVersion = require('../package.json').version;
 /**
  * Verifies one or more Reclaim proofs by validating signatures, verifying witness information,
  * and performing content validation against the expected configuration.
- * 
+ *
  * See also:
- * 
+ *
  * * `ReclaimProofRequest.getProviderHashRequirements()` - To get the expected proof hash requirements for a proof request.
  * * `fetchProviderHashRequirementsBy()` - To get the expected proof hash requirements for a provider version by providing providerId and exactProviderVersionString.
  * * `getProviderHashRequirementsFromSpec()` - To get the expected proof hash requirements from a provider spec.
@@ -64,18 +66,20 @@ const sdkVersion = require('../package.json').version;
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation.
- * @returns Promise<boolean> - Returns `true` if all proofs are successfully verified and validated, `false` otherwise.
- * @throws {ProofNotVerifiedError} When signature validation or identifier mismatch occurs.
- * @throws {ProofNotValidatedError} When no proofs are provided, when the configuration is missing, or when proof content does not match the expectations set in the config.
+ * @param verifyTEE - If `true`, requires and verifies TEE attestation on the proofs. Verification fails if TEE data is missing or invalid.
+ * @returns Verification result with `isVerified`, extracted `data` from each proof, and `isTeeVerified` when `verifyTEE` is `true`
  *
  * @example
  * ```typescript
  * // Fast and simple automatically fetched verification
- * const isValid = await verifyProof(proof, request.getProviderVersion());
+ * const { isVerified, data } = await verifyProof(proof, request.getProviderVersion());
+ *
+ * // With TEE attestation verification (fails if TEE data is missing or invalid)
+ * const { isVerified, isTeeVerified, data } = await verifyProof(proof, request.getProviderVersion(), true);
  * 
  * // Or, by manually providing the details:
  * 
- * const isValid = await verifyProof(proof, { 
+ * const { isVerified, data } = await verifyProof(proof, { 
  *   providerId: "YOUR_PROVIDER_ID", 
  *   // The exact provider version used in the session.
  *   providerVersion: "1.0.0",
@@ -84,15 +88,19 @@ const sdkVersion = require('../package.json').version;
  * });
  * 
  * // Validate a single proof against expected hash
- * const isValid = await verifyProof(proof, { hashes: ['0xAbC...'] });
- * 
+ * const { isVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] });
+ * if (isVerified) {
+ *   console.log(data[0].context);
+ *   console.log(data[0].extractedParameters);
+ * }
+ *
  * // Validate multiple proofs
- * const areAllValid = await verifyProof([proof1, proof2], { 
+ * const { isVerified, data } = await verifyProof([proof1, proof2], {
  *   hashes: ['0xAbC...', '0xF22..'],
  * });
  * 
  * // Validate multiple proofs and handle optional matches or repeated proofs
- * const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
+ * const { isVerified, data } = await verifyProof([proof1, proof2, sameAsProof2], { 
  *   hashes: [
  *     // A string hash is perfectly equivalent to { value: '...', required: true, multiple: true }
  *     '0xStrict1...', 
@@ -107,11 +115,11 @@ const sdkVersion = require('../package.json').version;
  */
 export async function verifyProof(
     proofOrProofs: Proof | Proof[],
-    config: VerificationConfig
-): Promise<boolean> {
+    config: VerificationConfig,
+    verifyTEE?: boolean
+): Promise<VerifyProofResult> {
+    const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
     try {
-        const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
-
         if (proofs.length === 0) {
             throw new ProofNotValidatedError('No proofs provided');
         }
@@ -127,10 +135,58 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
-        return true;
+        const result: VerifyProofResult = {
+            isVerified: true,
+            data: proofs.map(extractProofData),
+        }
+
+        if (verifyTEE) {
+            const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
+
+            if (!hasTeeData) {
+                logger.error('TEE verification requested but one or more proofs are missing TEE attestation data');
+                result.isTeeVerified = false;
+                result.isVerified = false;
+                return result;
+            }
+
+            try {
+                const teeResults = await Promise.all(proofs.map(proof => verifyTeeAttestation(proof)));
+                result.isTeeVerified = teeResults.every(r => r === true);
+                if (!result.isTeeVerified) {
+                    logger.error('TEE attestation verification failed for one or more proofs');
+                }
+                result.isVerified = result.isVerified && result.isTeeVerified;
+            } catch (error) {
+                logger.error('Error verifying TEE attestation:', error);
+                result.isTeeVerified = false;
+                result.isVerified = false;
+            }
+        }
+
+        return result;
     } catch (error) {
         logger.error('Error in validating proof:', error);
-        return false;
+        return {
+            isVerified: false,
+            data: [],
+        }
+    }
+}
+
+function extractProofData(proof: Proof): VerifyProofResult['data'][number] {
+    try {
+        const context = JSON.parse(proof.claimData.context)
+        const { extractedParameters, ...rest } = context
+        return {
+            context: rest,
+            extractedParameters: extractedParameters ?? {},
+        }
+    } catch {
+        return {
+            context: {},
+            extractedParameters: {},
+        }
     }
 }
 
@@ -241,21 +297,25 @@ export class ReclaimProofRequest {
         }
 
         if (options.useAppClip === undefined) {
-            options.useAppClip = true;
+            options.useAppClip = false;
         }
+
+        // portalUrl is an alias for customSharePageUrl (portalUrl takes precedence)
+        this.customSharePageUrl = options.portalUrl ?? options.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+        options.customSharePageUrl = this.customSharePageUrl;
 
         if (options?.envUrl) {
             setBackendBaseUrl(options.envUrl);
-        } else if (options?.customSharePageUrl?.includes('eu.portal.reclaimprotocol.org')) {
-            setBackendBaseUrl('https://eu.api.reclaimprotocol.org');
+        } else if (this.customSharePageUrl) {
+            try {
+                if (new URL(this.customSharePageUrl).hostname === 'eu.portal.reclaimprotocol.org') {
+                    setBackendBaseUrl('https://eu.api.reclaimprotocol.org');
+                }
+            } catch { /* invalid URL handled by validateURL in init */ }
         }
 
         if (options.extensionID) {
             this.extensionID = options.extensionID;
-        }
-
-        if (options?.customSharePageUrl) {
-            this.customSharePageUrl = options.customSharePageUrl;
         }
 
         if (options?.customAppClipUrl) {
@@ -269,13 +329,13 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Initializes a new Reclaim proof request instance with automatic signature generation and session creation
+     * Initializes a new Reclaim proof request instance with automatic signature generation and session creation.
      *
      * @param applicationId - Your Reclaim application ID
      * @param appSecret - Your application secret key for signing requests
      * @param providerId - The ID of the provider to use for proof generation
      * @param options - Optional configuration options for the proof request
-     * @returns Promise<ReclaimProofRequest> - A fully initialized proof request instance
+     * @returns A fully initialized proof request instance
      * @throws {InitError} When initialization fails due to invalid parameters or session creation errors
      *
      * @example
@@ -284,7 +344,7 @@ export class ReclaimProofRequest {
      *   'your-app-id',
      *   'your-app-secret',
      *   'provider-id',
-     *   { log: true, acceptAiProviders: true }
+     *   { portalUrl: 'https://portal.reclaimprotocol.org', log: true }
      * );
      * ```
      */
@@ -336,6 +396,11 @@ export class ReclaimProofRequest {
                 if (options.envUrl) {
                     validateFunctionParams([
                         { paramName: 'envUrl', input: options.envUrl, isString: true }
+                    ], 'the constructor')
+                }
+                if (options.portalUrl) {
+                    validateFunctionParams([
+                        { paramName: 'portalUrl', input: options.portalUrl, isString: true }
                     ], 'the constructor')
                 }
                 if (options.customSharePageUrl) {
@@ -984,13 +1049,7 @@ export class ReclaimProofRequest {
     }
 
     private buildSharePageUrl(template: string): string {
-        const baseUrl = 'https://share.reclaimprotocol.org/verify';
-
-        if (this.customSharePageUrl) {
-            return `${this.customSharePageUrl}/?template=${template}`;
-        }
-
-        return `${baseUrl}/?template=${template}`;
+        return `https://share.reclaimprotocol.org/verify/?template=${template}`;
     }
 
     /**
@@ -1097,13 +1156,15 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Generates and returns the request URL for proof verification
+     * Generates and returns the request URL for proof verification.
      *
-     * This URL can be shared with users to initiate the proof generation process.
-     * The URL format varies based on device type:
-     * - Mobile iOS: Returns App Clip URL (if useAppClip is enabled)
-     * - Mobile Android: Returns Instant App URL (if useAppClip is enabled)
-     * - Desktop/Other: Returns standard verification URL
+     * Defaults to portal mode. Pass `{ verificationMode: 'app' }` for native app flow URLs.
+     *
+     * - Portal mode (default): returns portal URL on all platforms
+     * - App mode: returns share page URL on all platforms
+     * - App mode + `useAppClip: true` on iOS: returns App Clip URL instead
+     *
+     * Falls back to `launchOptions` set at init time if not passed at call time.
      *
      * @param launchOptions - Optional launch configuration to override default behavior
      * @returns Promise<string> - The generated request URL
@@ -1111,12 +1172,16 @@ export class ReclaimProofRequest {
      *
      * @example
      * ```typescript
-     * const requestUrl = await proofRequest.getRequestUrl();
-     * // Share this URL with users or display as QR code
+     * // Portal URL (default)
+     * const url = await proofRequest.getRequestUrl();
+     *
+     * // Native app flow URL
+     * const url = await proofRequest.getRequestUrl({ verificationMode: 'app' });
      * ```
      */
     async getRequestUrl(launchOptions?: ReclaimFlowLaunchOptions): Promise<string> {
         const options = launchOptions || this.options?.launchOptions || {};
+        const mode = options.verificationMode ?? 'portal';
 
         logger.info('Creating Request Url')
         if (!this.signature) {
@@ -1126,33 +1191,29 @@ export class ReclaimProofRequest {
         try {
             const templateData = this.getTemplateData()
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
-            const deviceType = getDeviceType();
-            if (this.options?.useAppClip && deviceType === DeviceType.MOBILE) {
+
+            if (mode === 'app') {
                 let template = encodeURIComponent(JSON.stringify(templateData));
                 template = replaceAll(template, '(', '%28');
                 template = replaceAll(template, ')', '%29');
 
-                // check if the app is running on iOS or Android
-                const isIos = getMobileDeviceType() === DeviceType.IOS;
-                if (!isIos) {
-                    let instantAppUrl = this.buildSharePageUrl(template);
-                    const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
-
-                    if (isDeferredDeeplinksFlowEnabled) {
-                        instantAppUrl = instantAppUrl.replace("/verifier", "/link");
-                    }
-                    logger.info('Instant App Url created successfully: ' + instantAppUrl);
-                    return instantAppUrl;
-                } else {
+                // App Clip only if useAppClip is true and iOS
+                if (this.options?.useAppClip && getDeviceType() === DeviceType.MOBILE && getMobileDeviceType() === DeviceType.IOS) {
                     const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
                     logger.info('App Clip Url created successfully: ' + appClipUrl);
                     return appClipUrl;
                 }
-            } else {
-                const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl)
-                logger.info('Request Url created successfully: ' + link);
-                return link;
+
+                // Share page for all other cases in app mode
+                const sharePageUrl = await createLinkWithTemplateData(templateData, 'https://share.reclaimprotocol.org/verify');
+                logger.info('Share page Url created successfully: ' + sharePageUrl);
+                return sharePageUrl;
             }
+
+            // Portal mode (default)
+            const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl)
+            logger.info('Request Url created successfully: ' + link);
+            return link;
         } catch (error) {
             logger.info('Error creating Request Url:', error)
             throw error
@@ -1160,13 +1221,16 @@ export class ReclaimProofRequest {
     }
 
     /**
-     * Triggers the appropriate Reclaim verification flow based on device type and configuration
+     * Triggers the appropriate Reclaim verification flow based on device type and configuration.
      *
-     * This method automatically detects the device type and initiates the optimal verification flow:
-     * - Desktop with browser extension: Triggers extension flow
-     * - Desktop without extension: Shows QR code modal
-     * - Mobile Android: Redirects to Instant App
-     * - Mobile iOS: Redirects to App Clip
+     * Defaults to portal mode (remote browser verification). Pass `{ verificationMode: 'app' }`
+     * for native app flow via the share page.
+     *
+     * - Desktop: browser extension takes priority in both modes
+     * - Desktop portal mode (no extension): opens portal in new tab
+     * - Desktop app mode (no extension): shows QR code modal with share page URL
+     * - Mobile portal mode: opens portal in new tab
+     * - Mobile app mode: opens share page (or App Clip on iOS if `useAppClip` is `true`)
      *
      * @param launchOptions - Optional launch configuration to override default behavior
      * @returns Promise<void>
@@ -1174,12 +1238,26 @@ export class ReclaimProofRequest {
      *
      * @example
      * ```typescript
+     * // Portal flow (default)
      * await proofRequest.triggerReclaimFlow();
-     * // The appropriate verification method will be triggered automatically
+     *
+     * // Native app flow
+     * await proofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+     *
+     * // App Clip on iOS (requires useAppClip: true at init)
+     * const request = await ReclaimProofRequest.init(APP_ID, SECRET, PROVIDER, { useAppClip: true });
+     * await request.triggerReclaimFlow({ verificationMode: 'app' });
+     *
+     * // Can also set verificationMode at init time via launchOptions
+     * const request = await ReclaimProofRequest.init(APP_ID, SECRET, PROVIDER, {
+     *   launchOptions: { verificationMode: 'app' }
+     * });
+     * await request.triggerReclaimFlow(); // uses 'app' mode from init
      * ```
      */
     async triggerReclaimFlow(launchOptions?: ReclaimFlowLaunchOptions): Promise<void> {
         const options = launchOptions || this.options?.launchOptions || {};
+        const mode = options.verificationMode ?? 'portal';
 
         if (!this.signature) {
             throw new SignatureNotFoundError('Signature is not set.')
@@ -1190,36 +1268,75 @@ export class ReclaimProofRequest {
 
             this.templateData = templateData;
 
-            logger.info('Triggering Reclaim flow');
+            logger.info(`Triggering Reclaim flow (mode: ${mode})`);
 
-            // Get device type
             const deviceType = getDeviceType();
             updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
 
             if (deviceType === DeviceType.DESKTOP) {
+                // Extension has priority on desktop regardless of mode
                 const extensionAvailable = await this.isBrowserExtensionAvailable();
-                // Desktop flow
                 if (this.options?.useBrowserExtension && extensionAvailable) {
                     logger.info('Triggering browser extension flow');
                     this.triggerBrowserExtensionFlow();
                     return;
+                }
+
+                if (mode === 'portal') {
+                    // Open blank tab synchronously to preserve click activation (avoids popup blocker)
+                    const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+                    const newTab = window.open('about:blank', '_blank');
+                    const link = await createLinkWithTemplateData(templateData, portalUrl);
+                    logger.info('Opening portal in new tab: ' + link);
+                    if (newTab) {
+                        newTab.location = link;
+                        // Verify navigation actually happened; close blank tab if it didn't
+                        setTimeout(() => {
+                            try {
+                                if (newTab.location.href === 'about:blank') {
+                                    newTab.close();
+                                    window.open(link, '_blank');
+                                }
+                            } catch (_) {
+                                // Cross-origin after navigation means it worked
+                            }
+                        }, 500);
+                    }
                 } else {
-                    // Show QR code popup modal
-                    logger.info('Browser extension not available, showing QR code modal');
-                    await this.showQRCodeModal();
+                    // App mode: QR code modal with share page URL
+                    logger.info('Showing QR code modal with share page URL');
+                    await this.showQRCodeModal('app');
                 }
             } else if (deviceType === DeviceType.MOBILE) {
-                // Mobile flow
-                const mobileDeviceType = getMobileDeviceType();
-
-                if (mobileDeviceType === DeviceType.ANDROID) {
-                    // Redirect to instant app URL
-                    logger.info('Redirecting to Android instant app');
-                    await this.redirectToInstantApp(options);
-                } else if (mobileDeviceType === DeviceType.IOS) {
-                    // Redirect to app clip URL
-                    logger.info('Redirecting to iOS app clip');
-                    this.redirectToAppClip();
+                if (mode === 'app') {
+                    // App Clip only if useAppClip is true and iOS
+                    if (this.options?.useAppClip && getMobileDeviceType() === DeviceType.IOS) {
+                        logger.info('Redirecting to iOS app clip');
+                        this.redirectToAppClip();
+                    } else {
+                        // Share page for Android and iOS without useAppClip
+                        logger.info('Redirecting to share page');
+                        await this.redirectToInstantApp(options);
+                    }
+                } else {
+                    // Portal mode on mobile: open blank tab synchronously, then navigate
+                    const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+                    const newTab = window.open('about:blank', '_blank');
+                    const link = await createLinkWithTemplateData(templateData, portalUrl);
+                    logger.info('Opening portal on mobile: ' + link);
+                    if (newTab) {
+                        newTab.location = link;
+                        setTimeout(() => {
+                            try {
+                                if (newTab.location.href === 'about:blank') {
+                                    newTab.close();
+                                    window.open(link, '_blank');
+                                }
+                            } catch (_) {
+                                // Cross-origin after navigation means it worked
+                            }
+                        }, 500);
+                    }
                 }
             }
         } catch (error) {
@@ -1290,9 +1407,10 @@ export class ReclaimProofRequest {
         logger.info('Browser extension flow triggered');
     }
 
-    private async showQRCodeModal(): Promise<void> {
+    private async showQRCodeModal(mode: 'portal' | 'app' = 'portal'): Promise<void> {
         try {
-            const requestUrl = await createLinkWithTemplateData(this.templateData, this.customSharePageUrl);
+            const url = mode === 'app' ? 'https://share.reclaimprotocol.org/verify' : this.customSharePageUrl;
+            const requestUrl = await createLinkWithTemplateData(this.templateData, url);
             this.modal = new QRCodeModal(this.modalOptions);
             await this.modal.show(requestUrl);
         } catch (error) {
@@ -1526,7 +1644,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, verificationConfig ?? this.getProviderVersion());
+                            const { isVerified: verified } = await verifyProof(proofs, this.getProviderVersion());
                             if (!verified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError();

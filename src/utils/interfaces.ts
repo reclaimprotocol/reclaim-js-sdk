@@ -53,7 +53,9 @@ export interface ProviderClaimData {
 export interface Context {
   contextAddress: string;
   contextMessage: string;
-  reclaimSessionId?: string;
+  reclaimSessionId: string;
+  extractedParameters?: Record<string, string>;
+  providerHash?: string;
   attestationNonce?: string;
   attestationNonceData?: {
     applicationId: string;

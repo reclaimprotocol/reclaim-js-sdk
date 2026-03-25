@@ -157,7 +157,7 @@ export function isHttpProviderClaimParams(claimParams: unknown): claimParams is 
         typeof params.url === 'string' &&
         typeof params.method === 'string' &&
         allowedHttpMethods.has(params.method) &&
-        typeof params.body === 'string' &&
+        (params.body == null || typeof params.body === 'string') &&
         Array.isArray(params.responseMatches) &&
         params.responseMatches.length > 0 &&
         Array.isArray(params.responseRedactions)
