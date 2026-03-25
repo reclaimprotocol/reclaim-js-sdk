@@ -69,6 +69,19 @@ const sdkVersion = require('../package.json').version;
  *
  * @example
  * ```typescript
+ * // Fast and simple automatically fetched verification
+ * const isValid = await verifyProof(proof, request.getProviderVersion());
+ * 
+ * // Or, by manually providing the details:
+ * 
+ * const isValid = await verifyProof(proof, { 
+ *   providerId: "YOUR_PROVIDER_ID", 
+ *   // The exact provider version used in the session.
+ *   providerVersion: "1.0.0",
+ *   // Optionally provide tags. For example, this can be `['ai']` when you want to allow patches from ai.
+ *   allowedTags: ["ai"]
+ * });
+ * 
  * // Validate a single proof against expected hash
  * const { isVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] });
  * if (isVerified) {
@@ -80,10 +93,18 @@ const sdkVersion = require('../package.json').version;
  * const result = await verifyProof([proof1, proof2], {
  *   hashes: ['0xAbC...', '0xF22..'],
  * });
- *
- * // Validate 1 required proof, one that must appear exactly once, and one optional
- * const result = await verifyProof([proof1, proof2, sameAsProof2], {
- *   hashes: ['0xAbC...', { value: '0xF22..', multiple: false }, { value: '0xE33..', required: false }],
+ * 
+ * // Validate multiple proofs and handle optional matches or repeated proofs
+ * const areAllValid = await verifyProof([proof1, proof2, sameAsProof2], { 
+ *   hashes: [
+ *     // A string hash is perfectly equivalent to { value: '...', required: true, multiple: true }
+ *     '0xStrict1...', 
+ *     // An array 'value' means 1 proof can have any 1 matching hash from this list.
+ *     // 'multiple: true' (the default) means any proof matching this hash is allowed to appear multiple times in the list of proofs.
+ *     { value: ['0xOpt1..', '0xOpt2..'], multiple: true }, 
+ *     // 'required: false' means there can be 0 proofs matching this hash. Such proofs may be optionally present. (Defaults to true).
+ *     { value: '0xE33..', required: false }
+ *   ],
  * });
  * ```
  */
@@ -1469,6 +1490,7 @@ export class ReclaimProofRequest {
         return {
             providerId: this.providerId,
             providerVersion: exactProviderVersionString,
+            allowedTags: this.options?.acceptAiProviders ? ['ai'] : [],
         }
     }
 
@@ -1480,10 +1502,10 @@ export class ReclaimProofRequest {
      * * `fetchProviderHashRequirementsBy()` - An alternative of this function to get the expected hashes for a provider version by providing providerId and exactProviderVersionString. The result can be provided in verifyProof function's `config` parameter for proof validation.
      * * `getProviderHashRequirementsFromSpec()` - An alternative of this function to get the expected hashes from a provider spec. The result can be provided in verifyProof function's `config` parameter for proof validation.
      *
-     * @returns A promise that resolves to a ProviderHashRequirementsConfig
+     * @returns A promise that resolves to a `ProviderHashRequirementsConfig` or `ProviderHashRequirementsConfig[]`
      */
-    getProviderHashRequirements(proofs: Proof[]): Promise<ProviderHashRequirementsConfig> {
-        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', proofs);
+    getProviderHashRequirements(proofs: Proof[], allowedTags: string[] | null | undefined): Promise<ProviderHashRequirementsConfig[]> {
+        return fetchProviderHashRequirementsBy(this.providerId, this.resolvedProviderVersion ?? '', allowedTags, proofs);
     }
 
     /**
@@ -1525,7 +1547,7 @@ export class ReclaimProofRequest {
      * });
      * ```
      */
-    async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
+    async startSession({ onSuccess, onError, verificationConfig }: StartSessionParams): Promise<void> {
         if (!this.sessionId) {
             const message = "Session can't be started due to undefined value of sessionId";
             logger.info(message);

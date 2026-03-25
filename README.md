@@ -578,7 +578,12 @@ These options allow you to securely process proofs or cancellations on your serv
 
 ## Proof Verification
 
-The SDK provides a `verifyProof` function to manually verify proofs. This is useful when you need to validate proofs outside of the normal flow:
+The SDK provides a `verifyProof` function to manually verify proofs cryptographically on your backend. This involves validating the attestor signatures and enforcing that the proof matches the expected requirements.
+
+Here are the possible ways to use `verifyProof`, from beginner to advanced:
+
+### 1. Simple Verification
+The easiest way is to let the SDK retrieve the requirements automatically. If you have access to your `ReclaimProofRequest` instance, you can use `request.getProviderVersion()` to automate and simplify verification!
 
 ```javascript
 import { verifyProof } from "@reclaimprotocol/js-sdk";
@@ -592,9 +597,56 @@ if (isVerified) {
 } else {
   console.log("Proof is invalid");
 }
+```
 
-// Verify multiple proofs
-const result = await verifyProof([proof1, proof2], { hashes: ['0xAbC...', '0xF22..'] });
+Or, by manually providing the details:
+```javascript
+const isValid = await verifyProof(proof, { 
+  providerId: "YOUR_PROVIDER_ID", 
+  // The exact provider version used in the session.
+  providerVersion: "1.0.0",
+  // Optionally provide tags. For example, this can be `['ai']` when you want to allow patches from ai.
+  allowedTags: ["ai"]
+});
+```
+
+### 2. Intermediate: Strict Hash Verification
+
+If you want to avoid network requests, you can manually feed the expected cryptographic hashes your system allows.
+
+```javascript
+// Verify a proof against a known, strict expected hash
+const { isVerified, data } = await verifyProof(proof, {
+  hashes: ['0x1abc2def3456...']
+});
+```
+
+### 3. Advanced: Multiple Proofs and Optional Matches
+When building advanced use-cases, you might process multiple distinct proofs at once or deal with providers that yield a few valid hash possibilities (e.g., due to optional data fields).
+
+```javascript
+const result = await verifyProof([proof1, proof2, sameAsProof2], {
+  hashes: [
+    // A string hash is equivalent to an object with { value: '...', required: true, multiple: true }.
+    '0xStrictHash123...',
+    {
+       // An array 'value' means that 1 proof can have any 1 matching hash
+       // from this list, typically because of optional variables in the original request.
+       value: ['0xOptHash1...', '0xOptHashA...'],
+       // 'multiple' being true (which is the default) means any proof matching this hash
+       // is allowed to appear multiple times in the list of proofs you are verifying.
+       multiple: true
+    },
+    {
+       value: '0xE33...',
+       // 'required: false' means there can be 0 proofs matching this hash.
+       // Such proofs may be optionally present in the list of proofs.
+       // (By default, 'required' is true).
+       required: false
+    }
+  ]
+});
+
 if (result.isVerified) {
   result.data.forEach((d, i) => {
     console.log(`Proof ${i + 1} context:`, d.context);
@@ -603,13 +655,14 @@ if (result.isVerified) {
 }
 ```
 
-The `verifyProof` function:
+### 4. Danger Zone: Disabled Content Validation
+If you only want to verify the attestor signature but wish to dangerously bypass the parameter/content match (Not Recommended):
 
-- Accepts either a single proof or an array of proofs
-- Returns `{ isVerified: boolean, data: Array }` where each entry has `context` (full context object without extractedParameters) and `extractedParameters`
-- On failure, `isVerified` is `false` and `data` is an empty array
-- Verifies signatures, witness integrity, and claim data
-- Handles both standalone and blockchain-based proofs
+```javascript
+const { isVerified } = await verifyProof(proof, {
+  dangerouslyDisableContentValidation: true
+});
+```
 
 ## Error Handling
 
