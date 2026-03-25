@@ -11,7 +11,7 @@ export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' |
   & ClaimInfo;
 
 export interface HttpProviderClaimParams {
-  body: string;
+  body?: string | null;
   method: RequestSpec['method'];
   responseMatches: ResponseMatchSpec[]
   responseRedactions: ResponseRedactionSpec[]
@@ -290,6 +290,7 @@ export type TemplateData = {
 // Verify proof result type
 export type VerifyProofResult = {
   isVerified: boolean;
+  isTeeVerified?: boolean;
   data: {
     context: Record<string, unknown>;
     extractedParameters: Record<string, string>;

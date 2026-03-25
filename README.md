@@ -664,6 +664,58 @@ const { isVerified } = await verifyProof(proof, {
 });
 ```
 
+## TEE Attestation Verification
+
+The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. This provides hardware-level assurance that the proof was generated inside a secure enclave (AMD SEV-SNP).
+
+### Enabling TEE Attestation
+
+To request TEE attestation during proof generation, enable it during initialization:
+
+```javascript
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
+  acceptTeeAttestation: true,
+});
+```
+
+### Verifying TEE Attestation
+
+Pass `true` as the third argument (`verifyTEE`) to `verifyProof` to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail.
+
+```javascript
+import { verifyProof } from "@reclaimprotocol/js-sdk";
+
+// Pass true as the third argument (verifyTEE) to require TEE verification
+const { isVerified, isTeeVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] }, true);
+
+if (isVerified) {
+  console.log("Proof is fully verified with hardware attestation");
+  console.log("TEE verified:", isTeeVerified);
+  console.log("Extracted parameters:", data[0].extractedParameters);
+}
+```
+
+When `verifyTEE` is `true`, the result includes `isTeeVerified`. The overall `isVerified` will be `false` if TEE data is missing or TEE verification fails.
+
+The TEE verification validates:
+- **Nonce binding**: Ensures the attestation nonce matches the proof context
+- **Application ID**: Confirms the attestation was generated for your application (optional)
+- **Timestamp**: Verifies the attestation timestamp is within an acceptable range of the proof timestamp
+- **SNP report**: Validates the AMD SEV-SNP hardware attestation report
+- **VLEK certificate**: Verifies the certificate chain against AMD's root of trust
+- **Report data**: Confirms the workload and verifier digests match the attestation
+
+You can also verify TEE attestation separately using the lower-level `verifyTeeAttestation` function:
+
+```javascript
+import { verifyTeeAttestation } from "@reclaimprotocol/js-sdk";
+
+const isTeeValid = await verifyTeeAttestation(proof, APP_ID);
+if (isTeeValid) {
+  console.log("TEE attestation verified — proof was generated in a secure enclave");
+}
+```
+
 ## Error Handling
 
 The SDK provides specific error types for different failure scenarios. Here's how to handle them:

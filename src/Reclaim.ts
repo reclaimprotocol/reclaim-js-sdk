@@ -46,6 +46,7 @@ import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { canonicalStringify } from './utils/strings'
 import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
+import { verifyTeeAttestation } from './utils/verifyTee'
 import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
@@ -65,12 +66,16 @@ const sdkVersion = require('../package.json').version;
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation.
- * @returns Verification result with `isVerified` and, on success, extracted `data` from each proof
+ * @param verifyTEE - If `true`, requires and verifies TEE attestation on the proofs. Verification fails if TEE data is missing or invalid.
+ * @returns Verification result with `isVerified`, extracted `data` from each proof, and `isTeeVerified` when `verifyTEE` is `true`
  *
  * @example
  * ```typescript
  * // Fast and simple automatically fetched verification
  * const { isVerified, data } = await verifyProof(proof, request.getProviderVersion());
+ *
+ * // With TEE attestation verification (fails if TEE data is missing or invalid)
+ * const { isVerified, isTeeVerified, data } = await verifyProof(proof, request.getProviderVersion(), true);
  * 
  * // Or, by manually providing the details:
  * 
@@ -110,7 +115,8 @@ const sdkVersion = require('../package.json').version;
  */
 export async function verifyProof(
     proofOrProofs: Proof | Proof[],
-    config: VerificationConfig
+    config: VerificationConfig,
+    verifyTEE?: boolean
 ): Promise<VerifyProofResult> {
     const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
     try {
@@ -129,10 +135,36 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
-        return {
+        const result: VerifyProofResult = {
             isVerified: true,
             data: proofs.map(extractProofData),
         }
+
+        if (verifyTEE) {
+            const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
+
+            if (!hasTeeData) {
+                logger.error('TEE verification requested but one or more proofs are missing TEE attestation data');
+                result.isTeeVerified = false;
+                result.isVerified = false;
+                return result;
+            }
+
+            try {
+                const teeResults = await Promise.all(proofs.map(proof => verifyTeeAttestation(proof)));
+                result.isTeeVerified = teeResults.every(r => r === true);
+                if (!result.isTeeVerified) {
+                    logger.error('TEE attestation verification failed for one or more proofs');
+                }
+                result.isVerified = result.isVerified && result.isTeeVerified;
+            } catch (error) {
+                logger.error('Error verifying TEE attestation:', error);
+                result.isTeeVerified = false;
+                result.isVerified = false;
+            }
+        }
+
+        return result;
     } catch (error) {
         logger.error('Error in validating proof:', error);
         return {

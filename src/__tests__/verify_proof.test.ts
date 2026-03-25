@@ -17,6 +17,7 @@ describe('verifyProof', () => {
         const proof = proofData[0] as Proof;
         const verificationStatus = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(verificationStatus.isVerified).toBe(true);
+        expect(verificationStatus.isTeeVerified).toBe(true);
         await expect(verifyTeeAttestation(proof, expectedApplicationId)).resolves.toBe(true);
     });
 
