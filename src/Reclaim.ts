@@ -10,6 +10,7 @@ import {
     ReclaimFlowLaunchOptions,
     HttpFormEntry,
     HttpRedirectionMethod,
+    type TrustedData,
     type VerifyProofResult,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
@@ -36,7 +37,8 @@ import {
     SignatureNotFoundError,
     ErrorDuringVerificationError,
     CallbackUrlRequiredError,
-    ProofNotValidatedError
+    ProofNotValidatedError,
+    TeeVerificationError
 } from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
@@ -144,9 +146,11 @@ export async function verifyProof(
             const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
 
             if (!hasTeeData) {
-                logger.error('TEE verification requested but one or more proofs are missing TEE attestation data');
+                const teeError = new TeeVerificationError('TEE verification requested but one or more proofs are missing TEE attestation data');
+                logger.error(teeError.message);
                 result.isTeeVerified = false;
                 result.isVerified = false;
+                result.error = teeError;
                 return result;
             }
 
@@ -154,13 +158,17 @@ export async function verifyProof(
                 const teeResults = await Promise.all(proofs.map(proof => verifyTeeAttestation(proof)));
                 result.isTeeVerified = teeResults.every(r => r === true);
                 if (!result.isTeeVerified) {
-                    logger.error('TEE attestation verification failed for one or more proofs');
+                    const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
+                    logger.error(teeError.message);
+                    result.isVerified = false;
+                    result.error = teeError;
                 }
-                result.isVerified = result.isVerified && result.isTeeVerified;
             } catch (error) {
-                logger.error('Error verifying TEE attestation:', error);
+                const teeError = new TeeVerificationError('Error verifying TEE attestation', error);
+                logger.error(teeError.message);
                 result.isTeeVerified = false;
                 result.isVerified = false;
+                result.error = teeError;
             }
         }
 
@@ -170,11 +178,12 @@ export async function verifyProof(
         return {
             isVerified: false,
             data: [],
+            error: error instanceof Error ? error : new Error(String(error)),
         }
     }
 }
 
-function extractProofData(proof: Proof): VerifyProofResult['data'][number] {
+function extractProofData(proof: Proof): TrustedData {
     try {
         const context = JSON.parse(proof.claimData.context)
         const { extractedParameters, ...rest } = context

@@ -44,3 +44,4 @@ export const InavlidParametersError = createErrorClass('InavlidParametersError')
 export const ProofSubmissionFailedError = createErrorClass('ProofSubmissionFailedError');
 export const ErrorDuringVerificationError = createErrorClass('ErrorDuringVerificationError');
 export const CallbackUrlRequiredError = createErrorClass('CallbackUrlRequiredError');
+export const TeeVerificationError = createErrorClass('TeeVerificationError');

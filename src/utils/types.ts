@@ -287,14 +287,17 @@ export type TemplateData = {
   preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
 
+export type TrustedData = {
+  context: Record<string, unknown>;
+  extractedParameters: Record<string, string>;
+};
+
 // Verify proof result type
 export type VerifyProofResult = {
   isVerified: boolean;
   isTeeVerified?: boolean;
-  data: {
-    context: Record<string, unknown>;
-    extractedParameters: Record<string, string>;
-  }[];
+  data: TrustedData[];
+  error?: Error;
 }
 
 export type ProviderVersionConfig = {
