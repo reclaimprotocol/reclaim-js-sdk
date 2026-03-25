@@ -126,7 +126,7 @@ describe('Signature Verification', () => {
         };
 
         const result = await verifyProof(proof, validationConfig);
-        expect(result).toBe(true);
+        expect(result.isVerified).toBe(true);
     });
 
     /**
@@ -161,7 +161,7 @@ describe('Signature Verification', () => {
             hashes: [{ value: Array.isArray(computedHash) ? computedHash[0] : computedHash }]
         };
         const result = await verifyProof(proof, validationConfig);
-        expect(result).toBe(false);
+        expect(result.isVerified).toBe(false);
     });
 
     /**
