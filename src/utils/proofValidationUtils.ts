@@ -104,8 +104,8 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
             ? hashRequirement.value.map(h => h.toLowerCase().trim())
             : [hashRequirement.value.toLowerCase().trim()];
 
-        const isRequired = typeof hashRequirement !== 'string' ? (hashRequirement.required ?? HASH_REQUIRED_DEFAULT) : HASH_REQUIRED_DEFAULT;
-        let canMatchMultiple = typeof hashRequirement !== 'string' ? (hashRequirement.multiple ?? HASH_MATCH_MULTIPLE_DEFAULT) : HASH_MATCH_MULTIPLE_DEFAULT;
+        const isRequired = hashRequirement.required ?? HASH_REQUIRED_DEFAULT;
+        const canMatchMultiple = hashRequirement.multiple ?? HASH_MATCH_MULTIPLE_DEFAULT;
 
         // Iterate through unvalidated proofs to assert that the generated deterministic hash 
         // derived from the User's actual matched elements structurally matches ANY of the permissible configurations.
