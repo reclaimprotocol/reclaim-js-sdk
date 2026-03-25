@@ -589,13 +589,13 @@ The easiest way is to let the SDK retrieve the requirements automatically. If yo
 import { verifyProof } from "@reclaimprotocol/js-sdk";
 
 // Verify a single proof
-const { isVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] });
+const { isVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'] });
 if (isVerified) {
   console.log("Proof is valid");
   console.log("Context:", data[0].context);
   console.log("Extracted parameters:", data[0].extractedParameters);
 } else {
-  console.log("Proof is invalid");
+  console.log("Proof is invalid, reason:", error);
 }
 ```
 
@@ -680,18 +680,23 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 
 ### Verifying TEE Attestation
 
-Pass `true` as the third argument (`verifyTEE`) to `verifyProof` to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail.
+Pass `true` as the third argument (`verifyTEE`) to `verifyProof` to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
 
 ```javascript
 import { verifyProof } from "@reclaimprotocol/js-sdk";
+import { TeeVerificationError } from "@reclaimprotocol/js-sdk";
 
 // Pass true as the third argument (verifyTEE) to require TEE verification
-const { isVerified, isTeeVerified, data } = await verifyProof(proof, { hashes: ['0xAbC...'] }, true);
+const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'] }, true);
 
 if (isVerified) {
   console.log("Proof is fully verified with hardware attestation");
   console.log("TEE verified:", isTeeVerified);
   console.log("Extracted parameters:", data[0].extractedParameters);
+} else if (error instanceof TeeVerificationError) {
+  console.log("TEE verification failed:", error.message);
+} else {
+  console.log("Proof verification failed:", error);
 }
 ```
 
