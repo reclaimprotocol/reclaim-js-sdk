@@ -29,12 +29,12 @@ describe('generateSpecsFromRequestSpecTemplate', () => {
         const specWithMatches: RequestSpec = {
             ...baseSpec,
             responseMatches: [
-                { value: '"name":"{{param1}}"', invert: undefined, isOptional: undefined, type: "contains" },
-                { value: '"department":"(?<param2>.*)"', invert: undefined, isOptional: undefined, type: "regex" }
+                { value: '"name":"{{${param1}}}"', invert: undefined, isOptional: undefined, type: "contains" },
+                { value: '"department":"(?<${param2}>.*)"', invert: undefined, isOptional: undefined, type: "regex" }
             ],
             responseRedactions: [
-                { jsonPath: "$.employees[?(@.name == {{param1}})]", regex: '"name":"(?<param1>.*)"', xPath: "" },
-                { jsonPath: "$.employees[?(@.department == {{param2}})]", regex: '"department":"(?<param2>.*)"', xPath: "" },
+                { jsonPath: "$.employees[?(@.name == {{${param1}}})]", regex: '"name":"(?<${param1}>.*)"', xPath: "" },
+                { jsonPath: "$.employees[?(@.department == {{${param2}}})]", regex: '"department":"(?<${param2}>.*)"', xPath: "" },
             ]
         };
 
@@ -59,7 +59,7 @@ describe('generateSpecsFromRequestSpecTemplate', () => {
         const specWithMatches: RequestSpec = {
             ...baseSpec,
             responseMatches: [
-                { value: '"name":"{{param1}}"', invert: undefined, isOptional: undefined, type: "contains" }
+                { value: '"name":"{{${param1}}}"', invert: undefined, isOptional: undefined, type: "contains" }
             ],
             responseRedactions: []
         };
@@ -67,17 +67,17 @@ describe('generateSpecsFromRequestSpecTemplate', () => {
         generateSpecsFromRequestSpecTemplate([specWithMatches], { 'param1': ['alex'], 'param2': ['IT'] });
 
         // Original spec should remain unchanged
-        expect(specWithMatches.responseMatches[0].value).toBe('"name":"{{param1}}"');
+        expect(specWithMatches.responseMatches[0].value).toBe('"name":"{{${param1}}}"');
     });
 
     it('should replace all occurrences of a template parameter in response expectations', () => {
         const complexSpec: RequestSpec = {
             ...baseSpec,
             responseMatches: [
-                { value: '"name":"{{param1}}", "nickname":"{{param1}}"', invert: undefined, isOptional: undefined, type: "contains" }
+                { value: '"name":"{{${param1}}}", "nickname":"{{${param1}}}"', invert: undefined, isOptional: undefined, type: "contains" }
             ],
             responseRedactions: [
-                { jsonPath: "$.employees[?(@.name == {{param1}} && @.alias == {{param1}})]", regex: '"{{param1}}":"(?<{{param1}}>.*)"', xPath: "//{{param1}}[@id='{{param1}}']" }
+                { jsonPath: "$.employees[?(@.name == {{${param1}}} && @.alias == {{${param1}}})]", regex: '"{{${param1}}}":"(?<{{${param1}}}>.*)"', xPath: "//{{${param1}}}[@id='{{${param1}}}']" }
             ],
             templateParams: ['param1']
         };

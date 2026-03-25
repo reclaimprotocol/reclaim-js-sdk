@@ -86,6 +86,10 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
             throw new InvalidRequestSpecError(`Not all template variables have same length for template`);
         }
 
+        const getRequestSpecVariableTemplate = (key: string) => {
+            return `\${${key}}`;
+        }
+
         for (let i = 0; i < templateParamsPairMatchLength; i++) {
             const currentTemplateParams: Record<string, string> = {};
             for (const [key, values] of templateParamsPairMatch) {
@@ -100,15 +104,15 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
 
             for (const match of spec.responseMatches) {
                 for (const [key, value] of Object.entries(currentTemplateParams)) {
-                    match.value = match.value.split(key).join(value);
+                    match.value = match.value.split(getRequestSpecVariableTemplate(key)).join(value);
                 }
             }
 
             for (const redaction of spec.responseRedactions) {
                 for (const [key, value] of Object.entries(currentTemplateParams)) {
-                    redaction.jsonPath = redaction.jsonPath.split(key).join(value);
-                    redaction.xPath = redaction.xPath.split(key).join(value);
-                    redaction.regex = redaction.regex.split(key).join(value);
+                    redaction.jsonPath = redaction.jsonPath.split(getRequestSpecVariableTemplate(key)).join(value);
+                    redaction.xPath = redaction.xPath.split(getRequestSpecVariableTemplate(key)).join(value);
+                    redaction.regex = redaction.regex.split(getRequestSpecVariableTemplate(key)).join(value);
                 }
             }
 
