@@ -1283,11 +1283,25 @@ export class ReclaimProofRequest {
                 }
 
                 if (mode === 'portal') {
-                    // Portal mode: open in new tab
+                    // Open blank tab synchronously to preserve click activation (avoids popup blocker)
                     const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+                    const newTab = window.open('about:blank', '_blank');
                     const link = await createLinkWithTemplateData(templateData, portalUrl);
                     logger.info('Opening portal in new tab: ' + link);
-                    window.open(link, '_blank');
+                    if (newTab) {
+                        newTab.location = link;
+                        // Verify navigation actually happened; close blank tab if it didn't
+                        setTimeout(() => {
+                            try {
+                                if (newTab.location.href === 'about:blank') {
+                                    newTab.close();
+                                    window.open(link, '_blank');
+                                }
+                            } catch (_) {
+                                // Cross-origin after navigation means it worked
+                            }
+                        }, 500);
+                    }
                 } else {
                     // App mode: QR code modal with share page URL
                     logger.info('Showing QR code modal with share page URL');
@@ -1305,11 +1319,24 @@ export class ReclaimProofRequest {
                         await this.redirectToInstantApp(options);
                     }
                 } else {
-                    // Portal mode on mobile: open portal URL in new tab
+                    // Portal mode on mobile: open blank tab synchronously, then navigate
                     const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+                    const newTab = window.open('about:blank', '_blank');
                     const link = await createLinkWithTemplateData(templateData, portalUrl);
-                    logger.info('Opening portal in new tab: ' + link);
-                    window.open(link, '_blank');
+                    logger.info('Opening portal on mobile: ' + link);
+                    if (newTab) {
+                        newTab.location = link;
+                        setTimeout(() => {
+                            try {
+                                if (newTab.location.href === 'about:blank') {
+                                    newTab.close();
+                                    window.open(link, '_blank');
+                                }
+                            } catch (_) {
+                                // Cross-origin after navigation means it worked
+                            }
+                        }, 500);
+                    }
                 }
             }
         } catch (error) {
