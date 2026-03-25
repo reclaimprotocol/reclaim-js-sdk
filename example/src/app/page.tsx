@@ -1,63 +1,33 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { ReclaimProofRequest } from '@reclaimprotocol/js-sdk'
-import { Proof } from '@reclaimprotocol/js-sdk'
+import { ReclaimProofRequest, verifyProof } from '@reclaimprotocol/js-sdk'
+import type { Proof, VerifyProofResult } from '@reclaimprotocol/js-sdk'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [proofData, setProofData] = useState<Proof[] | null>(null)
+  const [verifyResult, setVerifyResult] = useState<VerifyProofResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reclaimProofRequest, setReclaimProofRequest] = useState<ReclaimProofRequest | null>(null)
 
   useEffect(() => {
-    // Initialize the ReclaimProofRequest when the component mounts
     initializeReclaimProofRequest()
-    // verifyProofData()
   }, [])
 
   async function initializeReclaimProofRequest() {
     try {
-      // ReclaimProofRequest Fields:
-      // - applicationId: Unique identifier for your application
-      // - providerId: Identifier for the specific provider you're using
-      // - sessionId: Unique identifier for the current proof request session
-      // - context: Additional context information for the proof request
-      // - requestedProof: Details of the proof being requested
-      // - signature: Cryptographic signature for request authentication
-      // - redirectUrl: URL to redirect after proof generation (optional)
-      // - appCallbackUrl: URL for receiving proof generation updates (optional)
-      // - timeStamp: Timestamp of the proof request
-      // - options: Additional configuration options
-
-
       const proofRequest = await ReclaimProofRequest.init(
         process.env.NEXT_PUBLIC_RECLAIM_APP_ID!,
         process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET!,
         process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_ID!,
-        // Uncomment the following line to enable logging and AI providers
         {
           log: true,
+          // portalUrl: 'https://portal.reclaimprotocol.org', // default
+          // launchOptions: { verificationMode: 'app' }, // for native app flow
+          // useAppClip: true, // for App Clip on iOS with verificationMode: 'app'
         }
       )
       setReclaimProofRequest(proofRequest)
-
-      // // // Add context to the proof request (optional)
-      // proofRequest.setContext("0x48796C654F7574707574", "test")
-
-      // deprecated method: use setContext instead
-      // proofRequest.addContext("0x48796C654F7574707574", "test1")
-
-      // Set parameters for the proof request (if needed)
-      // proofRequest.setParams({ email: "test@example.com", userName: "testUser" })
-
-      // Set a redirect URL (if needed)
-      // proofRequest.setRedirectUrl('https://example.com/redirect')
-
-      // Set a custom app callback URL (if needed)
-      // proofRequest.setAppCallbackUrl('https://webhook.site/fd6cf442-0ea7-4427-8cb8-cb4dbe8884d2')
-
-      // Uncomment the following line to log the proof request and to get the Json String
-      // console.log('Proof request initialized:', proofRequest.toJsonString())
     } catch (error) {
       console.error('Error initializing ReclaimProofRequest:', error)
       setError('Failed to initialize Reclaim. Please try again.')
@@ -74,22 +44,33 @@ export default function Home() {
     setError(null)
 
     try {
-      // Start the verification session
+      // Portal flow (default) — opens portal in new tab
       await reclaimProofRequest.triggerReclaimFlow()
+
+      // For native app flow, use:
+      //await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app'})
 
       await reclaimProofRequest.startSession({
         onSuccess: async (proof: Proof | Proof[] | undefined) => {
           setIsLoading(false)
 
-          if (proof && typeof proof === 'string') {
-            console.log('SDK Message:', proof)
-            setError('Received string response instead of proof object.')
-          } else if (proof && typeof proof !== 'string') {
-            console.log('Proof received:', proof)
-            if (Array.isArray(proof)) {
-              setProofData(proof)
+          if (proof && typeof proof !== 'string') {
+            const proofs = Array.isArray(proof) ? proof : [proof]
+            setProofData(proofs)
+
+            // Verify proofs and get extracted data
+            const providerVersion = reclaimProofRequest.getProviderVersion()
+            const { isVerified, data } = await verifyProof(proofs, providerVersion)
+            setVerifyResult({ isVerified, data })
+
+            if (isVerified) {
+              console.log('Proofs verified successfully')
+              data.forEach((d, i) => {
+                console.log(`Proof ${i + 1} context:`, d.context)
+                console.log(`Proof ${i + 1} params:`, d.extractedParameters)
+              })
             } else {
-              setProofData([proof])
+              console.warn('Proof verification failed')
             }
           }
         },
@@ -106,43 +87,12 @@ export default function Home() {
     }
   }
 
-  // Function to extract provider URL from parameters
   const getProviderUrl = (proof: Proof) => {
     try {
-      const parameters = JSON.parse(proof.claimData.parameters);
-      return parameters.url || "Unknown Provider";
-    } catch (e) {
-      return proof.claimData.provider || "Unknown Provider";
-    }
-  }
-
-  // Function to beautify and display extracted parameters
-  const renderExtractedParameters = (proof: Proof) => {
-    try {
-      const context = JSON.parse(proof.claimData.context)
-      const extractedParams = context.extractedParameters || {}
-
-      return (
-        <>
-          <p className="text-sm font-medium text-gray-500 mb-2">Extracted Parameters</p>
-          {Object.entries(extractedParams).length > 0 ? (
-            <div className="space-y-2">
-              {Object.entries(extractedParams).map(([key, value]) => (
-                <div key={key} className="bg-gray-50 p-2 rounded">
-                  <div className="flex flex-col">
-                    <span className="font-medium">{key}:</span>
-                    <span className="font-mono break-all">{String(value)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 bg-gray-50 p-2 rounded">No parameters extracted</p>
-          )}
-        </>
-      )
-    } catch (e) {
-      return <p className="text-red-500 bg-gray-50 p-2 rounded">Failed to parse parameters</p>
+      const parameters = JSON.parse(proof.claimData.parameters)
+      return parameters.url || 'Unknown Provider'
+    } catch {
+      return proof.claimData.provider || 'Unknown Provider'
     }
   }
 
@@ -181,13 +131,26 @@ export default function Home() {
 
         {proofData && proofData.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-2xl font-semibold mb-6 text-center">Verification Successful</h2>
+            <h2 className="text-2xl font-semibold mb-6 text-center">
+              {verifyResult?.isVerified ? 'Verification Successful' : 'Proofs Received'}
+            </h2>
+
+            {verifyResult && (
+              <div className={`mb-6 p-4 rounded-md text-sm font-medium ${verifyResult.isVerified
+                ? 'bg-green-50 border border-green-200 text-green-700'
+                : 'bg-red-50 border border-red-200 text-red-600'
+                }`}>
+                {verifyResult.isVerified ? 'All proofs verified successfully' : 'Proof verification failed'}
+              </div>
+            )}
 
             {proofData.map((proof, index) => (
               <div key={index} className="mb-8 bg-white p-8 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-xl font-medium">Proof #{index + 1}</h3>
-                  <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">Verified</span>
+                  {verifyResult?.isVerified && (
+                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">Verified</span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 mb-4">
@@ -201,10 +164,36 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Extracted parameters section */}
-                <div className="mt-5 pt-4 border-t border-gray-100">
-                  {renderExtractedParameters(proof)}
-                </div>
+                {/* Extracted parameters from verifyProof result */}
+                {verifyResult?.isVerified && verifyResult.data[index] && (
+                  <div className="mt-5 pt-4 border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-500 mb-2">Extracted Parameters</p>
+                    {Object.entries(verifyResult.data[index].extractedParameters).length > 0 ? (
+                      <div className="space-y-2">
+                        {Object.entries(verifyResult.data[index].extractedParameters).map(([key, value]) => (
+                          <div key={key} className="bg-gray-50 p-2 rounded">
+                            <div className="flex flex-col">
+                              <span className="font-medium">{key}:</span>
+                              <span className="font-mono break-all">{String(value)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 bg-gray-50 p-2 rounded">No parameters extracted</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Context from verifyProof result */}
+                {verifyResult?.isVerified && verifyResult.data[index] && (
+                  <div className="mt-5 pt-4 border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-500 mb-2">Context</p>
+                    <pre className="text-sm text-gray-600 font-mono break-all bg-gray-50 p-2 rounded overflow-auto">
+                      {JSON.stringify(verifyResult.data[index].context, null, 2)}
+                    </pre>
+                  </div>
+                )}
 
                 {/* Witnesses section */}
                 {proof.witnesses && proof.witnesses.length > 0 && (
@@ -220,21 +209,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Signatures section */}
-                {proof.signatures && proof.signatures.length > 0 && (
-                  <div className="mt-5 pt-4 border-t border-gray-100">
-                    <p className="text-sm font-medium text-gray-500 mb-2">Signatures</p>
-                    <div className="space-y-2">
-                      {proof.signatures.map((signature, sidx) => (
-                        <div key={sidx} className="bg-gray-50 p-2 rounded">
-                          <p className="text-sm font-mono break-all">{signature}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Identifier (full) */}
+                {/* Identifier */}
                 <div className="mt-5 pt-4 border-t border-gray-100">
                   <p className="text-sm font-medium text-gray-500 mb-2">Proof Identifier</p>
                   <p className="text-sm text-gray-600 font-mono break-all bg-gray-50 p-2 rounded">
@@ -245,14 +220,13 @@ export default function Home() {
             ))}
 
             <button
-              onClick={() => setProofData(null)}
+              onClick={() => { setProofData(null); setVerifyResult(null) }}
               className="mt-4 px-6 py-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors font-medium shadow-sm w-full md:w-auto"
             >
               Start New Claim
             </button>
           </div>
         )}
-
         {/* Optional: Add debug link for device detection testing */}
         {/* <div className="text-center mt-8">
           <a href="/debug" className="text-sm text-blue-600 hover:underline">

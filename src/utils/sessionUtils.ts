@@ -1,13 +1,15 @@
 import {
   InitSessionError,
   UpdateSessionError,
-  StatusUrlError
+  StatusUrlError,
+  ProviderConfigFetchError
 } from "./errors";
-import { InitSessionResponse, SessionStatus, StatusUrlResponse } from "./types";
+import { InitSessionResponse, ProviderConfigResponse, ProviderHashRequirementsResponse, SessionStatus, StatusUrlResponse } from "./types";
 import { validateFunctionParams } from "./validationUtils";
 import { BACKEND_BASE_URL, constants } from './constants';
 import { http } from "./fetch";
 import loggerModule from './logger';
+
 const logger = loggerModule.logger;
 
 /**
@@ -120,4 +122,41 @@ export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlRespon
   }
 }
 
+export async function fetchProviderConfigs(providerId: string, exactProviderVersionString: string | null | undefined, allowedTags: string[] | null | undefined): Promise<ProviderConfigResponse> {
+  validateFunctionParams(
+    [
+      { input: providerId, paramName: 'providerId', isString: true },
+    ],
+    'fetchProviderConfigs'
+  );
 
+  if (exactProviderVersionString != null && exactProviderVersionString != undefined) {
+    validateFunctionParams(
+      [
+        { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true },
+      ],
+      'fetchProviderConfigs'
+    );
+  }
+
+  try {
+    const response = await http.client(constants.DEFAULT_PROVIDER_CONFIGS_URL(providerId, exactProviderVersionString, allowedTags), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const res = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = `Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}. Status Code: ${response.status}`;
+      logger.info(errorMessage, res);
+      throw new ProviderConfigFetchError(errorMessage);
+    }
+
+    return res as ProviderConfigResponse;
+  } catch (err) {
+    const errorMessage = `Failed to fetch provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`;
+    logger.info(errorMessage, err);
+    throw new ProviderConfigFetchError(`Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`);
+  }
+}

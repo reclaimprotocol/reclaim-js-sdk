@@ -1,3 +1,12 @@
+export interface TeeAttestation {
+  workload_digest: string;
+  verifier_digest: string;
+  nonce: string;
+  snp_report: string;
+  vlek_cert: string;
+  timestamp: string;
+}
+
 // Proof-related interfaces
 export interface Proof {
   identifier: string;
@@ -7,6 +16,7 @@ export interface Proof {
   extractedParameterValues: any;
   publicData?: { [key: string]: string };
   taskId?: number;
+  teeAttestation?: TeeAttestation;
 }
 
 // Extension Interactions
@@ -43,6 +53,15 @@ export interface ProviderClaimData {
 export interface Context {
   contextAddress: string;
   contextMessage: string;
+  reclaimSessionId: string;
+  extractedParameters?: Record<string, string>;
+  providerHash?: string;
+  attestationNonce?: string;
+  attestationNonceData?: {
+    applicationId: string;
+    sessionId: string;
+    timestamp: string;
+  };
 }
 
 export interface Beacon {
@@ -57,4 +76,35 @@ export type BeaconState = {
   nextEpochTimestampS: number;
 };
 
-
+/**
+ * Information of the exact provider and its version used in the verification session.
+ * 
+ * See also:
+ * 
+ * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+ */
+export interface ProviderVersionInfo {
+  /**
+   * The identifier of provider used in verifications that resulted in a proof
+   * 
+   * See also:
+   * 
+   * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+   */
+  providerId: string;
+  /**
+   * The exact version of provider used in verifications that resulted in a proof.
+   * 
+   * This cannot be a version constaint or version expression.
+   * 
+   * See also:
+   * 
+   * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+   */
+  providerVersion: string;
+  /**
+   * List of allowed pre-release tags.
+   * For example, if you are using AI, provide `['ai']` to allow AI patch versions of the provider.
+   */
+  allowedTags: string[];
+}
