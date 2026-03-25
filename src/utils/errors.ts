@@ -1,15 +1,15 @@
 function createErrorClass(name: string) {
     return class extends Error {
-        constructor(message?: string, public innerError?: Error) {
+        constructor(message?: string, public innerError?: unknown) {
             // Include inner error message in the main message if available
             const fullMessage = innerError
-                ? `${message || ''} caused by ${innerError.name}: ${innerError.message}`
+                ? `${message || ''} caused by ${innerError && typeof innerError === 'object' && 'name' in innerError ? innerError.name : 'Error'}: ${innerError && typeof innerError === 'object' && 'message' in innerError ? innerError.message : String(innerError)}`
                 : message;
 
             super(fullMessage);
             this.name = name;
             if (innerError) {
-                this.stack += `\nCaused by: ${innerError.stack}`;
+                this.stack += `\nCaused by: ${innerError && typeof innerError === 'object' && 'stack' in innerError ? innerError.stack : String(innerError)}`;
             }
         }
     };
@@ -18,6 +18,7 @@ function createErrorClass(name: string) {
 export const TimeoutError = createErrorClass('TimeoutError');
 export const ProofNotVerifiedError = createErrorClass('ProofNotVerifiedError');
 export const ProofNotValidatedError = createErrorClass('ProofNotValidatedError');
+export const InvalidRequestSpecError = createErrorClass('InvalidRequestSpecError');
 export const UnknownProofsNotValidatedError = createErrorClass('UnknownProofsNotValidatedError');
 export const SessionNotStartedError = createErrorClass('SessionNotStartedError');
 export const ProviderNotFoundError = createErrorClass('ProviderNotFoundError');

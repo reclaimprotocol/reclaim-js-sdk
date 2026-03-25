@@ -83,12 +83,12 @@ export type BeaconState = {
  */
 export interface ProviderVersionInfo {
   /**
-     * The identifier of provider used in verifications that resulted in a proof
-     * 
-     * See also:
-     * 
-     * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
-     */
+   * The identifier of provider used in verifications that resulted in a proof
+   * 
+   * See also:
+   * 
+   * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+   */
   providerId: string;
   /**
    * The exact version of provider used in verifications that resulted in a proof.
@@ -100,4 +100,9 @@ export interface ProviderVersionInfo {
    * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
    */
   providerVersion: string;
+  /**
+   * List of allowed pre-release tags.
+   * For example, if you are using AI, provide `['ai']` to allow AI patch versions of the provider.
+   */
+  allowedTags: string[];
 }

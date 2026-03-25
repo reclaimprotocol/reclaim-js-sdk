@@ -1,6 +1,6 @@
 import { TextEncoder, TextDecoder } from 'util';
 
-// Object.assign(global, { TextDecoder, TextEncoder });
+Object.assign(global, { TextDecoder, TextEncoder });
 
 const originalUint8ArrayHasInstance = Uint8Array[Symbol.hasInstance];
 Object.defineProperty(Uint8Array, Symbol.hasInstance, {
