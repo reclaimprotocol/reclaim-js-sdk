@@ -70,6 +70,19 @@ const sdkVersion = require('../package.json').version;
  *
  * @example
  * ```typescript
+ * // Fast and simple automatically fetched verification
+ * const isValid = await verifyProof(proof, request.getProviderVersion());
+ * 
+ * // Or, by manually providing the details:
+ * 
+ * const isValid = await verifyProof(proof, { 
+ *   providerId: "YOUR_PROVIDER_ID", 
+ *   // The exact provider version used in the session.
+ *   providerVersion: "1.0.0",
+ *   // Optionally provide tags. For example, this can be `['ai']` when you want to allow patches from ai.
+ *   allowedTags: ["ai"]
+ * });
+ * 
  * // Validate a single proof against expected hash
  * const isValid = await verifyProof(proof, { hashes: ['0xAbC...'] });
  * 

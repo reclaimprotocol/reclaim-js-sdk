@@ -574,8 +574,10 @@ Or, by manually providing the details:
 ```javascript
 const isValid = await verifyProof(proof, { 
   providerId: "YOUR_PROVIDER_ID", 
-  // the exact provider version used in the session.
-  providerVersion: "1.0.0" 
+  // The exact provider version used in the session.
+  providerVersion: "1.0.0",
+  // Optionally provide tags. For example, this can be `['ai']` when you want to allow patches from ai.
+  allowedTags: ["ai"]
 });
 ```
 
