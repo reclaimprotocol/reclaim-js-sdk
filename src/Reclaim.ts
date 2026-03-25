@@ -1445,7 +1445,7 @@ export class ReclaimProofRequest {
      * });
      * ```
      */
-    async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
+    async startSession({ onSuccess, onError, verificationConfig }: StartSessionParams): Promise<void> {
         if (!this.sessionId) {
             const message = "Session can't be started due to undefined value of sessionId";
             logger.info(message);
@@ -1488,7 +1488,7 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const verified = await verifyProof(proofs, this.getProviderVersion());
+                            const verified = await verifyProof(proofs, verificationConfig ?? this.getProviderVersion());
                             if (!verified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError();
