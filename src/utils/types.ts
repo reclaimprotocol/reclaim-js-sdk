@@ -286,7 +286,7 @@ export type StatusUrlResponse = {
 
 export type ProviderConfigResponse = {
   message: string;
-  providers?: ReclaimProviderConfig;
+  providers?: ReclaimProviderConfig[];
   providerId?: string;
   providerVersionString?: string;
 };
