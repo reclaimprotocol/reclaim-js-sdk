@@ -20,7 +20,7 @@ describe('Validation', () => {
 
             return {
                 "message": "Provider fetched successfully",
-                "providers": {
+                "providers": [{
                     "requestData": [
                         {
                             "url": "https://www.kaggle.com/api/i/users.UsersService/GetCurrentUser",
@@ -58,12 +58,12 @@ describe('Validation', () => {
                             "credentials": null
                         }
                     ],
-                },
+                }],
                 "isSuccess": true
             }
         });
 
-        const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0');
+        const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0', []);
 
         // correct proofs
         expect(await verifyProof({
@@ -86,7 +86,7 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, hashRequirements)).toEqual(true);
+        } as any, hashRequirements[0])).toEqual(true);
 
         // correct proofs
         expect(await verifyProof({
@@ -109,7 +109,7 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0' })).toEqual(true);
+        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0', allowedTags: [] })).toEqual(true);
     });
 
     it('should validate invalid proofs and return false', async () => {
@@ -128,20 +128,51 @@ describe('Validation', () => {
             }
 
             return {
-                "message": "Provider hash requirements fetched successfully",
-                "hashRequirements": {
-                    "hashes": [
+                "message": "Provider fetched successfully",
+                "providers": [{
+                    "requestData": [
                         {
-                            "value": "0x4c20776ae89ab7eead49e4e393f4e07348a4d85e21869201aa6eea6e2bc07f5e"
+                            "url": "https://www.kaggle.com/api/i/users.UsersService/GetCurrentUser",
+                            "expectedPageUrl": "",
+                            "urlType": "TEMPLATE",
+                            "method": "POST",
+                            "responseMatches": [
+                                {
+                                    "value": "\"userName\":\"{{username}}\"",
+                                    "type": "contains",
+                                    "invert": false,
+                                    "description": null,
+                                    "order": null,
+                                    "isOptional": false
+                                }
+                            ],
+                            "responseRedactions": [
+                                {
+                                    "xPath": "",
+                                    "jsonPath": "$.userName.id",
+                                    "regex": "\"userName\":\"(.*)\"",
+                                    "hash": ""
+                                }
+                            ],
+                            "bodySniff": {
+                                "enabled": true,
+                                "template": "{\"includeGroups\":false,\"includeLogins\":false,\"includeVerificationStatus\":true}"
+                            },
+                            "requestHash": "0x8f3ebf2865a1dce8f5c070ea087a3af86ee9127b82dc79cefff76c45d8968c42",
+                            "responseVariables": [
+                                "username"
+                            ],
+                            "additionalClientOptions": null,
+                            "writeRedactionMode": null,
+                            "credentials": null
                         }
-                    ]
-                },
-                "providerId": "c94476a0-8a75-4563-b70a-bf6124d7c59b",
-                "providerVersionString": "1.0.0"
+                    ],
+                }],
+                "isSuccess": true
             }
         });
 
-        const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0');
+        const hashRequirements = await fetchProviderHashRequirementsBy('dontcareintest', '1.0.0', []);
 
         // invalid proofs
         expect(await verifyProof({
@@ -164,7 +195,7 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, hashRequirements)).toEqual(false);
+        } as any, hashRequirements[0])).toEqual(false);
 
         // invalid proofs
         expect(await verifyProof({
@@ -187,7 +218,7 @@ describe('Validation', () => {
             "signatures": [
                 "0x561d209c999536ad0c6b5834bb5416963a3d61b3045e621d99ba5e0a07aa1a7b0707a4e8f4a218c5dd13f9e470d3c7023b7ddeda5463069eb08c231dbb0ab63c1b"
             ]
-        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0' })).toEqual(false);
+        } as any, { providerId: 'dontcareintest', providerVersion: '1.0.0', allowedTags: [] })).toEqual(false);
     });
 
     describe('Array Values and Multiple Proofs Configurations', () => {

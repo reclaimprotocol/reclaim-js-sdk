@@ -84,4 +84,9 @@ export interface ProviderVersionInfo {
    * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
    */
   providerVersion: string;
+  /**
+   * List of allowed tags expected pre-release tags.
+   * If you are using AI, provide `['ai']` to allow patch versions AI the provider and version.
+   */
+  allowedTags: string[];
 }

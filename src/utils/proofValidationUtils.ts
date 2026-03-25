@@ -23,14 +23,39 @@ export type ValidationConfigWithHash = {
 };
 
 /**
- * Content validation configuration specifying the provider id and version.
+ * Content validation configuration specifying the provider id and version used in the verification session that generated the proofs.
  * Used to explicitly validate that a generated proof matches the exact request structure expected.
  * 
  * See also:
  * 
  * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
  */
-export type ValidationConfigWithProviderInformation = ProviderVersionInfo;
+export interface ValidationConfigWithProviderInformation {
+    /**
+     * The identifier of provider used in verifications that resulted in a proof
+     * 
+     * See also:
+     * 
+     * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+     **/
+    providerId: string;
+    /**
+     * The exact version of provider used in verifications that resulted in a proof.
+     * 
+     * This cannot be a version constaint or version expression. It can be undefined or left blank if proof must be validated with latest version of provider.
+     * Patches for the next provider version are also fetched and hashes from that spec is also be used to compare the hashes from proof.
+     * 
+     * See also:
+     * 
+     * * `ReclaimProofRequest.getProviderVersion()` - With a ReclaimProofRequest object, you can get the provider id & exact version of provider used in verification session.
+     **/
+    providerVersion?: string;
+    /**
+     * List of allowed tags expected pre-release tags.
+     * If you are using AI, provide `['ai']` to allow patch versions AI the provider and version.
+     */
+    allowedTags?: string[];
+}
 
 /**
  * Legacy configuration to completely bypass content validation during verification.
@@ -162,11 +187,29 @@ export async function assertValidateProof(proofs: Proof[], config: VerificationC
     }
 
     if ('providerId' in config) {
-        if (!config.providerId || !config.providerVersion || typeof config.providerId !== 'string' || typeof config.providerVersion !== 'string') {
-            throw new ProofNotValidatedError('Provider id and version are required for proof validation');
+        if (!config.providerId || typeof config.providerId !== 'string') {
+            throw new ProofNotValidatedError('Provider id is required for proof validation');
         }
-        const hashRequirementsFromProvider = await fetchProviderHashRequirementsBy(config.providerId, config.providerVersion, proofs);
-        return assertValidateProof(proofs, hashRequirementsFromProvider);
+        if (config.providerVersion && typeof config.providerVersion !== 'string') {
+            throw new ProofNotValidatedError('Provider version must be a string');
+        }
+        const hashRequirementsFromProvider = await fetchProviderHashRequirementsBy(config.providerId, config.providerVersion, config.allowedTags, proofs);
+        if (!hashRequirementsFromProvider.length) {
+            throw new ProofNotValidatedError('Could not find any provider information for the given provider id and version');
+        }
+        if (hashRequirementsFromProvider.length != 1) {
+            let lastError: unknown | null = null;
+            for (const hashRequirement of hashRequirementsFromProvider) {
+                try {
+                    return await assertValidateProof(proofs, hashRequirement);
+                } catch (e) {
+                    lastError = e;
+                }
+            }
+            throw new ProofNotValidatedError('Could not validate proof', lastError as any);
+        } else {
+            return assertValidateProof(proofs, hashRequirementsFromProvider[0]);
+        }
     }
 
     const effectiveHashRequirement = ('hashes' in config && Array.isArray(config?.hashes) ? config.hashes : []).map(it => {
