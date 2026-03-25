@@ -17,6 +17,14 @@ export interface HttpProviderClaimParams {
   url: string;
 }
 
+export interface HashableHttpProviderClaimParams {
+  body: string;
+  method: RequestSpec['method'];
+  responseMatches: (Omit<ResponseMatchSpec, 'isOptional'>)[]
+  responseRedactions: ResponseRedactionSpec[]
+  url: string;
+}
+
 export type SignedClaim = {
   claim: CompleteClaimData;
   signatures: Uint8Array[];
@@ -278,7 +286,7 @@ export type StatusUrlResponse = {
 
 export type ProviderConfigResponse = {
   message: string;
-  providers?: ReclaimProviderConfig;
+  providers?: ReclaimProviderConfig[];
   providerId?: string;
   providerVersionString?: string;
 };

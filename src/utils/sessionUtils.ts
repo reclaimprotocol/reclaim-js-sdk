@@ -122,17 +122,17 @@ export async function fetchStatusUrl(sessionId: string): Promise<StatusUrlRespon
   }
 }
 
-export async function fetchProviderConfig(providerId: string, exactProviderVersionString: string): Promise<ProviderConfigResponse> {
+export async function fetchProviderConfigs(providerId: string, exactProviderVersionString: string | null | undefined, allowedTags: string[] | null | undefined): Promise<ProviderConfigResponse> {
   validateFunctionParams(
     [
       { input: providerId, paramName: 'providerId', isString: true },
-      { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true }
+      { input: exactProviderVersionString, paramName: 'exactProviderVersionString', isString: true },
     ],
     'fetchProviderConfig'
   );
 
   try {
-    const response = await http.client(constants.DEFAULT_PROVIDER_URL(providerId, exactProviderVersionString), {
+    const response = await http.client(constants.DEFAULT_PROVIDER_CONFIGS_URL(providerId, exactProviderVersionString, allowedTags), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });

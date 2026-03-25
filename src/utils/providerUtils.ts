@@ -1,6 +1,6 @@
 import { hashProofClaimParams } from "../witness";
 import { InvalidRequestSpecError, ProviderConfigFetchError } from "./errors";
-import { fetchProviderConfig } from "./sessionUtils";
+import { fetchProviderConfigs } from "./sessionUtils";
 import loggerModule from './logger';
 import { Proof } from "./interfaces";
 
@@ -19,15 +19,24 @@ const logger = loggerModule.logger;
  * @param exactProviderVersionString - The specific version string of the provider configuration to ensure deterministic validation.
  * @returns A promise that resolves to `ProviderHashRequirementsConfig` representing the expected hashes for proof validation.
  */
-export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersionString: string, proofs?: Proof[]): Promise<ProviderHashRequirementsConfig> {
-    const providerResponse = await fetchProviderConfig(providerId, exactProviderVersionString);
+export async function fetchProviderHashRequirementsBy(providerId: string, exactProviderVersionString: string | null | undefined, allowedTags: string[] | null | undefined, proofs?: Proof[]): Promise<ProviderHashRequirementsConfig[]> {
+    const providerResponse = await fetchProviderConfigs(providerId, exactProviderVersionString, allowedTags);
 
     try {
-        const providerConfig = providerResponse.providers;
+        const providerConfigs = providerResponse.providers;
+        if (!providerConfigs || !providerConfigs.length) {
+            throw new ProviderConfigFetchError(`No provider configs found for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`);
+        }
 
-        return getProviderHashRequirementsFromSpec({
-            requests: [...(providerConfig?.requestData ?? []), ...generateSpecsFromRequestSpecTemplate(providerConfig?.allowedInjectedRequestData ?? [], takeTemplateParametersFromProofs(proofs))],
-        });
+        const hashRequirements: ProviderHashRequirementsConfig[] = [];
+
+        for (const providerConfig of providerConfigs) {
+            hashRequirements.push(getProviderHashRequirementsFromSpec({
+                requests: [...(providerConfig?.requestData ?? []), ...generateSpecsFromRequestSpecTemplate(providerConfig?.allowedInjectedRequestData ?? [], takeTemplateParametersFromProofs(proofs))],
+            }));
+        }
+
+        return hashRequirements;
     } catch (e) {
         const errorMessage = `Failed to fetch provider hash requirements for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}`;
         logger.info(errorMessage, e);
@@ -195,9 +204,9 @@ export type ProviderHashRequirementsConfig = {
  */
 export type HashRequirement = {
     /**
-     * The hash value to match
+     * The hash value(s) to match. An array represents multiple valid hashes for optional configurations.
      */
-    value: string;
+    value: string | string[];
     /**
      * Whether the hash is required to be present in the proof.
      * Defaults to true
