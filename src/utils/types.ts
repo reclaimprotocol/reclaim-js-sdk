@@ -1,4 +1,4 @@
-import type { Context, Proof, ProviderClaimData } from './interfaces';
+import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
 import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
 // Claim-related types
@@ -7,7 +7,7 @@ export type ClaimID = ProviderClaimData['identifier'];
 export type ClaimInfo = Pick<ProviderClaimData, 'context' | 'provider' | 'parameters'>;
 
 export type CompleteClaimData = Pick<ProviderClaimData, 'owner' | 'timestampS' | 'epoch'>
-  & ClaimInfo
+  & ClaimInfo;
 
 export interface HttpProviderClaimParams {
   body: string;
@@ -87,6 +87,10 @@ export type ProofRequestOptions = {
    * @since 4.7.0
    */
   metadata?: Record<string, string>;
+  /**
+   * If true, generates a TEE attestation nonce during session initialization and expects a TEE attestation in the proof.
+   */
+  acceptTeeAttestation?: boolean;
 };
 
 export type ReclaimFlowLaunchOptions = {
@@ -186,6 +190,7 @@ export type ProofPropertiesJSON = {
   jsonProofResponse?: boolean;
   resolvedProviderVersion: string;
   modalOptions?: SerializableModalOptions;
+  teeAttestation?: TeeAttestation | string;
 };
 
 export type HttpFormEntry = {

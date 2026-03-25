@@ -174,6 +174,8 @@ export class ReclaimProofRequest {
     private sessionId: string;
     private options?: ProofRequestOptions;
     private context: Context = { contextAddress: '0x0', contextMessage: 'sample context', reclaimSessionId: '' };
+    private attestationNonce?: string;
+    private attestationNonceData?: Context['attestationNonceData'];
     private claimCreationType?: ClaimCreationType = ClaimCreationType.STANDALONE;
     private providerId: string;
     private resolvedProviderVersion?: string;
@@ -353,6 +355,19 @@ export class ReclaimProofRequest {
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
             proofRequestInstance.context.reclaimSessionId = data.sessionId
 
+            if (options?.acceptTeeAttestation) {
+                const wallet = new ethers.Wallet(appSecret)
+                const nonceData = `${applicationId}:${data.sessionId}:${proofRequestInstance.timeStamp}`
+                const nonceMsg = ethers.getBytes(ethers.keccak256(new TextEncoder().encode(nonceData)))
+                const nonceSignature = await wallet.signMessage(nonceMsg)
+
+                proofRequestInstance.setAttestationContext(nonceSignature, {
+                    applicationId,
+                    sessionId: data.sessionId,
+                    timestamp: proofRequestInstance.timeStamp
+                })
+            }
+
             return proofRequestInstance
         } catch (error) {
             console.error(error);
@@ -498,6 +513,7 @@ export class ReclaimProofRequest {
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
+            proofRequestInstance.setAttestationContext(context?.attestationNonce, context?.attestationNonceData);
             proofRequestInstance.parameters = parameters;
             proofRequestInstance.appCallbackUrl = appCallbackUrl;
             proofRequestInstance.redirectUrl = redirectUrl;
@@ -715,6 +731,7 @@ export class ReclaimProofRequest {
             ], 'setJsonContext');
             // ensure context is canonically json serializable
             this.context = JSON.parse(canonicalStringify({ ...context, reclaimSessionId: this.sessionId }));
+            this.applyAttestationContext();
         } catch (error) {
             logger.info("Error setting context", error)
             throw new SetContextError("Error setting context", error as Error)
@@ -747,6 +764,7 @@ export class ReclaimProofRequest {
                 { input: message, paramName: 'message', isString: true }
             ], 'setContext');
             this.context = { contextAddress: address, contextMessage: message, reclaimSessionId: this.sessionId };
+            this.applyAttestationContext();
         } catch (error) {
             logger.info("Error setting context", error)
             throw new SetContextError("Error setting context", error as Error)
@@ -922,6 +940,26 @@ export class ReclaimProofRequest {
             clearInterval(this.intervals.get(this.sessionId) as NodeJS.Timeout)
             this.intervals.delete(this.sessionId)
         }
+    }
+
+    private setAttestationContext(nonce?: string, data?: Context['attestationNonceData']): void {
+        if (!nonce || !data) {
+            return;
+        }
+        this.attestationNonce = nonce;
+        this.attestationNonceData = data;
+        this.applyAttestationContext();
+    }
+
+    private applyAttestationContext(): void {
+        if (!this.attestationNonce || !this.attestationNonceData) {
+            return;
+        }
+        this.context = {
+            ...this.context,
+            attestationNonce: this.attestationNonce,
+            attestationNonceData: this.attestationNonceData
+        };
     }
 
     private buildSharePageUrl(template: string): string {
