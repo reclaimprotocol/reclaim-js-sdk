@@ -203,20 +203,20 @@ The method returns a `FlowHandle` that lets you close the flow programmatically:
 ```javascript
 // Portal flow (default) — opens in new tab
 const handle = await reclaimProofRequest.triggerReclaimFlow();
+handle.tab;    // Window reference to the opened tab
+handle.close(); // close tab and stop polling
 
 // Embedded — portal loads inside a DOM element as an iframe
 const handle = await reclaimProofRequest.triggerReclaimFlow({
   target: document.getElementById('reclaim-container')
 });
+handle.iframe; // HTMLIFrameElement reference
+handle.iframe?.style.height = '700px'; // customize the iframe
+handle.close(); // remove iframe and stop polling
 
 // Verifier app flow
 const handle = await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
-
-// Close the flow at any time (removes iframe, closes tab, stops polling)
-handle.close();
-
-// Access the iframe element directly (only in embedded mode)
-handle.iframe?.style.height = '700px';
+handle.close(); // stop polling
 ```
 
 #### On Desktop Browsers:
@@ -500,17 +500,19 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
    ```javascript
    // Portal flow (default) — opens in new tab
    const handle = await reclaimProofRequest.triggerReclaimFlow();
+   handle.tab;    // Window reference
+   handle.close(); // close tab, stop polling
 
    // Embedded portal — loads inside a DOM element
    const handle = await reclaimProofRequest.triggerReclaimFlow({
      target: document.getElementById('container')
    });
+   handle.iframe; // HTMLIFrameElement reference
+   handle.close(); // remove iframe, stop polling
 
    // Verifier app flow
    const handle = await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
-
-   // Close any flow programmatically
-   handle.close();
+   handle.close(); // stop polling
 
    // getRequestUrl also supports verificationMode
    const portalUrl = await reclaimProofRequest.getRequestUrl();

@@ -156,6 +156,8 @@ export type FlowHandle = {
   close: () => void;
   /** The iframe element when using embedded mode, `undefined` otherwise */
   iframe?: HTMLIFrameElement;
+  /** The tab/window reference when using new tab mode, `undefined` otherwise */
+  tab?: Window | null;
 }
 
 /** Alias for `FlowHandle` */

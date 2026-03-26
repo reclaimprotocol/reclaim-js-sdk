@@ -1075,9 +1075,9 @@ export class ReclaimProofRequest {
         return `${this.appSharePageUrl}/?template=${template}`;
     }
 
-    private async openPortalTab(templateData: TemplateData): Promise<void> {
-        // Open blank tab synchronously to preserve click activation (avoids popup blocker)
-        const newTab = window.open('about:blank', '_blank');
+    private async openPortalTab(templateData: TemplateData, preOpenedTab?: Window | null): Promise<void> {
+        // Use pre-opened tab if provided, otherwise open one now
+        const newTab = preOpenedTab ?? window.open('about:blank', '_blank');
         const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl);
         logger.info('Opening portal in new tab: ' + link);
         if (newTab) {
@@ -1334,14 +1334,14 @@ export class ReclaimProofRequest {
      * @example
      * ```typescript
      * // Portal flow (default) — opens in new tab
-     * await proofRequest.triggerReclaimFlow();
+     * const handle = await proofRequest.triggerReclaimFlow();
+     * handle.tab;   // Window reference to the opened tab
+     * handle.close(); // close tab and stop polling
      *
      * // Embed portal in an iframe inside a DOM element
      * const handle = await proofRequest.triggerReclaimFlow({ target: document.getElementById('reclaim-container') });
-     * // Later, close the flow using the returned handle:
-     * handle.close();
-     * // Or access the iframe element directly (only available in embedded mode):
-     * handle.iframe?.style.height = '600px';
+     * handle.iframe; // HTMLIFrameElement reference
+     * handle.close(); // remove iframe and stop polling
      *
      * // Verifier app flow
      * await proofRequest.triggerReclaimFlow({ verificationMode: 'app' });
@@ -1388,12 +1388,22 @@ export class ReclaimProofRequest {
             }
 
             if (deviceType === DeviceType.DESKTOP) {
-                // Extension has priority on desktop regardless of mode
-                const extensionAvailable = await this.isBrowserExtensionAvailable();
-                if (this.options?.useBrowserExtension && extensionAvailable) {
-                    logger.info('Triggering browser extension flow');
-                    this.triggerBrowserExtensionFlow();
-                } else if (mode === 'portal') {
+                // Check extension first if enabled
+                if (this.options?.useBrowserExtension) {
+                    const extensionAvailable = await this.isBrowserExtensionAvailable();
+                    if (extensionAvailable) {
+                        logger.info('Triggering browser extension flow');
+                        this.triggerBrowserExtensionFlow();
+                        return {
+                            close: () => { this.clearInterval(); },
+                        };
+                    }
+                }
+
+                // No extension — open tab/modal synchronously (click activation preserved
+                // because extension check is skipped when useBrowserExtension is false,
+                // and when it's true but unavailable, we proceed immediately)
+                if (mode === 'portal') {
                     await this.openPortalTab(templateData);
                 } else {
                     // App mode: QR code modal with share page URL
@@ -1422,6 +1432,7 @@ export class ReclaimProofRequest {
                     this.closeEmbeddedFlow();
                     this.modal?.close();
                 },
+                tab: this.portalTab ?? undefined,
             };
         } catch (error) {
             logger.info('Error triggering Reclaim flow:', error);
