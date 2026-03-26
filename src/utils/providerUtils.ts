@@ -31,9 +31,8 @@ export async function fetchProviderHashRequirementsBy(providerId: string, exactP
         const hashRequirements: ProviderHashRequirementsConfig[] = [];
 
         for (const providerConfig of providerConfigs) {
-            hashRequirements.push(getProviderHashRequirementsFromSpec({
-                requests: [...(providerConfig?.requestData ?? []), ...generateSpecsFromRequestSpecTemplate(providerConfig?.allowedInjectedRequestData ?? [], takeTemplateParametersFromProofs(proofs))],
-            }));
+            const requestSpec = getProviderHashRequirementSpecFromProviderConfig(providerConfig, proofs);
+            hashRequirements.push(getProviderHashRequirementsFromSpec(requestSpec));
         }
 
         return hashRequirements;
@@ -148,6 +147,21 @@ export function takePairsWhereValueIsArray(o: Record<string, string> | undefined
 }
 
 /**
+ * Builds and returns raw hash requirement spec that can be used with `getProviderHashRequirementsFromSpec` to computes the expected proof hashes for a provider configuration
+ * by combining its explicitly required requests and allowed injected requests.
+ * It resolves template parameters from provided proofs to generate the final request specifications.
+ * 
+ * @param providerConfig - The provider configuration containing request data and allowed injected requests.
+ * @param proofs - Optional array of proofs used to extract template parameters for resolving placeholders in injected requests.
+ * @returns A structured configuration containing that can be used with `getProviderHashRequirementsFromSpec` to compute the hashes.
+ */
+export function getProviderHashRequirementSpecFromProviderConfig(providerConfig: ReclaimProviderConfigWithRequestSpec, proofs?: Proof[]): ProviderHashRequirementSpec {
+    return {
+        requests: [...(providerConfig?.requestData ?? []), ...generateSpecsFromRequestSpecTemplate(providerConfig?.allowedInjectedRequestData ?? [], takeTemplateParametersFromProofs(proofs))],
+    };
+}
+
+/**
  * Transforms a raw provider hash requirement specification into a structured configuration for proof validation.
  * It computes the proof hashes for both required and allowed extra requests to correctly match uploaded proofs.
  * 
@@ -223,6 +237,11 @@ export type HashRequirement = {
     multiple?: boolean;
 }
 
+export interface ReclaimProviderConfigWithRequestSpec {
+    requestData: InterceptorRequestSpec[];
+    allowedInjectedRequestData: InjectedRequestSpec[];
+}
+
 /**
  * Specific marker interface for intercepted request specifications.
  */
@@ -295,7 +314,7 @@ export interface ResponseMatchSpec {
  */
 export interface ResponseRedactionSpec {
     /** Optional hashing method applied to the redacted content (e.g., 'oprf') */
-    hash?: "oprf" | undefined;
+    hash?: "oprf" | "oprf-mpc" | undefined;
     /** JSON path for locating the value to redact */
     jsonPath: string;
     /** RegEx applied to correctly parse and extract/redact value */

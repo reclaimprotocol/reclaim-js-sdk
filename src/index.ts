@@ -9,6 +9,8 @@ export * from './utils/providerUtils';
 export type * from './utils/providerUtils';
 export * from './utils/sessionUtils';
 export type * from './utils/sessionUtils';
+export * from './witness';
+export type * from './witness';
 export { verifyTeeAttestation } from './utils/verifyTee';
 export { TeeVerificationError } from './utils/errors';
 // Export device detection utilities for debugging (optional)

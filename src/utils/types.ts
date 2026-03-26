@@ -1,5 +1,5 @@
 import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
-import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
+import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, ReclaimProviderConfigWithRequestSpec, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
@@ -353,17 +353,14 @@ export type ProviderConfigResponse = {
   providerVersionString?: string;
 };
 
-export interface ReclaimProviderConfig {
+export interface ReclaimProviderConfig extends ReclaimProviderConfigWithRequestSpec {
   loginUrl: string;
   customInjection: string;
   geoLocation: string;
   injectionType: string;
   disableRequestReplay: boolean;
   verificationType: string;
-  requestData: InterceptorRequestSpec[];
-  allowedInjectedRequestData: InjectedRequestSpec[];
 }
-
 
 export type ProviderHashRequirementsResponse = {
   message?: string;

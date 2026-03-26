@@ -14,7 +14,7 @@ export function createSignDataForClaim(data: CompleteClaimData): string {
   return lines.join('\n');
 }
 
-function getIdentifierFromClaimInfo(info: ClaimInfo): ClaimID {
+export function getIdentifierFromClaimInfo(info: ClaimInfo): ClaimID {
   // re-canonicalize context if it's not empty
   let canonicalContext = info.context || '';
   if (canonicalContext.length > 0) {
@@ -71,20 +71,22 @@ function strToUint8Array(str: string): Uint8Array {
  * In Reclaim, proof security revolves around generating a deterministic Hash based on the JSON stringified keys
  * of matched specifications (e.g. `responseMatches` and `responseRedactions`).
  * When processing a Provider Configuration containing `isOptional` rules, the protocol doesn't require users to generate a 
- * proof that matched *all* of the rules. A valid proof could inherently omit any optional rules if the server payload didn't contain them.
+ * proof that matched *all* of the rules. A client could inherently omit any optional rules from claim before
+ * starting claim creation to make a valid proof if the server payload may not contain them.
  * 
  * To ensure the eventual Proof's Hash safely validates against the parent template's Requirement Hash, logic here 
  * loops $2^N$ times using bitmask computation (where N = number of rule pairs) and yields canonically sorted 
  * permutations for every sub-set of optional combinations. 
  * Any combination forcefully omitting a mathematically required (`isOptional: false`) rule is stripped out.
  * 
- * Note: When a user successfully generates a proof, their attested parameter payload *strictly strips* out the `isOptional` tags, 
+ * Note: When a user successfully generates a proof, their attested parameter payload does not contain `isOptional` tags
+ * because the client sending request to attestor omits rules where data may not be present in response, 
  * producing exactly 1 deterministic configuration subset (what the user actually proved!).
  *  
  * @param params - The structured parameters.
  * @returns Serialized string or array of strings.
  */
-function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams): string | string[] {
+export function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams): string[] {
   // redaction cannot be more than response match
   const pairsCount = params?.responseMatches?.length ?? 0;
   const validCanonicalizedStrings: string[] = [];
@@ -153,8 +155,8 @@ function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams)
       responseMatches: [],
       responseRedactions: [],
     };
-    return canonicalStringify(filteredParams);
+    return [canonicalStringify(filteredParams)];
   }
 
-  return validCanonicalizedStrings.length === 1 ? validCanonicalizedStrings[0] : validCanonicalizedStrings;
+  return validCanonicalizedStrings;
 }
