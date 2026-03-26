@@ -294,6 +294,25 @@ describe('Request', () => {
             expect(url).not.toContain('portal.reclaimprotocol.org');
         });
 
+        it('getRequestUrl with custom portalUrl should use it for app mode too', async () => {
+            const request = await ReclaimProofRequest.init(testAppId, testAppSecret, 'example', {
+                portalUrl: 'https://custom.example.com',
+            });
+            request.setAppCallbackUrl('https://example.com/callback');
+            globalThis.fetch = mockFetchBy((url) => {
+                if (url.includes('shortener')) {
+                    return { error: true };
+                }
+                return { success: true };
+            });
+
+            const portalUrlResult = await request.getRequestUrl();
+            expect(portalUrlResult).toContain('custom.example.com');
+
+            const appUrlResult = await request.getRequestUrl({ verificationMode: 'app' });
+            expect(appUrlResult).toContain('custom.example.com');
+        });
+
         it('should preserve useAppClip alongside verificationMode', async () => {
             const request = await ReclaimProofRequest.init(
                 testAppId,

@@ -8,6 +8,7 @@ import {
     ClaimCreationType,
     ModalOptions,
     ReclaimFlowLaunchOptions,
+    type FlowHandle,
     HttpFormEntry,
     HttpRedirectionMethod,
     type TrustedData,
@@ -67,9 +68,8 @@ const sdkVersion = require('../package.json').version;
  * * All 3 functions above are alternatives of each other and result from these functions can be directly used as `config` parameter in this function for proof validation.
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
- * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation.
- * @param verifyTEE - If `true`, requires and verifies TEE attestation on the proofs. Verification fails if TEE data is missing or invalid.
- * @returns Verification result with `isVerified`, extracted `data` from each proof, and `isTeeVerified` when `verifyTEE` is `true`
+ * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `verifyTEE` to require TEE attestation verification.
+ * @returns Verification result with `isVerified`, extracted `data` from each proof, optional `error` on failure, and `isTeeVerified` when `verifyTEE` is enabled.
  *
  * @example
  * ```typescript
@@ -77,7 +77,7 @@ const sdkVersion = require('../package.json').version;
  * const { isVerified, data } = await verifyProof(proof, request.getProviderVersion());
  *
  * // With TEE attestation verification (fails if TEE data is missing or invalid)
- * const { isVerified, isTeeVerified, data } = await verifyProof(proof, request.getProviderVersion(), true);
+ * const { isVerified, isTeeVerified, data } = await verifyProof(proof, { ...request.getProviderVersion(), verifyTEE: true });
  * 
  * // Or, by manually providing the details:
  * 
@@ -118,7 +118,6 @@ const sdkVersion = require('../package.json').version;
 export async function verifyProof(
     proofOrProofs: Proof | Proof[],
     config: VerificationConfig,
-    verifyTEE?: boolean
 ): Promise<VerifyProofResult> {
     const proofs = Array.isArray(proofOrProofs) ? proofOrProofs : [proofOrProofs];
     try {
@@ -142,7 +141,7 @@ export async function verifyProof(
             data: proofs.map(extractProofData),
         }
 
-        if (verifyTEE) {
+        if (config.verifyTEE) {
             const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
 
             if (!hasTeeData) {
@@ -280,6 +279,8 @@ export class ReclaimProofRequest {
     private extensionID: string = "reclaim-extension";
     private customSharePageUrl?: string;
     private customAppClipUrl?: string;
+    private portalTab?: Window | null;
+    private portalIframe?: HTMLIFrameElement;
     private modalOptions?: ModalOptions;
     private modal?: QRCodeModal;
     private readonly FAILURE_TIMEOUT = 30 * 1000; // 30 seconds timeout, can be adjusted
@@ -1057,8 +1058,95 @@ export class ReclaimProofRequest {
         };
     }
 
+    private encodeTemplateData(templateData: TemplateData): string {
+        let template = encodeURIComponent(JSON.stringify(templateData));
+        template = replaceAll(template, '(', '%28');
+        template = replaceAll(template, ')', '%29');
+        return template;
+    }
+
+    private get appModeBaseUrl(): string {
+        // If user set a custom URL, use it for app mode too; otherwise default to share page
+        return this.customSharePageUrl === 'https://portal.reclaimprotocol.org'
+            ? 'https://share.reclaimprotocol.org/verify'
+            : this.customSharePageUrl ?? 'https://share.reclaimprotocol.org/verify';
+    }
+
     private buildSharePageUrl(template: string): string {
-        return `https://share.reclaimprotocol.org/verify/?template=${template}`;
+        return `${this.appModeBaseUrl}/?template=${template}`;
+    }
+
+    private async openPortalTab(templateData: TemplateData): Promise<void> {
+        // Open blank tab synchronously to preserve click activation (avoids popup blocker)
+        const newTab = window.open('about:blank', '_blank');
+        const link = await createLinkWithTemplateData(templateData, this.customSharePageUrl);
+        logger.info('Opening portal in new tab: ' + link);
+        if (newTab) {
+            this.portalTab = newTab;
+            newTab.location = link;
+            // Verify navigation actually happened; close blank tab if it didn't
+            setTimeout(() => {
+                try {
+                    if (newTab.location.href === 'about:blank') {
+                        newTab.close();
+                        this.portalTab = undefined;
+                        window.open(link, '_blank');
+                    }
+                } catch (_) {
+                    // Cross-origin after navigation means it worked
+                }
+            }, 500);
+        }
+    }
+
+    private closePortalTab(): void {
+        try {
+            this.portalTab?.close();
+        } catch (_) {
+            // Cross-origin — tab may have navigated away
+        }
+        this.portalTab = undefined;
+    }
+
+    private async embedPortalIframe(templateData: TemplateData, target: HTMLElement): Promise<void> {
+        let link = await createLinkWithTemplateData(templateData, this.customSharePageUrl);
+        // Signal to the portal that it's embedded — skip extension detection
+        const separator = link.includes('?') ? '&' : '?';
+        link = `${link}${separator}embedded=true`;
+        logger.info('Embedding portal in iframe: ' + link);
+
+        this.closeEmbeddedFlow();
+
+        const iframe = document.createElement('iframe');
+        iframe.src = link;
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.setAttribute('allow', 'clipboard-write');
+        iframe.setAttribute('sandbox', 'allow-scripts allow-forms');
+
+        target.appendChild(iframe);
+        this.portalIframe = iframe;
+    }
+
+    /**
+     * Closes the embedded portal iframe and stops the session polling.
+     *
+     * Call this to programmatically cancel the embedded verification flow
+     * that was started with `triggerReclaimFlow({ target: element })`.
+     * Also called automatically when verification succeeds or fails.
+     *
+     * @example
+     * ```typescript
+     * proofRequest.closeEmbeddedFlow();
+     * ```
+     */
+    closeEmbeddedFlow(): void {
+        if (this.portalIframe) {
+            this.portalIframe.remove();
+            this.portalIframe = undefined;
+        }
+        this.clearInterval();
     }
 
     /**
@@ -1184,7 +1272,7 @@ export class ReclaimProofRequest {
      * // Portal URL (default)
      * const url = await proofRequest.getRequestUrl();
      *
-     * // Native app flow URL
+     * // Verifier app flow URL
      * const url = await proofRequest.getRequestUrl({ verificationMode: 'app' });
      * ```
      */
@@ -1202,9 +1290,7 @@ export class ReclaimProofRequest {
             await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
 
             if (mode === 'app') {
-                let template = encodeURIComponent(JSON.stringify(templateData));
-                template = replaceAll(template, '(', '%28');
-                template = replaceAll(template, ')', '%29');
+                const template = this.encodeTemplateData(templateData);
 
                 // App Clip only if useAppClip is true and iOS
                 if (this.options?.useAppClip && getDeviceType() === DeviceType.MOBILE && getMobileDeviceType() === DeviceType.IOS) {
@@ -1214,7 +1300,7 @@ export class ReclaimProofRequest {
                 }
 
                 // Share page for all other cases in app mode
-                const sharePageUrl = await createLinkWithTemplateData(templateData, 'https://share.reclaimprotocol.org/verify');
+                const sharePageUrl = await createLinkWithTemplateData(templateData, this.appModeBaseUrl);
                 logger.info('Share page Url created successfully: ' + sharePageUrl);
                 return sharePageUrl;
             }
@@ -1235,6 +1321,7 @@ export class ReclaimProofRequest {
      * Defaults to portal mode (remote browser verification). Pass `{ verificationMode: 'app' }`
      * for native app flow via the share page.
      *
+     * - **Embedded iframe**: Pass `{ target: element }` to embed the portal inside a DOM element instead of a new tab
      * - Desktop: browser extension takes priority in both modes
      * - Desktop portal mode (no extension): opens portal in new tab
      * - Desktop app mode (no extension): shows QR code modal with share page URL
@@ -1242,15 +1329,22 @@ export class ReclaimProofRequest {
      * - Mobile app mode: opens share page (or App Clip on iOS if `useAppClip` is `true`)
      *
      * @param launchOptions - Optional launch configuration to override default behavior
-     * @returns Promise<void>
+     * @returns Promise<FlowHandle> - Handle to control the flow (close, access iframe)
      * @throws {SignatureNotFoundError} When signature is not set
      *
      * @example
      * ```typescript
-     * // Portal flow (default)
+     * // Portal flow (default) — opens in new tab
      * await proofRequest.triggerReclaimFlow();
      *
-     * // Native app flow
+     * // Embed portal in an iframe inside a DOM element
+     * const handle = await proofRequest.triggerReclaimFlow({ target: document.getElementById('reclaim-container') });
+     * // Later, close the flow using the returned handle:
+     * handle.close();
+     * // Or access the iframe element directly (only available in embedded mode):
+     * handle.iframe?.style.height = '600px';
+     *
+     * // Verifier app flow
      * await proofRequest.triggerReclaimFlow({ verificationMode: 'app' });
      *
      * // App Clip on iOS (requires useAppClip: true at init)
@@ -1264,7 +1358,7 @@ export class ReclaimProofRequest {
      * await request.triggerReclaimFlow(); // uses 'app' mode from init
      * ```
      */
-    async triggerReclaimFlow(launchOptions?: ReclaimFlowLaunchOptions): Promise<void> {
+    async triggerReclaimFlow(launchOptions?: ReclaimFlowLaunchOptions): Promise<FlowHandle> {
         const options = launchOptions || this.options?.launchOptions || {};
         const mode = options.verificationMode ?? 'portal';
 
@@ -1282,39 +1376,30 @@ export class ReclaimProofRequest {
             const deviceType = getDeviceType();
             updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
 
+            // Iframe embedding — takes priority when target element is provided
+            if ('target' in options && !options.target) {
+                logger.warn('triggerReclaimFlow: target was provided but is null/undefined — falling back to default flow. Ensure the element exists in the DOM.');
+            }
+            if (options.target && mode === 'portal') {
+                await this.embedPortalIframe(templateData, options.target);
+                return {
+                    close: () => this.closeEmbeddedFlow(),
+                    iframe: this.portalIframe!,
+                };
+            }
+
             if (deviceType === DeviceType.DESKTOP) {
                 // Extension has priority on desktop regardless of mode
                 const extensionAvailable = await this.isBrowserExtensionAvailable();
                 if (this.options?.useBrowserExtension && extensionAvailable) {
                     logger.info('Triggering browser extension flow');
                     this.triggerBrowserExtensionFlow();
-                    return;
-                }
-
-                if (mode === 'portal') {
-                    // Open blank tab synchronously to preserve click activation (avoids popup blocker)
-                    const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
-                    const newTab = window.open('about:blank', '_blank');
-                    const link = await createLinkWithTemplateData(templateData, portalUrl);
-                    logger.info('Opening portal in new tab: ' + link);
-                    if (newTab) {
-                        newTab.location = link;
-                        // Verify navigation actually happened; close blank tab if it didn't
-                        setTimeout(() => {
-                            try {
-                                if (newTab.location.href === 'about:blank') {
-                                    newTab.close();
-                                    window.open(link, '_blank');
-                                }
-                            } catch (_) {
-                                // Cross-origin after navigation means it worked
-                            }
-                        }, 500);
-                    }
+                } else if (mode === 'portal') {
+                    await this.openPortalTab(templateData);
                 } else {
                     // App mode: QR code modal with share page URL
                     logger.info('Showing QR code modal with share page URL');
-                    await this.showQRCodeModal('app');
+                    await this.showQRCodeModal();
                 }
             } else if (deviceType === DeviceType.MOBILE) {
                 if (mode === 'app') {
@@ -1328,26 +1413,17 @@ export class ReclaimProofRequest {
                         await this.redirectToInstantApp(options);
                     }
                 } else {
-                    // Portal mode on mobile: open blank tab synchronously, then navigate
-                    const portalUrl = this.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
-                    const newTab = window.open('about:blank', '_blank');
-                    const link = await createLinkWithTemplateData(templateData, portalUrl);
-                    logger.info('Opening portal on mobile: ' + link);
-                    if (newTab) {
-                        newTab.location = link;
-                        setTimeout(() => {
-                            try {
-                                if (newTab.location.href === 'about:blank') {
-                                    newTab.close();
-                                    window.open(link, '_blank');
-                                }
-                            } catch (_) {
-                                // Cross-origin after navigation means it worked
-                            }
-                        }, 500);
-                    }
+                    await this.openPortalTab(templateData);
                 }
             }
+
+            return {
+                close: () => {
+                    this.closePortalTab();
+                    this.closeEmbeddedFlow();
+                    this.modal?.close();
+                },
+            };
         } catch (error) {
             logger.info('Error triggering Reclaim flow:', error);
             throw error;
@@ -1416,10 +1492,9 @@ export class ReclaimProofRequest {
         logger.info('Browser extension flow triggered');
     }
 
-    private async showQRCodeModal(mode: 'portal' | 'app' = 'portal'): Promise<void> {
+    private async showQRCodeModal(): Promise<void> {
         try {
-            const url = mode === 'app' ? 'https://share.reclaimprotocol.org/verify' : this.customSharePageUrl;
-            const requestUrl = await createLinkWithTemplateData(this.templateData, url);
+            const requestUrl = await createLinkWithTemplateData(this.templateData, this.appModeBaseUrl);
             this.modal = new QRCodeModal(this.modalOptions);
             await this.modal.show(requestUrl);
         } catch (error) {
@@ -1430,10 +1505,7 @@ export class ReclaimProofRequest {
 
     private async redirectToInstantApp(options: ReclaimFlowLaunchOptions): Promise<void> {
         try {
-            let template = encodeURIComponent(JSON.stringify(this.templateData));
-            template = replaceAll(template, '(', '%28');
-            template = replaceAll(template, ')', '%29');
-
+            const template = this.encodeTemplateData(this.templateData);
             let instantAppUrl = this.buildSharePageUrl(template);
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
@@ -1516,13 +1588,10 @@ export class ReclaimProofRequest {
 
     private redirectToAppClip(): void {
         try {
-            let template = encodeURIComponent(JSON.stringify(this.templateData));
-            template = replaceAll(template, '(', '%28');
-            template = replaceAll(template, ')', '%29');
-
+            const template = this.encodeTemplateData(this.templateData);
             const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
-            const verifierUrl = `https://share.reclaimprotocol.org/verifier/?template=${template}`;
+            const verifierUrl = `${this.appModeBaseUrl}/?template=${template}`;
 
             // Redirect to app clip
             window.location.href = appClipUrl;
@@ -1668,6 +1737,8 @@ export class ReclaimProofRequest {
                         }
                         this.clearInterval();
                         this.modal?.close();
+                        this.closePortalTab();
+                        this.closeEmbeddedFlow();
                     }
                 } else {
                     if (statusUrlResponse.session.statusV2 === SessionStatus.PROOF_SUBMISSION_FAILED) {
@@ -1684,6 +1755,8 @@ export class ReclaimProofRequest {
                         }
                         this.clearInterval();
                         this.modal?.close();
+                        this.closePortalTab();
+                        this.closeEmbeddedFlow();
                     }
                 }
             } catch (e) {

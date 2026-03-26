@@ -138,7 +138,28 @@ export type ReclaimFlowLaunchOptions = {
    * @default 'portal'
    */
   verificationMode?: 'app' | 'portal';
+  /**
+   * Target DOM element to embed the verification flow in an iframe.
+   * When provided, the portal opens inside the element instead of a new tab.
+   * Use `closeEmbeddedFlow()` to remove the iframe programmatically.
+   *
+   * Only applies to portal mode.
+   */
+  target?: HTMLElement;
 }
+
+/**
+ * Handle returned by `triggerReclaimFlow` to control the launched flow.
+ */
+export type FlowHandle = {
+  /** Closes the flow (removes iframe, closes tab, stops polling) */
+  close: () => void;
+  /** The iframe element when using embedded mode, `undefined` otherwise */
+  iframe?: HTMLIFrameElement;
+}
+
+/** Alias for `FlowHandle` */
+export type EmbeddedFlowHandle = FlowHandle;
 
 // Modal customization options
 export type ModalOptions = {

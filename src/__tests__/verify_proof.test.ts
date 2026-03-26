@@ -48,7 +48,7 @@ describe('verifyProof', () => {
         const originalHex = digest ?? '';
         const flippedHex = (originalHex[0] === '0' ? '1' : '0') + originalHex.slice(1);
         attestation.workload_digest = `${prefix}@sha256:${flippedHex}`;
-        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true }, true);
+        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, verifyTEE: true });
         expect(result.isVerified).toBe(false);
         expect(result.isTeeVerified).toBe(false);
         expect(result.error).toBeInstanceOf(TeeVerificationError);
@@ -59,7 +59,7 @@ describe('verifyProof', () => {
         delete (proof as any).teeAttestation;
         // Context (and its attestationNonce) stays intact so signature remains valid.
         // verifyTeeAttestation sees missing teeAttestation and returns false.
-        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true }, true);
+        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, verifyTEE: true });
         expect(result.isVerified).toBe(false);
         expect(result.isTeeVerified).toBe(false);
         expect(result.error).toBeInstanceOf(TeeVerificationError);

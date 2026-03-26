@@ -195,30 +195,44 @@ async function handleCreateClaim() {
 
 The `triggerReclaimFlow()` method supports two verification modes via `verificationMode`:
 
-- **`'portal'` (default)**: Opens the portal URL for remote browser verification on all platforms.
-- **`'app'`**: Native app flow via the share page. Uses App Clip on iOS if `useAppClip` is `true`.
+- **`'portal'` (default)**: Opens the portal URL for remote browser verification. Opens in a new tab by default, or embedded in an iframe when `target` is provided.
+- **`'app'`**: Verifier app flow via the share page. Uses App Clip on iOS if `useAppClip` is `true`.
+
+The method returns a `FlowHandle` that lets you close the flow programmatically:
 
 ```javascript
-// Portal flow (default)
-await reclaimProofRequest.triggerReclaimFlow();
+// Portal flow (default) — opens in new tab
+const handle = await reclaimProofRequest.triggerReclaimFlow();
 
-// Native app flow
-await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+// Embedded — portal loads inside a DOM element as an iframe
+const handle = await reclaimProofRequest.triggerReclaimFlow({
+  target: document.getElementById('reclaim-container')
+});
+
+// Verifier app flow
+const handle = await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+
+// Close the flow at any time (removes iframe, closes tab, stops polling)
+handle.close();
+
+// Access the iframe element directly (only in embedded mode)
+handle.iframe?.style.height = '700px';
 ```
 
 #### On Desktop Browsers:
 
-1. **Browser Extension First**: If the Reclaim browser extension is installed, it will use the extension regardless of verification mode.
-2. **Portal mode** (no extension): Opens the portal in a new tab.
-3. **App mode** (no extension): Shows QR code modal with share page URL.
+1. **Embedded mode**: If `target` is provided, the portal loads in an iframe inside the target element.
+2. **Browser Extension**: If the Reclaim browser extension is installed and no `target` is set, it will use the extension.
+3. **Portal mode** (no extension, no target): Opens the portal in a new tab.
+4. **App mode** (no extension): Shows QR code modal with share page URL.
 
 #### On Mobile Devices (portal mode):
 
-Opens the portal in a new tab.
+Opens the portal in a new tab, or in an iframe if `target` is provided.
 
 #### On Mobile Devices (app mode):
 
-1. **All platforms**: Redirects to the share page.
+1. **All platforms**: Redirects to the verifier app.
 2. **iOS with `useAppClip: true`**: Redirects to the Reclaim App Clip instead.
 
 The same `verificationMode` option works with `getRequestUrl()`:
@@ -227,7 +241,7 @@ The same `verificationMode` option works with `getRequestUrl()`:
 // Portal URL (default)
 const url = await reclaimProofRequest.getRequestUrl();
 
-// Native app URL
+// Verifier app URL
 const url = await reclaimProofRequest.getRequestUrl({ verificationMode: 'app' });
 ```
 
@@ -290,10 +304,10 @@ await reclaimProofRequest.triggerReclaimFlow();
 ### Benefits of the New Flow:
 
 1. **Platform Adaptive**: Automatically chooses the best verification method for each platform
-2. **User-Friendly**: Provides the most seamless experience possible for each user
-3. **Simplified Integration**: Single method call handles all verification scenarios
+2. **Embeddable**: Embed the portal directly in your page via iframe with `{ target: element }`
+3. **Controllable**: Returns a `FlowHandle` to close the flow or access the iframe at any time
 4. **Extension Support**: Leverages browser extension for desktop users when available
-5. **Mobile Optimized**: Native app experiences on mobile devices
+5. **Mobile Optimized**: Verifier app experiences on mobile devices
 
 ## Step 6: Run your application
 
@@ -397,6 +411,7 @@ reclaimProofRequest.setCancelRedirectUrl(
 
    By default, proofs are sent as HTTP `POST` with `Content-Type` as `application/x-www-form-urlencoded`. Pass function argument `jsonProofResponse` as `true` to send proofs with `Content-Type` as `application/json`.
 
+   ```javascript
    reclaimProofRequest.setAppCallbackUrl("https://example.com/callback", true);
    ```
 
@@ -473,18 +488,28 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 });
 ```
 
-> **Note:** `portalUrl` defaults to `https://portal.reclaimprotocol.org` and `useAppClip` defaults to `false` when no options are provided. `portalUrl` is the preferred option. The previous `customSharePageUrl` is deprecated but still supported. If both are provided, `portalUrl` takes precedence.
+> **Note:** `portalUrl` defaults to `https://portal.reclaimprotocol.org` for portal mode. App mode defaults to `https://share.reclaimprotocol.org`. If you set a custom `portalUrl`, it will be used for both modes. `useAppClip` defaults to `false`. The previous `customSharePageUrl` is deprecated but still supported. If both are provided, `portalUrl` takes precedence.
 
 10. **Platform-Specific Flow Control**:
    Both `triggerReclaimFlow()` and `getRequestUrl()` support `verificationMode`:
 
    ```javascript
-   // Portal flow (default) — remote browser verification
-   await reclaimProofRequest.triggerReclaimFlow();
-   const portalUrl = await reclaimProofRequest.getRequestUrl();
+   // Portal flow (default) — opens in new tab
+   const handle = await reclaimProofRequest.triggerReclaimFlow();
 
-   // Native app flow
-   await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+   // Embedded portal — loads inside a DOM element
+   const handle = await reclaimProofRequest.triggerReclaimFlow({
+     target: document.getElementById('container')
+   });
+
+   // Verifier app flow
+   const handle = await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app' });
+
+   // Close any flow programmatically
+   handle.close();
+
+   // getRequestUrl also supports verificationMode
+   const portalUrl = await reclaimProofRequest.getRequestUrl();
    const appUrl = await reclaimProofRequest.getRequestUrl({ verificationMode: 'app' });
    ```
 
@@ -583,13 +608,14 @@ The SDK provides a `verifyProof` function to manually verify proofs cryptographi
 Here are the possible ways to use `verifyProof`, from beginner to advanced:
 
 ### 1. Simple Verification
-The easiest way is to let the SDK retrieve the requirements automatically. If you have access to your `ReclaimProofRequest` instance, you can use `request.getProviderVersion()` to automate and simplify verification!
+The easiest way is to use `request.getProviderVersion()` which returns the provider ID and exact version used in the session — pass it directly as the config:
 
 ```javascript
 import { verifyProof } from "@reclaimprotocol/js-sdk";
 
-// Verify a single proof
-const { isVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'] });
+// Using getProviderVersion() — recommended
+const providerVersion = reclaimProofRequest.getProviderVersion();
+const { isVerified, data, error } = await verifyProof(proof, providerVersion);
 if (isVerified) {
   console.log("Proof is valid");
   console.log("Context:", data[0].context);
@@ -599,15 +625,20 @@ if (isVerified) {
 }
 ```
 
-Or, by manually providing the details:
+Or, by manually providing the provider details:
 ```javascript
-const { isVerified, data } = await verifyProof(proof, { 
-  providerId: "YOUR_PROVIDER_ID", 
+const { isVerified, data } = await verifyProof(proof, {
+  providerId: "YOUR_PROVIDER_ID",
   // The exact provider version used in the session.
   providerVersion: "1.0.0",
   // Optionally provide tags. For example, this can be `['ai']` when you want to allow patches from ai.
   allowedTags: ["ai"]
 });
+```
+
+Or, with a known hash:
+```javascript
+const { isVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'] });
 ```
 
 ### 2. Intermediate: Strict Hash Verification
@@ -680,13 +711,13 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 
 ### Verifying TEE Attestation
 
-Pass `true` as the third argument (`verifyTEE`) to `verifyProof` to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
+Set `verifyTEE: true` in the config to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
 
 ```javascript
 import { verifyProof, TeeVerificationError } from "@reclaimprotocol/js-sdk";
 
-// Pass true as the third argument (verifyTEE) to require TEE verification
-const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'] }, true);
+// Set verifyTEE in config to require TEE verification
+const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'], verifyTEE: true });
 
 if (isVerified) {
   console.log("Proof is fully verified with hardware attestation");
