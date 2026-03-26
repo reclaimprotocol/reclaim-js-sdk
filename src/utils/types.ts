@@ -1,4 +1,3 @@
-import type { VerificationConfig } from './proofValidationUtils';
 import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
 import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
@@ -40,7 +39,6 @@ export type CreateVerificationRequest = {
 export type StartSessionParams = {
   onSuccess: OnSuccess;
   onError: OnError;
-  verificationConfig?: VerificationConfig;
 };
 
 export type OnSuccess = (proof?: Proof | Proof[]) => void;
@@ -130,7 +128,7 @@ export type ReclaimFlowLaunchOptions = {
    * Verification mode for the flow.
    *
    * - `'portal'`: Opens the portal URL in the browser (remote browser verification).
-   * - `'app'`: Native app flow via the share page. If `useAppClip` is `true`, uses App Clip on iOS.
+   * - `'app'`: Verifier app flow via the share page. If `useAppClip` is `true`, uses App Clip on iOS.
    *
    * Can be set at call time via `triggerReclaimFlow({ verificationMode })` or `getRequestUrl({ verificationMode })`,
    * or at init time via `launchOptions: { verificationMode }`.
@@ -138,7 +136,30 @@ export type ReclaimFlowLaunchOptions = {
    * @default 'portal'
    */
   verificationMode?: 'app' | 'portal';
+  /**
+   * Target DOM element to embed the verification flow in an iframe.
+   * When provided, the portal opens inside the element instead of a new tab.
+   * Use `closeEmbeddedFlow()` to remove the iframe programmatically.
+   *
+   * Only applies to portal mode.
+   */
+  target?: HTMLElement;
 }
+
+/**
+ * Handle returned by `triggerReclaimFlow` to control the launched flow.
+ */
+export type FlowHandle = {
+  /** Closes the flow (removes iframe, closes tab, stops polling) */
+  close: () => void;
+  /** The iframe element when using embedded mode, `undefined` otherwise */
+  iframe?: HTMLIFrameElement;
+  /** The tab/window reference when using new tab mode, `undefined` otherwise */
+  tab?: Window | null;
+}
+
+/** Alias for `FlowHandle` */
+export type EmbeddedFlowHandle = FlowHandle;
 
 // Modal customization options
 export type ModalOptions = {
@@ -234,7 +255,7 @@ export type HttpRedirectionMethod = 'GET' | 'POST';
 /**
  * Options for HTTP redirection.
  *
- * Only supported by In-Browser SDK.
+ * Only supported by Portal flow.
  * On other SDKs, this will be ignored and a GET redirection will be performed with the URL.
  *
  * @since 4.11.0
@@ -287,14 +308,17 @@ export type TemplateData = {
   preferredLocale?: ProofRequestOptions['preferredLocale'];
 };
 
+export type TrustedData = {
+  context: Record<string, unknown>;
+  extractedParameters: Record<string, string>;
+};
+
 // Verify proof result type
 export type VerifyProofResult = {
   isVerified: boolean;
   isTeeVerified?: boolean;
-  data: {
-    context: Record<string, unknown>;
-    extractedParameters: Record<string, string>;
-  }[];
+  data: TrustedData[];
+  error?: Error;
 }
 
 export type ProviderVersionConfig = {
