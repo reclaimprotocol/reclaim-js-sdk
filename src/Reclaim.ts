@@ -673,11 +673,11 @@ export class ReclaimProofRequest {
      *
      * @param url - The URL where users should be redirected after successful proof generation
      * @param method - The redirection method that should be used for redirection. Allowed options: `GET`, and `POST`.
-     * `POST` form redirection is only supported in In-Browser SDK.
+     * `POST` form redirection is only supported in Portal SDK.
      * @param body - List of name-value pairs to be sent as the body of the form request.
      * `When `method` is set to `POST`, `body` will be sent with 'application/x-www-form-urlencoded' content type.
      * When `method` is set to `GET`, if `body` is set then `body` will be sent as query parameters.
-     * Sending `body` on redirection is only supported in In-Browser SDK.
+     * Sending `body` on redirection is only supported in Portal SDK.
      *
      * @throws {InvalidParamError} When URL is invalid
      *
@@ -742,11 +742,11 @@ export class ReclaimProofRequest {
      *
      * @param url - The URL where users should be redirected after an error which aborts the verification process
      * @param method - The redirection method that should be used for redirection. Allowed options: `GET`, and `POST`.
-     * `POST` form redirection is only supported in In-Browser SDK.
+     * `POST` form redirection is only supported in Portal SDK.
      * @param body - List of name-value pairs to be sent as the body of the form request.
      * When `method` is set to `POST`, `body` will be sent with 'application/x-www-form-urlencoded' content type.
      * When `method` is set to `GET`, if `body` is set then `body` will be sent as query parameters.
-     * Sending `body` on redirection is only supported in In-Browser SDK.
+     * Sending `body` on redirection is only supported in Portal SDK.
      * @throws {InvalidParamError} When URL is invalid
      *
      * @example

@@ -364,17 +364,17 @@ Redirection with body:
 
    - **url**: The URL where users should be redirected after successful proof generation.
    - **method** (optional): The redirection method to use. Allowed options: `GET` (default) and `POST`. 
-     *Note: `POST` form redirection is only supported in In-Browser SDK.*
+     *Note: `POST` form redirection is only supported in Portal SDK.*
    - **body** (optional): List of name-value pairs to be sent as the body of the form request.
      - When `method` is `POST`, `body` is sent with `application/x-www-form-urlencoded` content type.
      - When `method` is `GET`, if `body` is set, it is sent as query parameters.
-     *Note: Sending `body` on redirection is only supported in In-Browser SDK.*
+     *Note: Sending `body` on redirection is only supported in Portal SDK.*
 
 ```javascript
 reclaimProofRequest.setRedirectUrl(
   "https://example.com/redirect",
-  "POST", // In-Browser SDK only
-  [{ name: "foo", value: "bar" }]  // In-Browser SDK only
+  "POST", // Portal SDK only
+  [{ name: "foo", value: "bar" }]  // Portal SDK only
 );
 ```
 
@@ -390,17 +390,17 @@ Redirection with body:
 
    - **url**: The URL where users should be redirected after an error which aborts the verification process.
    - **method** (optional): The redirection method to use. Allowed options: `GET` (default) and `POST`.
-     *Note: `POST` form redirection is only supported in In-Browser SDK.*
+     *Note: `POST` form redirection is only supported in Portal SDK.*
    - **body** (optional): List of name-value pairs to be sent as the body of the form request.
      - When `method` is `POST`, `body` is sent with `application/x-www-form-urlencoded` content type.
      - When `method` is `GET`, if `body` is set, it is sent as query parameters.
-     *Note: Sending `body` on redirection is only supported in In-Browser SDK.*
+     *Note: Sending `body` on redirection is only supported in Portal SDK.*
   
 ```javascript
 reclaimProofRequest.setCancelRedirectUrl(
   "https://example.com/error-redirect",
-  "POST",  // In-Browser SDK only
-  [{ name: "error_code", value: "1001" }]  // In-Browser SDK only
+  "POST",  // Portal SDK only
+  [{ name: "error_code", value: "1001" }]  // Portal SDK only
 );
 ```
 

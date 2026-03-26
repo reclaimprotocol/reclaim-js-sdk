@@ -255,7 +255,7 @@ export type HttpRedirectionMethod = 'GET' | 'POST';
 /**
  * Options for HTTP redirection.
  *
- * Only supported by In-Browser SDK.
+ * Only supported by Portal SDK.
  * On other SDKs, this will be ignored and a GET redirection will be performed with the URL.
  *
  * @since 4.11.0
