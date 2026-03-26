@@ -294,7 +294,7 @@ describe('Request', () => {
             expect(url).not.toContain('portal.reclaimprotocol.org');
         });
 
-        it('getRequestUrl with custom portalUrl should use it for app mode too', async () => {
+        it('custom portalUrl overrides both portal and app modes', async () => {
             const request = await ReclaimProofRequest.init(testAppId, testAppSecret, 'example', {
                 portalUrl: 'https://custom.example.com',
             });

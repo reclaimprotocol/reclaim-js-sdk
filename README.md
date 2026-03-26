@@ -482,13 +482,17 @@ For more details about response format, check out [official documentation of Err
 
 ```javascript
 const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
-  portalUrl: "https://your-custom-domain.com/verify", // Custom portal URL
+  portalUrl: "https://your-custom-domain.com/verify", // Custom URL for both portal and app modes
   customAppClipUrl: "https://appclip.apple.com/id?p=your.custom.app.clip", // Custom iOS App Clip URL
   // ... other options
 });
 ```
 
-> **Note:** `portalUrl` defaults to `https://portal.reclaimprotocol.org` for portal mode. App mode defaults to `https://share.reclaimprotocol.org`. If you set a custom `portalUrl`, it will be used for both modes. `useAppClip` defaults to `false`. The previous `customSharePageUrl` is deprecated but still supported. If both are provided, `portalUrl` takes precedence.
+> **Defaults:**
+> - Portal mode: `https://portal.reclaimprotocol.org` — remote browser verification
+> - App mode: `https://share.reclaimprotocol.org` — redirects to the verifier app
+>
+> Setting `portalUrl` overrides both modes. The previous `customSharePageUrl` is deprecated but still supported — if both are provided, `portalUrl` takes precedence. `useAppClip` defaults to `false`.
 
 10. **Platform-Specific Flow Control**:
    Both `triggerReclaimFlow()` and `getRequestUrl()` support `verificationMode`:

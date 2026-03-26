@@ -130,7 +130,7 @@ export type ReclaimFlowLaunchOptions = {
    * Verification mode for the flow.
    *
    * - `'portal'`: Opens the portal URL in the browser (remote browser verification).
-   * - `'app'`: Native app flow via the share page. If `useAppClip` is `true`, uses App Clip on iOS.
+   * - `'app'`: Verifier app flow via the share page. If `useAppClip` is `true`, uses App Clip on iOS.
    *
    * Can be set at call time via `triggerReclaimFlow({ verificationMode })` or `getRequestUrl({ verificationMode })`,
    * or at init time via `launchOptions: { verificationMode }`.

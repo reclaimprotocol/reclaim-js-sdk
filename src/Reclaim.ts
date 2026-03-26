@@ -278,6 +278,7 @@ export class ReclaimProofRequest {
     private templateData: TemplateData;
     private extensionID: string = "reclaim-extension";
     private customSharePageUrl?: string;
+    private appSharePageUrl: string = 'https://share.reclaimprotocol.org/verify';
     private customAppClipUrl?: string;
     private portalTab?: Window | null;
     private portalIframe?: HTMLIFrameElement;
@@ -311,7 +312,12 @@ export class ReclaimProofRequest {
         }
 
         // portalUrl is an alias for customSharePageUrl (portalUrl takes precedence)
-        this.customSharePageUrl = options.portalUrl ?? options.customSharePageUrl ?? 'https://portal.reclaimprotocol.org';
+        // When set, overrides both portal and app share page URLs
+        const customUrl = options.portalUrl ?? options.customSharePageUrl;
+        this.customSharePageUrl = customUrl ?? 'https://portal.reclaimprotocol.org';
+        if (customUrl) {
+            this.appSharePageUrl = customUrl;
+        }
         options.customSharePageUrl = this.customSharePageUrl;
 
         if (options?.envUrl) {
@@ -1065,15 +1071,8 @@ export class ReclaimProofRequest {
         return template;
     }
 
-    private get appModeBaseUrl(): string {
-        // If user set a custom URL, use it for app mode too; otherwise default to share page
-        return this.customSharePageUrl === 'https://portal.reclaimprotocol.org'
-            ? 'https://share.reclaimprotocol.org/verify'
-            : this.customSharePageUrl ?? 'https://share.reclaimprotocol.org/verify';
-    }
-
     private buildSharePageUrl(template: string): string {
-        return `${this.appModeBaseUrl}/?template=${template}`;
+        return `${this.appSharePageUrl}/?template=${template}`;
     }
 
     private async openPortalTab(templateData: TemplateData): Promise<void> {
@@ -1123,7 +1122,7 @@ export class ReclaimProofRequest {
         iframe.style.height = '100%';
         iframe.style.border = 'none';
         iframe.setAttribute('allow', 'clipboard-write');
-        iframe.setAttribute('sandbox', 'allow-scripts allow-forms');
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
 
         target.appendChild(iframe);
         this.portalIframe = iframe;
@@ -1300,7 +1299,7 @@ export class ReclaimProofRequest {
                 }
 
                 // Share page for all other cases in app mode
-                const sharePageUrl = await createLinkWithTemplateData(templateData, this.appModeBaseUrl);
+                const sharePageUrl = await createLinkWithTemplateData(templateData, this.appSharePageUrl);
                 logger.info('Share page Url created successfully: ' + sharePageUrl);
                 return sharePageUrl;
             }
@@ -1319,7 +1318,7 @@ export class ReclaimProofRequest {
      * Triggers the appropriate Reclaim verification flow based on device type and configuration.
      *
      * Defaults to portal mode (remote browser verification). Pass `{ verificationMode: 'app' }`
-     * for native app flow via the share page.
+     * for verifier app flow via the share page.
      *
      * - **Embedded iframe**: Pass `{ target: element }` to embed the portal inside a DOM element instead of a new tab
      * - Desktop: browser extension takes priority in both modes
@@ -1494,7 +1493,7 @@ export class ReclaimProofRequest {
 
     private async showQRCodeModal(): Promise<void> {
         try {
-            const requestUrl = await createLinkWithTemplateData(this.templateData, this.appModeBaseUrl);
+            const requestUrl = await createLinkWithTemplateData(this.templateData, this.appSharePageUrl);
             this.modal = new QRCodeModal(this.modalOptions);
             await this.modal.show(requestUrl);
         } catch (error) {
@@ -1591,7 +1590,7 @@ export class ReclaimProofRequest {
             const template = this.encodeTemplateData(this.templateData);
             const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
-            const verifierUrl = `${this.appModeBaseUrl}/?template=${template}`;
+            const verifierUrl = `${this.appSharePageUrl}/?template=${template}`;
 
             // Redirect to app clip
             window.location.href = appClipUrl;
@@ -1679,7 +1678,7 @@ export class ReclaimProofRequest {
      * });
      * ```
      */
-    async startSession({ onSuccess, onError, verificationConfig }: StartSessionParams): Promise<void> {
+    async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
         if (!this.sessionId) {
             const message = "Session can't be started due to undefined value of sessionId";
             logger.info(message);
@@ -1765,6 +1764,8 @@ export class ReclaimProofRequest {
                 }
                 this.clearInterval();
                 this.modal?.close();
+                this.closePortalTab();
+                this.closeEmbeddedFlow();
             }
         }, sessionUpdatePollingInterval);
 
