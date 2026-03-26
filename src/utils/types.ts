@@ -1,4 +1,3 @@
-import type { VerificationConfig } from './proofValidationUtils';
 import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
 import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
@@ -40,7 +39,6 @@ export type CreateVerificationRequest = {
 export type StartSessionParams = {
   onSuccess: OnSuccess;
   onError: OnError;
-  verificationConfig?: VerificationConfig;
 };
 
 export type OnSuccess = (proof?: Proof | Proof[]) => void;
