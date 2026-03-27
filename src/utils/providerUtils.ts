@@ -314,7 +314,7 @@ export interface ResponseMatchSpec {
  */
 export interface ResponseRedactionSpec {
     /** Optional hashing method applied to the redacted content (e.g., 'oprf') */
-    hash?: "oprf" | "oprf-mpc" | undefined;
+    hash?: "oprf" | "oprf-mpc" | "oprf-raw" | undefined;
     /** JSON path for locating the value to redact */
     jsonPath: string;
     /** RegEx applied to correctly parse and extract/redact value */
