@@ -1,5 +1,7 @@
-import { hashProofClaimParams } from "../../witness";
-import { HttpProviderClaimParams } from "../types";
+import { hashProofClaimParams, getIdentifierFromClaimInfo, getProviderParamsAsCanonicalizedString } from "../../witness";
+import { HttpProviderClaimParams, ClaimInfo } from "../types";
+import { ethers } from "ethers";
+import { canonicalStringify } from "../strings";
 
 describe('Witness', () => {
     describe('hashProofClaimParams', () => {
@@ -94,6 +96,93 @@ describe('Witness', () => {
             
             const uniqueHashes = new Set(result as string[]);
             expect(uniqueHashes.size).toBe(4);
+        });
+    });
+
+    describe('getIdentifierFromClaimInfo', () => {
+        it('should generate correct identifier with empty context', () => {
+            const info: ClaimInfo = { provider: 'provider1', parameters: 'param1', context: '' };
+            const result = getIdentifierFromClaimInfo(info);
+            const expectedStr = 'provider1\nparam1\n';
+            expect(result).toBe(ethers.keccak256(new TextEncoder().encode(expectedStr)).toLowerCase());
+        });
+
+        it('should re-canonicalize non-empty context', () => {
+            const info: ClaimInfo = { provider: 'provider1', parameters: 'param1', context: '{"b": 2, "a": 1}' };
+            const result = getIdentifierFromClaimInfo(info);
+            const expectedContext = canonicalStringify({ b: 2, a: 1 });
+            const expectedStr = `provider1\nparam1\n${expectedContext}`;
+            expect(result).toBe(ethers.keccak256(new TextEncoder().encode(expectedStr)).toLowerCase());
+        });
+
+        it('should throw error for invalid context JSON', () => {
+             const info: ClaimInfo = { provider: 'provider1', parameters: 'param1', context: 'invalid json' };
+             expect(() => getIdentifierFromClaimInfo(info)).toThrow('unable to parse non-empty context. Must be JSON');
+        });
+    });
+
+    describe('getProviderParamsAsCanonicalizedString', () => {
+        it('should return a single canonicalized string when no optional rules', () => {
+            const params: HttpProviderClaimParams = { 
+                url: 'http://a', 
+                method: 'GET', 
+                body: '', 
+                responseMatches: [{type: 'contains', value: 'a', isOptional: false} as any], 
+                responseRedactions: [{jsonPath: 'b', regex: 'c', xPath: 'd'} as any] 
+            };
+            const result = getProviderParamsAsCanonicalizedString(params);
+            expect(result).toHaveLength(1);
+            expect(typeof result[0]).toBe('string');
+            const expectedParams = { 
+                url: 'http://a', 
+                method: 'GET', 
+                body: '', 
+                responseMatches: [{value: 'a', type: 'contains'}], 
+                responseRedactions: [{xPath: 'd', jsonPath: 'b', regex: 'c'}] 
+            };
+            expect(result[0]).toBe(canonicalStringify(expectedParams));
+        });
+
+        it('should return multiple strings for optional rules', () => {
+            const params: HttpProviderClaimParams = { 
+                url: 'http://a', 
+                method: 'GET', 
+                body: '', 
+                responseMatches: [{type: 'contains', value: 'a', isOptional: true} as any, {type: 'regex', value: 'b', isOptional: true} as any], 
+                responseRedactions: [{jsonPath: 'b', regex: 'c', xPath: 'd'} as any, {jsonPath: 'e', regex: 'f', xPath: 'g'} as any] 
+            };
+            const result = getProviderParamsAsCanonicalizedString(params);
+            // 2 pairs of optional rules => 2^2 - 1 = 3 combinations.
+            expect(result).toHaveLength(3);
+        });
+
+        it('should filter out combinations missing required rules', () => {
+            const params: HttpProviderClaimParams = { 
+                url: 'http://a', 
+                method: 'GET', 
+                body: '', 
+                responseMatches: [{type: 'contains', value: 'a', isOptional: false} as any, {type: 'regex', value: 'b', isOptional: true} as any], 
+                responseRedactions: [{jsonPath: 'b', regex: 'c', xPath: 'd'} as any, {jsonPath: 'e', regex: 'f', xPath: 'g'} as any] 
+            };
+            const result = getProviderParamsAsCanonicalizedString(params);
+            // Since rule 1 is required, it must be included. 
+            // Rule 2 is optional, so it can be included or not.
+            // valid combinations: (1, 2) and (1) -> 2 combinations.
+            expect(result).toHaveLength(2); 
+        });
+
+        it('should handle undefined rules properly and return base object', () => {
+            const params: HttpProviderClaimParams = { url: 'http://a', method: 'GET', body: '' } as any;
+            const result = getProviderParamsAsCanonicalizedString(params);
+            expect(result).toHaveLength(1);
+            const expectedParams = { 
+                url: 'http://a', 
+                method: 'GET', 
+                body: '', 
+                responseMatches: [], 
+                responseRedactions: [] 
+            };
+            expect(result[0]).toBe(canonicalStringify(expectedParams));
         });
     });
 });
