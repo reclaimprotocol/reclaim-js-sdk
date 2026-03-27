@@ -9,4 +9,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Updated type of `hash` field to include `oprf-raw` as a hashing method in `ResponseRedactionSpec` interface.
+- Update type of `hash` field to include `oprf-raw` as a hashing method in `ResponseRedactionSpec` interface.
