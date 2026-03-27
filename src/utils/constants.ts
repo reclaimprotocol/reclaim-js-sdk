@@ -31,6 +31,12 @@ export const constants = {
         return `${BACKEND_BASE_URL}/api/providers/${providerId}/configs?versionNumber=${exactProviderVersionString || ''}&allowedTags=${allowedTags?.join(',') || ''}`
     },
 
+    // Default portal URL
+    DEFAULT_PORTAL_URL: 'https://portal.reclaimprotocol.org',
+
+    // Default sharepage URL
+    DEFAULT_APP_SHARE_PAGE_URL: 'https://share.reclaimprotocol.org/verifier',
+
     // URL for sharing Reclaim templates
     RECLAIM_SHARE_URL: 'https://share.reclaimprotocol.org/verifier/?template=',
 

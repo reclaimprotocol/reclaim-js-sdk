@@ -70,7 +70,7 @@ export type ProofRequestOptions = {
    */
   portalUrl?: string;
   customAppClipUrl?: string;
-  launchOptions?: ReclaimFlowLaunchOptions;
+  launchOptions?: ReclaimFlowInitOptions;
   /**
    * Whether the verification client should automatically submit necessary proofs once they are generated.
    * If set to false, the user must manually click a button to submit.
@@ -110,7 +110,7 @@ export type ProofRequestOptions = {
   acceptTeeAttestation?: boolean;
 };
 
-export type ReclaimFlowLaunchOptions = {
+export type ReclaimFlowInitOptions = {
   /**
    * Enables deferred deep links for the Reclaim verification flow.
    *
@@ -136,6 +136,9 @@ export type ReclaimFlowLaunchOptions = {
    * @default 'portal'
    */
   verificationMode?: 'app' | 'portal';
+}
+
+export type ReclaimFlowLaunchOptions = ReclaimFlowInitOptions & {
   /**
    * Target DOM element to embed the verification flow in an iframe.
    * When provided, the portal opens inside the element instead of a new tab.

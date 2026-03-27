@@ -278,7 +278,7 @@ export class ReclaimProofRequest {
     private templateData: TemplateData;
     private extensionID: string = "reclaim-extension";
     private customSharePageUrl?: string;
-    private appSharePageUrl: string = 'https://share.reclaimprotocol.org/verify';
+    private appSharePageUrl: string = constants.DEFAULT_APP_SHARE_PAGE_URL;
     private customAppClipUrl?: string;
     private portalTab?: Window | null;
     private portalIframe?: HTMLIFrameElement;
@@ -313,9 +313,9 @@ export class ReclaimProofRequest {
 
         // portalUrl is an alias for customSharePageUrl (portalUrl takes precedence)
         // When set, overrides both portal and app share page URLs
-        const customUrl = options.portalUrl ?? options.customSharePageUrl;
-        this.customSharePageUrl = customUrl ?? 'https://portal.reclaimprotocol.org';
-        if (customUrl) {
+        const customUrl = options.portalUrl || options.customSharePageUrl;
+        this.customSharePageUrl = customUrl || constants.DEFAULT_PORTAL_URL;
+        if (customUrl && customUrl !== constants.DEFAULT_PORTAL_URL) {
             this.appSharePageUrl = customUrl;
         }
         options.customSharePageUrl = this.customSharePageUrl;
@@ -1276,7 +1276,7 @@ export class ReclaimProofRequest {
      * ```
      */
     async getRequestUrl(launchOptions?: ReclaimFlowLaunchOptions): Promise<string> {
-        const options = launchOptions || this.options?.launchOptions || {};
+        const options = { ...this.options?.launchOptions, ...launchOptions };
         const mode = options.verificationMode ?? 'portal';
 
         logger.info('Creating Request Url')
@@ -1358,7 +1358,7 @@ export class ReclaimProofRequest {
      * ```
      */
     async triggerReclaimFlow(launchOptions?: ReclaimFlowLaunchOptions): Promise<FlowHandle> {
-        const options = launchOptions || this.options?.launchOptions || {};
+        const options = { ...this.options?.launchOptions, ...launchOptions };
         const mode = options.verificationMode ?? 'portal';
 
         if (!this.signature) {
@@ -1376,11 +1376,11 @@ export class ReclaimProofRequest {
             updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
 
             // Iframe embedding — takes priority when target element is provided
-            if ('target' in options && !options.target) {
+            if (launchOptions && 'target' in launchOptions && !launchOptions.target) {
                 logger.warn('triggerReclaimFlow: target was provided but is null/undefined — falling back to default flow. Ensure the element exists in the DOM.');
             }
-            if (options.target && mode === 'portal') {
-                await this.embedPortalIframe(templateData, options.target);
+            if (launchOptions?.target && mode === 'portal') {
+                await this.embedPortalIframe(templateData, launchOptions.target);
                 return {
                     close: () => this.closeEmbeddedFlow(),
                     iframe: this.portalIframe!,
