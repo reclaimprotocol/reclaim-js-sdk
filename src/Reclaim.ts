@@ -1671,6 +1671,7 @@ export class ReclaimProofRequest {
      *
      * @param onSuccess - Callback function invoked when proof is successfully submitted
      * @param onError - Callback function invoked when an error occurs during the session
+     * @param verificationConfig - Optional configuration to customize proof verification
      * @returns Promise<void>
      * @throws {SessionNotStartedError} When session ID is not defined
      * @throws {ProofNotVerifiedError} When proof verification fails (default callback only)
@@ -1689,7 +1690,7 @@ export class ReclaimProofRequest {
      * });
      * ```
      */
-    async startSession({ onSuccess, onError }: StartSessionParams): Promise<void> {
+    async startSession({ onSuccess, onError, verificationConfig }: StartSessionParams): Promise<void> {
         if (!this.sessionId) {
             const message = "Session can't be started due to undefined value of sessionId";
             logger.info(message);
@@ -1732,10 +1733,10 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const { isVerified: verified } = await verifyProof(proofs, this.getProviderVersion());
-                            if (!verified) {
+                            const result = await verifyProof(proofs, verificationConfig ?? this.getProviderVersion());
+                            if (!result.isVerified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
-                                throw new ProofNotVerifiedError();
+                                throw new ProofNotVerifiedError(`Proofs not verified: count=${proofs?.length}`, result.error);
                             }
                         }
                         // check if the proofs array has only one proof then send the proofs in onSuccess

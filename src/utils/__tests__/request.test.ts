@@ -563,4 +563,74 @@ describe('Request', () => {
             expect(output.options.launchOptions.verificationMode).toEqual('app');
         });
     });
+
+    describe('startSession', () => {
+        let originalSetInterval: typeof setInterval;
+        let originalClearInterval: typeof clearInterval;
+
+        beforeEach(() => {
+            originalSetInterval = global.setInterval;
+            originalClearInterval = global.clearInterval;
+        });
+
+        afterEach(() => {
+            global.setInterval = originalSetInterval;
+            global.clearInterval = originalClearInterval;
+        });
+
+        it('should accept and use verificationConfig in startSession without breaking the api', async () => {
+            let intervalCb: any;
+            (global as any).setInterval = (cb: any, time: number) => {
+                intervalCb = cb;
+                return 123 as any;
+            };
+            (global as any).clearInterval = () => {};
+
+            globalThis.fetch = mockFetchBy((url) => {
+                if (url.includes('session/')) {
+                    return {
+                        session: {
+                            statusV2: 'PROOF_GENERATION_SUCCESS',
+                            proofs: [{
+                                identifier: '0x123',
+                                claimData: {
+                                    provider: 'http',
+                                    parameters: '{}',
+                                    owner: '0x0',
+                                    timestampS: 1234567890,
+                                    context: 'some-context',
+                                    identifier: '0x123',
+                                    epoch: 1
+                                },
+                                signatures: ['0xinvalid'],
+                                witnesses: []
+                            }]
+                        },
+                        sessionId: '123',
+                        resolvedProviderVersion: '1.0.0'
+                    };
+                }
+                return { success: true };
+            });
+
+            const request = await ReclaimProofRequest.init(testAppId, testAppSecret, 'example');
+
+            const mockSuccess = jest.fn();
+            const mockError = jest.fn();
+
+            await request.startSession({
+                onSuccess: mockSuccess,
+                onError: mockError,
+                verificationConfig: { dangerouslyDisableContentValidation: true }
+            });
+
+            // Trigger the interval callback manually
+            await intervalCb();
+
+            expect(mockError).toHaveBeenCalled();
+            const err = mockError.mock.calls[0][0];
+            expect(err.message).toContain('Proofs not verified');
+            expect(mockSuccess).not.toHaveBeenCalled();
+        });
+    });
 });
