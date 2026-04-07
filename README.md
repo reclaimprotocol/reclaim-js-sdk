@@ -138,7 +138,7 @@ Let's break down what's happening in this code:
 
    - Generate a request URL using `getRequestUrl()`. This URL is used to create the QR code.
    - Get the status URL using `getStatusUrl()`. This URL can be used to check the status of the claim process.
-   - Start a session with `startSession()`, which sets up callbacks for successful and failed verifications.
+   - Start a session with `startSession()`, which sets up callbacks for successful and failed verifications, and allows you to pass an optional `verificationConfig` to customize proof verification.
 
 3. We display a QR code using the request URL. When a user scans this code, it starts the verification process.
 

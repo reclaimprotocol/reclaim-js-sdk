@@ -1,4 +1,5 @@
 import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
+import { VerificationConfig } from './proofValidationUtils';
 import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, ReclaimProviderConfigWithRequestSpec, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
 // Claim-related types
@@ -39,6 +40,7 @@ export type CreateVerificationRequest = {
 export type StartSessionParams = {
   onSuccess: OnSuccess;
   onError: OnError;
+  verificationConfig?: VerificationConfig;
 };
 
 export type OnSuccess = (proof?: Proof | Proof[]) => void;
