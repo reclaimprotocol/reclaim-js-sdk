@@ -14,7 +14,11 @@ export interface Proof {
   signatures: string[];
   witnesses: WitnessData[];
   extractedParameterValues: any;
-  publicData?: { [key: string]: string };
+  /**
+   * A JSON serializable object that is returned by the provider as additional data attached to proof.
+   * This data is not verified or validated.
+   */
+  publicData?: any;
   taskId?: number;
   teeAttestation?: TeeAttestation;
 }

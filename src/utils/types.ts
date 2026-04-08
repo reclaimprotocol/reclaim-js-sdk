@@ -38,12 +38,36 @@ export type CreateVerificationRequest = {
 };
 
 export type StartSessionParams = {
+  /**
+   * Callback function that is invoked when the session is successfully created.
+   * 
+   * @param proofOrProofs - A single proof object or an array of proof objects. This can be empty when proofs are sent to callback.
+   */
   onSuccess: OnSuccess;
+  /**
+   * Callback function that is invoked when the session fails to be created.
+   * 
+   * @param error - The error that caused the session to fail.
+   */
   onError: OnError;
+  /**
+   * Configuration for proof validation. Defaults to the provider id and version used in this session.
+   */
   verificationConfig?: VerificationConfig;
 };
 
-export type OnSuccess = (proof?: Proof | Proof[]) => void;
+/**
+ * Callback function that is invoked when the session is successfully created.
+ * 
+ * @param proofOrProofs - A single proof object or an array of proof objects. This can be empty when proofs are sent to callback.
+ */
+export type OnSuccess = (proofOrProofs: Proof | Proof[]) => void;
+
+/**
+ * Callback function that is invoked when the session fails to be created.
+ * 
+ * @param error - The error that caused the session to fail.
+ */
 export type OnError = (error: Error) => void;
 
 export type ProofRequestOptions = {
@@ -318,13 +342,24 @@ export type TrustedData = {
   extractedParameters: Record<string, string>;
 };
 
-// Verify proof result type
-export type VerifyProofResult = {
-  isVerified: boolean;
+export type VerifyProofResultSuccess = {
+  isVerified: true;
   isTeeVerified?: boolean;
+  error: undefined;
   data: TrustedData[];
-  error?: Error;
+  publicData: any[];
 }
+
+export type VerifyProofResultFailure = {
+  isVerified: false;
+  isTeeVerified?: boolean;
+  error: Error;
+  data: [];
+  publicData: [];
+}
+
+// Verify proof result type
+export type VerifyProofResult = VerifyProofResultSuccess | VerifyProofResultFailure;
 
 export type ProviderVersionConfig = {
   major?: number;

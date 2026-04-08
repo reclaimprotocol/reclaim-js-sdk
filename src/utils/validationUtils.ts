@@ -281,4 +281,17 @@ export function validateModalOptions(modalOptions: ModalOptions, functionName: s
 }
 
 
+export function hashObject(o: any) {
+  try {
+    const canonicalData = canonicalStringify(o);
+
+    const messageHash = ethers.keccak256(new TextEncoder().encode(canonicalData));
+
+    return messageHash;
+
+  } catch (e) {
+    logger.info(`Failed to hash object: ${(e as Error).message}`);
+    throw new Error(`Failed to hash object: ${(e as Error).message}`);
+  }
+}
 

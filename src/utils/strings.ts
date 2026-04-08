@@ -5,7 +5,7 @@ import canonicalize from "canonicalize"
  * produce the same string despite the order of keys
  */
 export function canonicalStringify(params: { [key: string]: any } | undefined) {
-	if(!params) {
+	if (!params) {
 		return ''
 	}
 
