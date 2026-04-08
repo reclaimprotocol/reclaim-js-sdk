@@ -138,6 +138,8 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
+        let isTeeVerified: boolean | undefined = undefined;
+
         if (config.verifyTEE) {
             const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
 
@@ -158,7 +160,7 @@ export async function verifyProof(
 
             try {
                 const teeResults = await Promise.all(proofs.map(proof => verifyTeeAttestation(proof)));
-                const isTeeVerified = teeResults.every(r => r === true);
+                isTeeVerified = teeResults.every(r => r === true);
                 if (!isTeeVerified) {
                     const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
                     logger.error(teeError.message);
@@ -190,6 +192,7 @@ export async function verifyProof(
 
         const result: VerifyProofResultSuccess = {
             isVerified: true,
+            isTeeVerified: isTeeVerified,
             data: proofs.map(createTrustedDataFromProofData),
             publicData: getPublicDataFromProofs(proofs),
             error: undefined,

@@ -82,7 +82,7 @@ describe('getPublicDataFromProofs', () => {
         const proof2 = cloneProof();
         proof1.publicData = undefined;
         proof2.publicData = undefined;
-        
+
         const result = getPublicDataFromProofs([proof1, proof2]);
         expect(result).toEqual([]);
     });
@@ -90,7 +90,7 @@ describe('getPublicDataFromProofs', () => {
     it('extracts publicData correctly', () => {
         const proof = cloneProof();
         proof.publicData = { user: 'test1' };
-        
+
         const result = getPublicDataFromProofs([proof]);
         expect(result).toEqual([{ user: 'test1' }]);
     });
@@ -101,7 +101,7 @@ describe('getPublicDataFromProofs', () => {
         proof1.publicData = { user: 'test', score: '100' };
         // Identical data but different key order to also test canonical hashing
         proof2.publicData = { score: '100', user: 'test' };
-        
+
         const result = getPublicDataFromProofs([proof1, proof2]);
         expect(result).toHaveLength(1);
         expect(result[0]).toEqual({ user: 'test', score: '100' });
@@ -112,7 +112,7 @@ describe('getPublicDataFromProofs', () => {
         const proof2 = cloneProof();
         proof1.publicData = { user: 'test1' };
         proof2.publicData = { user: 'test2' };
-        
+
         const result = getPublicDataFromProofs([proof1, proof2]);
         expect(result).toHaveLength(2);
         expect(result).toEqual([{ user: 'test1' }, { user: 'test2' }]);
