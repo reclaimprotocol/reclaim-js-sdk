@@ -11,15 +11,14 @@ import {
     type FlowHandle,
     HttpFormEntry,
     HttpRedirectionMethod,
-    type TrustedData,
     type VerifyProofResult,
-    type VerifyProofResultSuccess,
-    type VerifyProofResultFailure,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
 import canonicalize from 'canonicalize'
 import {
+    createVerifyProofResultSuccess,
+    createVerifyProofResultFailure,
     replaceAll,
     scheduleIntervalEndingTask
 } from './utils/helper'
@@ -43,7 +42,7 @@ import {
     ProofNotValidatedError,
     TeeVerificationError
 } from './utils/errors';
-import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody, hashObject } from './utils/validationUtils'
+import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
 import { assertVerifiedProof, createLinkWithTemplateData, getAttestors } from './utils/proofUtils'
 import { QRCodeModal } from './utils/modalUtils'
@@ -146,16 +145,7 @@ export async function verifyProof(
             if (!hasTeeData) {
                 const teeError = new TeeVerificationError('TEE verification requested but one or more proofs are missing TEE attestation data');
                 logger.error(teeError.message);
-
-                const errorResult: VerifyProofResultFailure = {
-                    isVerified: false,
-                    isTeeVerified: false,
-                    error: teeError,
-                    data: [],
-                    publicData: [],
-                }
-
-                return errorResult;
+                return createVerifyProofResultFailure(teeError, false);
             }
 
             try {
@@ -164,88 +154,21 @@ export async function verifyProof(
                 if (!isTeeVerified) {
                     const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
                     logger.error(teeError.message);
-                    const errorResult: VerifyProofResultFailure = {
-                        isVerified: false,
-                        isTeeVerified: false,
-                        error: teeError,
-                        data: [],
-                        publicData: [],
-                    }
-
-                    return errorResult;
+                    return createVerifyProofResultFailure(teeError, false);
                 }
             } catch (error) {
                 const teeError = new TeeVerificationError('Error verifying TEE attestation', error);
                 logger.error(teeError.message);
-
-                const errorResult: VerifyProofResultFailure = {
-                    isVerified: false,
-                    isTeeVerified: false,
-                    error: teeError,
-                    data: [],
-                    publicData: [],
-                }
-
-                return errorResult;
+                return createVerifyProofResultFailure(teeError, false);
             }
         }
 
-        const result: VerifyProofResultSuccess = {
-            isVerified: true,
-            isTeeVerified: isTeeVerified,
-            data: proofs.map(createTrustedDataFromProofData),
-            publicData: getPublicDataFromProofs(proofs),
-            error: undefined,
-        }
-
-        return result;
+        return createVerifyProofResultSuccess(proofs, isTeeVerified);
     } catch (error) {
         logger.error('Error in validating proof:', error);
-        return {
-            isVerified: false,
-            error: error instanceof Error ? error : new Error(String(error)),
-            data: [],
-            publicData: [],
-        }
+        const _error = error instanceof Error ? error : new Error(String(error));
+        return createVerifyProofResultFailure(_error);
     }
-}
-
-export function createTrustedDataFromProofData(proof: Proof): TrustedData {
-    try {
-        const context = JSON.parse(proof.claimData.context)
-        const { extractedParameters, ...rest } = context
-        return {
-            context: rest,
-            extractedParameters: extractedParameters ?? {},
-        }
-    } catch {
-        return {
-            context: {},
-            extractedParameters: {},
-        }
-    }
-}
-
-export function getPublicDataFromProofs(proofs: Proof[]): any[] {
-    const data: any[] = [];
-    const seenData = new Set<string>();
-    for (const proof of proofs) {
-        const publicData = proof.publicData;
-        if (publicData === null || publicData === undefined) {
-            continue;
-        }
-        try {
-            const hash = hashObject(publicData);
-            if (seenData.has(hash)) {
-                continue;
-            }
-            seenData.add(hash);
-        } catch (_) {
-            // if hash fails, we still push the data
-        }
-        data.push(publicData);
-    }
-    return data;
 }
 
 /**

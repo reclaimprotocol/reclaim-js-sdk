@@ -1,6 +1,6 @@
 import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
 import { VerificationConfig } from './proofValidationUtils';
-import { InjectedRequestSpec, InterceptorRequestSpec, ProviderHashRequirementsConfig, ReclaimProviderConfigWithRequestSpec, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
+import { ProviderHashRequirementsConfig, ReclaimProviderConfigWithRequestSpec, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
 // Claim-related types
 export type ClaimID = ProviderClaimData['identifier'];
