@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.1.0]
 
+### Changed
+
+- Refactor `VerifyProofResult` type into a discriminated union (`VerifyProofResultSuccess` and `VerifyProofResultFailure`).
+
 ### Added
 
+- Include `publicData` in successful `VerifyProofResult` (type `VerifyProofResultSuccess`) responses.
 - Add `verificationConfig` parameter to `startSession` method.
 
 ## [5.0.1]

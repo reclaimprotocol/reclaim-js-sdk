@@ -11,13 +11,14 @@ import {
     type FlowHandle,
     HttpFormEntry,
     HttpRedirectionMethod,
-    type TrustedData,
     type VerifyProofResult,
 } from './utils/types'
 import { SessionStatus, DeviceType } from './utils/types'
 import { ethers } from 'ethers'
 import canonicalize from 'canonicalize'
 import {
+    createVerifyProofResultSuccess,
+    createVerifyProofResultFailure,
     replaceAll,
     scheduleIntervalEndingTask
 } from './utils/helper'
@@ -136,10 +137,7 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
-        const result: VerifyProofResult = {
-            isVerified: true,
-            data: proofs.map(extractProofData),
-        }
+        let isTeeVerified: boolean | undefined = undefined;
 
         if (config.verifyTEE) {
             const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
@@ -147,54 +145,29 @@ export async function verifyProof(
             if (!hasTeeData) {
                 const teeError = new TeeVerificationError('TEE verification requested but one or more proofs are missing TEE attestation data');
                 logger.error(teeError.message);
-                result.isTeeVerified = false;
-                result.isVerified = false;
-                result.error = teeError;
-                return result;
+                return createVerifyProofResultFailure(teeError, false);
             }
 
             try {
                 const teeResults = await Promise.all(proofs.map(proof => verifyTeeAttestation(proof)));
-                result.isTeeVerified = teeResults.every(r => r === true);
-                if (!result.isTeeVerified) {
+                isTeeVerified = teeResults.every(r => r === true);
+                if (!isTeeVerified) {
                     const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
                     logger.error(teeError.message);
-                    result.isVerified = false;
-                    result.error = teeError;
+                    return createVerifyProofResultFailure(teeError, false);
                 }
             } catch (error) {
                 const teeError = new TeeVerificationError('Error verifying TEE attestation', error);
                 logger.error(teeError.message);
-                result.isTeeVerified = false;
-                result.isVerified = false;
-                result.error = teeError;
+                return createVerifyProofResultFailure(teeError, false);
             }
         }
 
-        return result;
+        return createVerifyProofResultSuccess(proofs, isTeeVerified);
     } catch (error) {
         logger.error('Error in validating proof:', error);
-        return {
-            isVerified: false,
-            data: [],
-            error: error instanceof Error ? error : new Error(String(error)),
-        }
-    }
-}
-
-function extractProofData(proof: Proof): TrustedData {
-    try {
-        const context = JSON.parse(proof.claimData.context)
-        const { extractedParameters, ...rest } = context
-        return {
-            context: rest,
-            extractedParameters: extractedParameters ?? {},
-        }
-    } catch {
-        return {
-            context: {},
-            extractedParameters: {},
-        }
+        const _error = error instanceof Error ? error : new Error(String(error));
+        return createVerifyProofResultFailure(_error);
     }
 }
 
@@ -1667,7 +1640,7 @@ export class ReclaimProofRequest {
      * and the startSession function source for more details.
      *
      * > [!TIP]
-     * > **Best Practice:** When using `setAppCallbackUrl` and/or `setCancelCallbackUrl`, your backend receives the proof or cancellation details directly. We recommend your backend notifies the frontend (e.g. via WebSockets, SSE, or polling) to stop the verification process and handle the appropriate success/failure action. Do not rely completely on `startSession` callbacks on the frontend when using these backend callbacks.
+     * > **Best Practice:** When using `setAppCallbackUrl` and/or `setCancelCallbackUrl`, your backend receives the proof or cancellation details directly. We recommend your backend notifies the frontend (e.g. via WebSockets, SSE, or polling) to stop the verification process and handle the appropriate success/failure action. When a callback is set, `onSuccess` callback provided to `startSession` will have an empty array as its argument.
      *
      * @param onSuccess - Callback function invoked when proof is successfully submitted
      * @param onError - Callback function invoked when an error occurs during the session

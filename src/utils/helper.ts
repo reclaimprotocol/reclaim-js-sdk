@@ -1,6 +1,8 @@
-import { OnError } from './types'
+import { OnError, TrustedData, VerifyProofResultFailure, VerifyProofResultSuccess } from './types'
 import { TimeoutError } from './errors'
 import loggerModule from './logger'
+import { hashObject } from './validationUtils';
+import { Proof } from './interfaces';
 const logger = loggerModule.logger
 
 /**
@@ -32,18 +34,77 @@ export function replaceAll(str: string, find: string, replace: string): string {
  * @param timeout - Timeout in milliseconds (default: 10 minutes)
  */
 export function scheduleIntervalEndingTask(
-    sessionId: string,
-    intervals: Map<string, NodeJS.Timer>,
-    onFailureCallback: OnError,
-    timeout: number = 1000 * 60 * 10
+  sessionId: string,
+  intervals: Map<string, NodeJS.Timer>,
+  onFailureCallback: OnError,
+  timeout: number = 1000 * 60 * 10
 ): void {
-    setTimeout(() => {
-        if (intervals.has(sessionId)) {
-            const message = 'Interval ended without receiving proofs'
-            onFailureCallback(new TimeoutError(message))
-            logger.info(message)
-            clearInterval(intervals.get(sessionId) as NodeJS.Timeout)
-            intervals.delete(sessionId)
-        }
-    }, timeout)
+  setTimeout(() => {
+    if (intervals.has(sessionId)) {
+      const message = 'Interval ended without receiving proofs'
+      onFailureCallback(new TimeoutError(message))
+      logger.info(message)
+      clearInterval(intervals.get(sessionId) as NodeJS.Timeout)
+      intervals.delete(sessionId)
+    }
+  }, timeout)
+}
+
+export const createVerifyProofResultSuccess = (proofs: Proof[], isTeeVerified?: true): VerifyProofResultSuccess => {
+  return {
+    isVerified: true,
+    isTeeVerified: isTeeVerified,
+    error: undefined,
+    data: proofs.map(createTrustedDataFromProofData),
+    publicData: getPublicDataFromProofs(proofs),
+  }
+}
+
+
+export const createVerifyProofResultFailure = (error: Error, isTeeVerified?: false): VerifyProofResultFailure => {
+  return {
+    isVerified: false,
+    isTeeVerified: isTeeVerified,
+    error: error,
+    data: [],
+    publicData: [],
+  }
+}
+
+export function createTrustedDataFromProofData(proof: Proof): TrustedData {
+  try {
+    const context = JSON.parse(proof.claimData.context)
+    const { extractedParameters, ...rest } = context
+    return {
+      context: rest,
+      extractedParameters: extractedParameters ?? {},
+    }
+  } catch {
+    return {
+      context: {},
+      extractedParameters: {},
+    }
+  }
+}
+
+export function getPublicDataFromProofs(proofs: Proof[]): any[] {
+  const data: any[] = [];
+  const seenData = new Set<string>();
+  for (const proof of proofs) {
+    const publicData = proof.publicData;
+    if (publicData === null || publicData === undefined) {
+      continue;
+    }
+    try {
+      const hash = hashObject(publicData);
+      if (seenData.has(hash)) {
+        continue;
+      }
+      seenData.add(hash);
+    } catch (_) {
+      // if hash fails, we still push the data
+    }
+    data.push(publicData);
+  }
+  return data;
 }
