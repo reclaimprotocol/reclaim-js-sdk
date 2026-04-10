@@ -69,12 +69,15 @@ export default function Home() {
         process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_ID!,
         {
           log: true,
-          acceptTeeAttestation: true,
+          // acceptTeeAttestation: true,
           useAppClip: false,
-          customSharePageUrl: 'http://localhost:5173',
+          // portalUrl: 'https://portal.reclaimprotocol.org', // default
+          // launchOptions: { verificationMode: 'app' }, // for native app flow
+          // useAppClip: true, // for App Clip on iOS with verificationMode: 'app'
+          // portalUrl: 'https://portal.reclaimprotocol.org', 
         }
       )
-      proofRequest.setAppCallbackUrl('https://webhook.site/f2eb69c1-2dfc-4304-81f5-418393154487', true)
+      proofRequest.setAppCallbackUrl('<YOUR_APP_CALLBACK_URL>', true)
       setReclaimProofRequest(proofRequest)
       return proofRequest
     } catch (error) {
