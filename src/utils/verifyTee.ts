@@ -1,722 +1,399 @@
-import forge from 'node-forge';
 import { Proof, TeeAttestation } from './interfaces';
 import { ethers } from 'ethers';
-import { AMD_CERTS } from './amdCerts';
+import { generateAttestationNonce } from './attestationNonce';
 import loggerModule from './logger';
 
-const crlCache: Record<string, { buffer: Uint8Array, fetchedAt: number }> = {};
 const logger = loggerModule.logger;
 
-type BinaryLike = Uint8Array | ArrayBuffer | Buffer;
+const EXPECTED_ISSUER = 'https://confidentialcomputing.googleapis.com';
+const EXPECTED_HW_MODEL = 'GCP_AMD_SEV';
+const EXPECTED_TEE_PROVIDER = 'gcp';
+const EXPECTED_TEE_TECHNOLOGY = 'amd-sev';
+const TOKEN_CLOCK_SKEW_S = 60;
+const NONCE_TIMESTAMP_MAX_SKEW_MS = 10 * 60 * 1000;
 
-function toUint8Array(input: BinaryLike): Uint8Array {
-    if (typeof Buffer !== 'undefined' && typeof Buffer.isBuffer === 'function' && Buffer.isBuffer(input)) {
-        return new Uint8Array(input);
+type JsonWebKeyLike = JsonWebKey & {
+    kid?: string;
+    alg?: string;
+    use?: string;
+};
+
+type DecodedJwt = {
+    header: Record<string, any>;
+    payload: Record<string, any>;
+    signingInput: string;
+    signature: Uint8Array;
+};
+
+type NonceContextData = {
+    applicationId: string;
+    sessionId: string;
+    timestamp: string;
+};
+
+export type TeeVerificationResult = {
+    isVerified: boolean;
+    error?: string;
+};
+
+const BROWSER_ENVIRONMENT_ERROR =
+    'TEE attestation verification is only supported in non-browser environments. Run verifyTeeAttestation on your server or API route.';
+
+function assert(condition: unknown, message: string): asserts condition {
+    if (!condition) {
+        throw new Error(message);
     }
-    if (input instanceof Uint8Array) {
-        return new Uint8Array(input);
-    }
-    if (typeof ArrayBuffer !== 'undefined' && input instanceof ArrayBuffer) {
-        return new Uint8Array(input);
-    }
-    throw new Error('Unsupported binary data type');
 }
 
-function uint8ArrayToBinaryString(bytes: Uint8Array): string {
-    let result = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, i + chunkSize);
-        result += String.fromCharCode(...chunk);
+function isBrowserEnvironment(): boolean {
+    if (typeof window !== 'undefined' || typeof document !== 'undefined') {
+        return true;
     }
-    return result;
+
+    if (typeof navigator !== 'undefined' && typeof process === 'undefined') {
+        return true;
+    }
+
+    const workerGlobalScope = (globalThis as any).WorkerGlobalScope;
+    if (
+        typeof workerGlobalScope !== 'undefined' &&
+        typeof self !== 'undefined' &&
+        self instanceof workerGlobalScope
+    ) {
+        return true;
+    }
+
+    return false;
 }
 
-function binaryStringToUint8Array(binary: string): Uint8Array {
-    const result = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        result[i] = binary.charCodeAt(i);
+function assertNonBrowserEnvironment() {
+    if (isBrowserEnvironment()) {
+        throw new Error(BROWSER_ENVIRONMENT_ERROR);
     }
-    return result;
 }
 
-function base64ToUint8Array(base64: string): Uint8Array {
-    if (typeof atob === 'function') {
-        const binary = atob(base64);
-        return binaryStringToUint8Array(binary);
-    }
+function normalizeHex(value: string | undefined | null): string {
+    return (value || '').trim().replace(/^0x/i, '').toLowerCase();
+}
+
+function isHex(value: string): boolean {
+    return /^[0-9a-f]+$/i.test(value);
+}
+
+function decodeBase64Url(input: string): Uint8Array {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+
     if (typeof Buffer !== 'undefined') {
-        return new Uint8Array(Buffer.from(base64, 'base64'));
+        return new Uint8Array(Buffer.from(padded, 'base64'));
     }
+    if (typeof atob === 'function') {
+        const binary = atob(padded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
     throw new Error('Base64 decoding is not supported in this environment');
 }
 
-function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
-    const view = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-    let hex = '';
-    for (let i = 0; i < view.length; i++) {
-        hex += view[i].toString(16).padStart(2, '0');
-    }
-    return hex;
+function decodeUtf8(bytes: Uint8Array): string {
+    return new TextDecoder().decode(bytes);
 }
 
-function concatUint8Arrays(parts: Uint8Array[]): Uint8Array {
-    const totalLength = parts.reduce((sum, arr) => sum + arr.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const arr of parts) {
-        result.set(arr, offset);
-        offset += arr.length;
-    }
-    return result;
-}
-
-function reverseBytes(bytes: Uint8Array): Uint8Array {
-    const copy = Uint8Array.from(bytes);
-    copy.reverse();
-    return copy;
-}
-
-function normalizeSerial(s: string) {
-    let cleaned = s.toLowerCase().replace(/[^a-f0-9]/g, '');
-    while (cleaned.startsWith('0') && cleaned.length > 1) cleaned = cleaned.substring(1);
-    return cleaned;
-}
-const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
-const getSubtleCrypto = () => {
-    if (typeof window !== 'undefined' && window.crypto?.subtle) return window.crypto.subtle;
-    if (isNode) return require('crypto').webcrypto.subtle;
-    throw new Error('No WebCrypto subtle implementation found in this environment');
-};
-
-interface ParsedCert {
-    serialNumber: string;
-    tbsDer: Uint8Array;
-    signature: Uint8Array;
-    sigAlgOid: string;
-    spkiDer: Uint8Array;
-    notBefore?: Date;
-    notAfter?: Date;
-}
-
-function parseCert(buffer: BinaryLike): ParsedCert {
-    const bytes = toUint8Array(buffer);
-    const asn1 = forge.asn1.fromDer(uint8ArrayToBinaryString(bytes));
-    const certSeq = asn1.value as any[];
-    const tbsAsn1 = certSeq[0];
-    const sigAlgAsn1 = certSeq[1];
-    const sigValueAsn1 = certSeq[2];
-
-    const tbsFields = tbsAsn1.value as any[];
-    let idx = 0;
-    if (tbsFields[idx].tagClass === 128) idx++; // version
-    const serialAsn1 = tbsFields[idx++];
-    const serialNumber = forge.util.bytesToHex(serialAsn1.value);
-    idx++; // sigAlg
-    idx++; // issuer
-    const validityAsn1 = tbsFields[idx++];
-    idx++; // subject
-    const spkiAsn1 = tbsFields[idx];
-
-    if (!validityAsn1 || !Array.isArray(validityAsn1.value) || validityAsn1.value.length < 2) {
-        throw new Error('Certificate validity window is malformed');
-    }
-    const notBeforeNode = validityAsn1.value[0];
-    const notAfterNode = validityAsn1.value[1];
-    const notBefore = notBeforeNode ? parseAsn1Time(notBeforeNode) : undefined;
-    const notAfter = notAfterNode ? parseAsn1Time(notAfterNode) : undefined;
-
-    const sigRaw = typeof sigValueAsn1.value === 'string' ? sigValueAsn1.value : '';
-    const signature = binaryStringToUint8Array(sigRaw.substring(1));
-    const sigAlgOid = forge.asn1.derToOid((sigAlgAsn1.value as any[])[0].value);
+function decodeJwt(token: string): DecodedJwt {
+    const parts = token.split('.');
+    assert(parts.length === 3, 'attestation token is not a JWT');
 
     return {
-        serialNumber: normalizeSerial(serialNumber),
-        tbsDer: binaryStringToUint8Array(forge.asn1.toDer(tbsAsn1).getBytes()),
-        signature,
-        sigAlgOid,
-        spkiDer: binaryStringToUint8Array(forge.asn1.toDer(spkiAsn1).getBytes()),
-        notBefore,
-        notAfter
+        header: JSON.parse(decodeUtf8(decodeBase64Url(parts[0]))),
+        payload: JSON.parse(decodeUtf8(decodeBase64Url(parts[1]))),
+        signingInput: `${parts[0]}.${parts[1]}`,
+        signature: decodeBase64Url(parts[2]),
     };
 }
 
-async function verifySignature(publicKeyPem: string, data: Uint8Array, signature: Uint8Array, sigAlgOid: string) {
-    const cryptoSubtle = getSubtleCrypto();
-    const forgeCert = forge.pki.certificateFromPem(publicKeyPem);
-    const spkiBuf = binaryStringToUint8Array(forge.asn1.toDer(forge.pki.publicKeyToAsn1(forgeCert.publicKey)).getBytes());
-
-    let importParams: any;
-    let verifyParams: any;
-
-    if (sigAlgOid === '1.2.840.113549.1.1.10') { // rsassa-pss
-        importParams = { name: 'RSA-PSS', hash: 'SHA-384' };
-        verifyParams = { name: 'RSA-PSS', saltLength: 48 };
-    } else if (sigAlgOid === '1.2.840.113549.1.1.11' || sigAlgOid === '1.2.840.113549.1.1.12' || sigAlgOid === '1.2.840.113549.1.1.5') {
-        importParams = { name: 'RSASSA-PKCS1-v1_5', hash: sigAlgOid === '1.2.840.113549.1.1.12' ? 'SHA-384' : 'SHA-256' };
-        verifyParams = { name: 'RSASSA-PKCS1-v1_5' };
-    } else if (sigAlgOid === '1.2.840.10045.4.3.3') { // ecdsa-with-sha384
-        importParams = { name: 'ECDSA', namedCurve: 'P-384' };
-        verifyParams = { name: 'ECDSA', hash: 'SHA-384' };
-    } else {
-        // Fallback or generic
-        importParams = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
-        verifyParams = { name: 'RSASSA-PKCS1-v1_5' };
-    }
-
-    const key = await cryptoSubtle.importKey('spki', spkiBuf, importParams, false, ['verify']);
-    const isValid = await cryptoSubtle.verify(verifyParams, key, signature, data);
-    if (!isValid) throw new Error(`Signature verification failed (OID: ${sigAlgOid}, ImportParams: ${JSON.stringify(importParams)})`);
+function getFetch(): typeof fetch {
+    const fetchFn = globalThis.fetch;
+    assert(fetchFn, 'fetch is not available in this environment');
+    return fetchFn.bind(globalThis);
 }
 
-const COSIGN_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEjiL30OjPuxa+GC1I7SAcBv2u2pMt
-h9WbP33IvB3eFww+C1hoW0fwdZPiq4FxBtKNiZuFpmYuFngW/nJteBu9kQ==
------END PUBLIC KEY-----
-`;
+function getSubtleCrypto(): SubtleCrypto {
+    if (globalThis.crypto?.subtle) {
+        return globalThis.crypto.subtle;
+    }
+
+    const nodeCrypto = typeof process !== 'undefined' && process.versions?.node
+        ? require('crypto')
+        : undefined;
+    if (nodeCrypto?.webcrypto?.subtle) {
+        return nodeCrypto.webcrypto.subtle as SubtleCrypto;
+    }
+
+    throw new Error('WebCrypto subtle is not available in this environment');
+}
+
+async function fetchJson(url: string): Promise<any> {
+    const response = await getFetch()(url);
+    if (!response.ok) {
+        throw new Error(`GET ${url} returned ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+}
+
+async function sha256Hex(input: string): Promise<string> {
+    const digest = await getSubtleCrypto().digest('SHA-256', new TextEncoder().encode(input));
+    return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyJwtSignature(token: string, issuer: string): Promise<Record<string, any>> {
+    const { header, payload, signingInput, signature } = decodeJwt(token);
+    assert(header.alg === 'RS256', `unexpected attestation signing algorithm: ${header.alg}`);
+    assert(typeof header.kid === 'string' && header.kid.length > 0, 'attestation token kid is missing');
+
+    const oidc = await fetchJson(`${issuer}/.well-known/openid-configuration`);
+    assert(typeof oidc?.jwks_uri === 'string' && oidc.jwks_uri.length > 0, 'issuer JWKS URI is missing');
+
+    const jwks = await fetchJson(oidc.jwks_uri);
+    const jwk = (jwks?.keys || []).find((key: JsonWebKeyLike) => key.kid === header.kid) as JsonWebKeyLike | undefined;
+    assert(jwk, `no JWKS key found for kid ${header.kid}`);
+
+    const cryptoKey = await getSubtleCrypto().importKey(
+        'jwk',
+        jwk,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+        false,
+        ['verify']
+    );
+
+    const isValid = await getSubtleCrypto().verify(
+        'RSASSA-PKCS1-v1_5',
+        cryptoKey,
+        signature as unknown as BufferSource,
+        new TextEncoder().encode(signingInput) as unknown as BufferSource
+    );
+    assert(isValid, 'JWT signature verification failed');
+
+    return payload;
+}
+
+function parseProofContext(proof: Proof): { parsedContext: any; nonceDataObj: NonceContextData; expectedNonce: string } {
+    let parsedContext: any;
+    try {
+        parsedContext = JSON.parse(proof.claimData.context);
+    } catch {
+        throw new Error('Failed to parse proof context to extract attestationNonce');
+    }
+
+    const expectedNonce = parsedContext?.attestationNonce;
+    const nonceDataObj = parsedContext?.attestationNonceData as NonceContextData | undefined;
+    assert(expectedNonce, 'Proof context is missing attestationNonce or attestationNonceData');
+    assert(nonceDataObj, 'Proof context is missing attestationNonce or attestationNonceData');
+    assert(typeof nonceDataObj.applicationId === 'string' && nonceDataObj.applicationId.length > 0, 'Proof context attestationNonceData.applicationId is missing');
+    assert(typeof nonceDataObj.sessionId === 'string' && nonceDataObj.sessionId.length > 0, 'Proof context attestationNonceData.sessionId is missing');
+    assert(typeof nonceDataObj.timestamp === 'string' && nonceDataObj.timestamp.length > 0, 'Proof context attestationNonceData.timestamp is missing');
+
+    return { parsedContext, nonceDataObj, expectedNonce };
+}
+
+function verifyApplicationAndSessionBinding(
+    proof: Proof,
+    parsedContext: any,
+    nonceDataObj: NonceContextData,
+    expectedApplicationId?: string
+) {
+    const { applicationId, sessionId, timestamp } = nonceDataObj;
+
+    if (expectedApplicationId) {
+        assert(
+            applicationId.toLowerCase() === expectedApplicationId.toLowerCase(),
+            `Application ID Mismatch! Expected ${expectedApplicationId}, but proof context contains ${applicationId}`
+        );
+    }
+
+    let parsedParameters: any = {};
+    try {
+        parsedParameters = proof.claimData.parameters ? JSON.parse(proof.claimData.parameters) : {};
+    } catch {
+        parsedParameters = {};
+    }
+
+    const contextSessionId = parsedContext?.reclaimSessionId;
+    const parameterSessionId = parsedParameters?.proxySessionId ?? parsedParameters?.sessionId;
+
+    if (contextSessionId && contextSessionId.toString() !== sessionId.toString()) {
+        throw new Error(`Session ID Mismatch! Expected ${sessionId}, but proof context contains reclaimSessionId=${contextSessionId}`);
+    }
+    if (parameterSessionId && parameterSessionId.toString() !== sessionId.toString()) {
+        throw new Error(`Session ID Mismatch! Expected ${sessionId}, but proof parameters contain ${parameterSessionId}`);
+    }
+    if (!contextSessionId && !parameterSessionId) {
+        throw new Error('Proof is missing reclaimSessionId and proxySessionId/sessionId for attestation nonce verification');
+    }
+
+    const claimTimestampMs = proof.claimData.timestampS * 1000;
+    const nonceTimestampMs = parseInt(timestamp, 10);
+    const diffMs = Math.abs(claimTimestampMs - nonceTimestampMs);
+    if (diffMs > NONCE_TIMESTAMP_MAX_SKEW_MS) {
+        throw new Error(`Timestamp Skew Too Large! claimData.timestampS and attestationNonce timestamp differ by ${Math.round(diffMs / 1000)}s (limit: 600s)`);
+    }
+}
+
+function verifyNonceMaterial(
+    expectedNonce: string,
+    nonceDataObj: NonceContextData,
+    expectedAppSecret?: string
+) {
+    const cleanExpectedNonce = normalizeHex(expectedNonce);
+    const { applicationId, sessionId, timestamp } = nonceDataObj;
+
+    assert(cleanExpectedNonce.length > 0, 'Proof context attestationNonce is empty');
+    assert(isHex(cleanExpectedNonce), 'Proof context attestationNonce is not valid hex');
+
+    if (expectedAppSecret) {
+        const recomputedNonce = generateAttestationNonce(expectedAppSecret, applicationId, sessionId, timestamp);
+        assert(
+            recomputedNonce === cleanExpectedNonce,
+            'Attestation nonce verification failed: app secret, application ID, session ID, or timestamp do not match'
+        );
+        return;
+    }
+
+    if (cleanExpectedNonce.length > 74) {
+        const legacyNonceData = `${applicationId}:${sessionId}:${timestamp}`;
+        const nonceMsg = ethers.getBytes(ethers.keccak256(new TextEncoder().encode(legacyNonceData)));
+        const recoveredAddress = ethers.verifyMessage(
+            nonceMsg,
+            expectedNonce.startsWith('0x') ? expectedNonce : `0x${expectedNonce}`
+        );
+
+        assert(
+            recoveredAddress.toLowerCase() === applicationId.toLowerCase(),
+            `Nonce signature verification failed: recovered ${recoveredAddress}, expected ${applicationId}`
+        );
+        return;
+    }
+
+    throw new Error('App secret is required to verify hash-based attestation nonces');
+}
+
+function assertTokenFresh(claims: Record<string, any>) {
+    const now = Math.floor(Date.now() / 1000);
+
+    if (typeof claims.nbf === 'number' && now + TOKEN_CLOCK_SKEW_S < claims.nbf) {
+        throw new Error(`Attestation token is not valid before ${claims.nbf}`);
+    }
+    if (typeof claims.exp === 'number' && now - TOKEN_CLOCK_SKEW_S > claims.exp) {
+        throw new Error(`Attestation token expired at ${claims.exp}`);
+    }
+    if (typeof claims.iat === 'number' && claims.iat > now + TOKEN_CLOCK_SKEW_S) {
+        throw new Error(`Attestation token issued-at ${claims.iat} is in the future`);
+    }
+}
+
+function assertAudienceClaim(aud: unknown) {
+    if (typeof aud === 'string') {
+        assert(aud.length > 0, 'attestation token audience is empty');
+        return;
+    }
+    if (Array.isArray(aud)) {
+        assert(aud.length > 0, 'attestation token audience is empty');
+        assert(aud.every((entry) => typeof entry === 'string' && entry.length > 0), 'attestation token audience contains invalid entries');
+        return;
+    }
+    throw new Error('attestation token audience is missing');
+}
+
+function assertProofShape(teeAttestation: TeeAttestation) {
+    if (teeAttestation.error) {
+        throw new Error(`${teeAttestation.error.code}: ${teeAttestation.error.message}`);
+    }
+
+    assert(teeAttestation.proof_version === 'v2', `unexpected proof version: ${teeAttestation.proof_version}`);
+    assert(teeAttestation.tee_provider === EXPECTED_TEE_PROVIDER, `unexpected tee provider: ${teeAttestation.tee_provider}`);
+    assert(teeAttestation.tee_technology === EXPECTED_TEE_TECHNOLOGY, `unexpected tee technology: ${teeAttestation.tee_technology}`);
+    assert(typeof teeAttestation.nonce === 'string' && teeAttestation.nonce.length > 0, 'tee attestation nonce missing');
+    assert(typeof teeAttestation.timestamp === 'string' && teeAttestation.timestamp.length > 0, 'tee attestation timestamp missing');
+    assert(!Number.isNaN(Date.parse(teeAttestation.timestamp)), 'tee attestation timestamp is invalid');
+    assert(typeof teeAttestation.workload?.image_digest === 'string' && teeAttestation.workload.image_digest.length > 0, 'workload image digest missing');
+    assert(typeof teeAttestation.verifier?.image_digest === 'string' && teeAttestation.verifier.image_digest.length > 0, 'verifier image digest missing');
+    assert(typeof teeAttestation.attestation?.token === 'string' && teeAttestation.attestation.token.length > 0, 'attestation token missing');
+}
+
+async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: string) {
+    const claims = await verifyJwtSignature(teeAttestation.attestation.token, EXPECTED_ISSUER);
+
+    assert(claims.iss === EXPECTED_ISSUER, `unexpected issuer: ${claims.iss}`);
+    assertAudienceClaim(claims.aud);
+    assert(Array.isArray(claims.eat_nonce), 'eat_nonce claim missing');
+
+    const digestBinding = await sha256Hex(
+        `${teeAttestation.workload.image_digest}\n${teeAttestation.verifier.image_digest}`
+    );
+
+    assert(claims.eat_nonce.includes(expectedNonce), 'request nonce is not present in attestation token');
+    assert(claims.eat_nonce.includes(digestBinding), 'digest-binding nonce is not present in attestation token');
+    assert(claims.hwmodel === EXPECTED_HW_MODEL, `unexpected hwmodel: ${claims.hwmodel}`);
+    assert(claims.secboot === true, 'secure boot claim is not true');
+    assert(claims.submods?.gce, 'gce submod claim missing');
+
+    assertTokenFresh(claims);
+}
 
 /**
  * Validates the hardware TEE attestation included in the proof.
  * Throws an error if the attestation is invalid or compromised.
  */
-export async function verifyTeeAttestation(proof: Proof, expectedApplicationId?: string): Promise<boolean> {
+export async function verifyTeeAttestationDetailed(
+    proof: Proof,
+    expectedApplicationId?: string,
+    expectedAppSecret?: string
+): Promise<TeeVerificationResult> {
+    assertNonBrowserEnvironment();
+
     try {
         let teeAttestation = proof.teeAttestation;
         if (!teeAttestation) {
-            throw new Error("Missing teeAttestation in proof");
+            throw new Error('Missing teeAttestation in proof');
         }
 
         if (typeof teeAttestation === 'string') {
             teeAttestation = JSON.parse(teeAttestation) as TeeAttestation;
         }
 
-    // 1. Verify Nonce Binding
-    let expectedNonceSignature: string | undefined;
-    let nonceDataObj: any;
-    try {
-        const context = JSON.parse(proof.claimData.context);
-        expectedNonceSignature = context.attestationNonce;
-        nonceDataObj = context.attestationNonceData;
-    } catch (e) {
-        throw new Error("Failed to parse proof context to extract attestationNonce");
-    }
+        assertProofShape(teeAttestation);
 
-    if (!expectedNonceSignature || !nonceDataObj) {
-        throw new Error("Proof context is missing attestationNonce or attestationNonceData");
-    }
+        const { parsedContext, nonceDataObj, expectedNonce } = parseProofContext(proof);
+        verifyApplicationAndSessionBinding(proof, parsedContext, nonceDataObj, expectedApplicationId);
+        verifyNonceMaterial(expectedNonce, nonceDataObj, expectedAppSecret);
 
-    if (teeAttestation.nonce !== expectedNonceSignature) {
-        throw new Error(`Nonce Mismatch! Expected signature ${expectedNonceSignature}, got ${teeAttestation.nonce}`);
-    }
+        const cleanExpectedNonce = normalizeHex(expectedNonce);
+        const cleanTeeNonce = normalizeHex(teeAttestation.nonce);
+        assert(cleanTeeNonce.length > 0, 'TEE attestation nonce is empty');
+        assert(isHex(cleanTeeNonce), 'TEE attestation nonce is not valid hex');
+        assert(cleanTeeNonce === cleanExpectedNonce, `Nonce Mismatch! Expected ${cleanExpectedNonce}, got ${cleanTeeNonce}`);
 
-    const { applicationId, sessionId, timestamp } = nonceDataObj;
+        await verifyGcpClaims(teeAttestation, cleanExpectedNonce);
 
-    if (expectedApplicationId && applicationId.toLowerCase() !== expectedApplicationId.toLowerCase()) {
-        throw new Error(`Application ID Mismatch! Expected ${expectedApplicationId}, but proof context contains ${applicationId}`);
-    }
-
-    const expectedNonceData = `${applicationId}:${sessionId}:${timestamp}`;
-    const nonceMsg = ethers.getBytes(ethers.keccak256(new TextEncoder().encode(expectedNonceData)));
-    const recoveredAddress = ethers.verifyMessage(nonceMsg, expectedNonceSignature);
-
-    if (recoveredAddress.toLowerCase() !== applicationId.toLowerCase()) {
-        throw new Error(`Nonce signature verification failed: recovered ${recoveredAddress}, expected ${applicationId}`);
-    }
-
-    try {
-        const context = JSON.parse(proof.claimData.context);
-        const paramSessionId = context.attestationNonceData.sessionId;
-        if (!paramSessionId) {
-            throw new Error(`Proof parameters are missing proxySessionId or sessionId`);
-        }
-        if (paramSessionId.toString() !== sessionId.toString()) {
-            throw new Error(`Session ID Mismatch! Expected ${sessionId}, but proof parameters contain ${paramSessionId}`);
-        }
-
-        // Timestamp skew check: claimData.timestampS (seconds) vs attestationNonceData.timestamp (ms)
-        const claimTimestampMs = proof.claimData.timestampS * 1000;
-        const nonceTimestampMs = parseInt(timestamp, 10);
-        const diffMs = Math.abs(claimTimestampMs - nonceTimestampMs);
-        const TEN_MINUTES_MS = 10 * 60 * 1000;
-        if (diffMs > TEN_MINUTES_MS) {
-            throw new Error(`Timestamp Skew Too Large! claimData.timestampS and attestationNonce timestamp differ by ${Math.round(diffMs / 1000)}s (limit: 600s)`);
-        }
-    } catch (e) {
-        if (e instanceof Error && (e.message.includes("Session ID Mismatch!") || e.message.includes("Timestamp Skew"))) {
-            throw e;
-        }
-        throw new Error(`Failed to cross-verify session ID: ${(e as Error).message}`);
-    }
-
-    // 2. Recompute REPORT_DATA Hash
-    // Recompute H(workload_digest || verifier_digest || pubkey_hash || nonce)
-    // Here PUBKEY_HASH is the hash of the generic cosign pub key used by Popcorn.
-    // For universal verification, we assume the Popcorn standard cosign public key hash matches the one used by Popcorn.
-    // Note: To be fully strict, the public key hash should either be provided or fetched. 
-    // We will compute the SHA256 of the concatenated string.
-
-    // The verify_proof script uses the hash of a specific file. We'll reconstruct the data that was signed.
-    // However, wait! If JS SDK cannot easily hash the hardcoded cosign public key (or doesn't have it), 
-    // we must verify using the provided public data or skip the workload digest lock for now.
-    // The user requested: "same verification we do in the popcorn verficcation script".
-    // Let's implement the generic parts first: Hardware Signature and TCB.
-
-        const reportBuffer = base64ToUint8Array(teeAttestation.snp_report);
-        const report = parseAttestationReport(reportBuffer);
-
-        if (report.isDebugEnabled) {
-            throw new Error("POLICY CHECK FAILED: Debug mode is ALLOWED. Environment is compromised.");
-        }
-
-        const certBuffer = base64ToUint8Array(teeAttestation.vlek_cert);
-
-        await verifyAMDChain(certBuffer);
-        verifyTCB(certBuffer, report);
-        await verifyHardwareSignature(reportBuffer, certBuffer);
-        await verifyReportData(teeAttestation, proof.claimData.context, report);
-
-        return true;
+        return { isVerified: true };
     } catch (error) {
         logger.error('TEE attestation verification failed:', error);
-        return false;
+        return {
+            isVerified: false,
+            error: error instanceof Error ? error.message : String(error),
+        };
     }
 }
 
-function parseAttestationReport(buffer: Uint8Array) {
-    if (buffer.length < 1000) {
-        throw new Error(`Report buffer is too small: ${buffer.length} bytes`);
-    }
-
-    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const policy = view.getBigUint64(0x08, true);
-    const isDebugEnabled = (policy & (BigInt(1) << BigInt(19))) !== BigInt(0);
-
-    const reported_tcb = {
-        bootloader: buffer[0x38],
-        tee: buffer[0x39],
-        snp: buffer[0x3E],
-        microcode: buffer[0x3F]
-    };
-
-    const reportData = arrayBufferToHex(buffer.subarray(0x50, 0x90)); // 64 bytes
-    return { policy, isDebugEnabled, reported_tcb, reportData };
-}
-
-function getExtValue(certAsn1: any, oidString: string) {
-    const tbsCert = certAsn1.value[0];
-    if (!tbsCert || !tbsCert.value) return null;
-
-    const extBlockWrapper = tbsCert.value.find((node: any) => node.tagClass === forge.asn1.Class.CONTEXT_SPECIFIC && node.type === 3);
-    if (!extBlockWrapper || !extBlockWrapper.value || !extBlockWrapper.value.length) return null;
-
-    const extSequence = extBlockWrapper.value[0];
-    for (const ext of extSequence.value) {
-        const extIdAsn1 = ext.value[0];
-        const extIdStr = forge.asn1.derToOid(extIdAsn1.value);
-        if (extIdStr === oidString) {
-            const extValueAsn1 = ext.value[ext.value.length - 1];
-            const rawOctetStringBytes = extValueAsn1.value;
-            try {
-                // The extension value is an OCTET STRING containing the DER encoding of an INTEGER
-                const innerAsn1 = forge.asn1.fromDer(forge.util.createBuffer(rawOctetStringBytes));
-                if (innerAsn1.type === 2) { // INTEGER
-                    const bytes = innerAsn1.value;
-                    if (typeof bytes === 'string' && bytes.length > 0) {
-                        return bytes.charCodeAt(bytes.length - 1);
-                    } else {
-                        throw new Error(`Extension ${oidString} INTEGER value is empty or invalid`);
-                    }
-                } else {
-                    throw new Error(`Extension ${oidString} does not contain an INTEGER, found type ${innerAsn1.type}`);
-                }
-            } catch (e) {
-                // Fail closed on any parse or schema error
-                throw new Error(`Failed to strictly parse AMD TCB extension ${oidString}: ${(e as Error).message}`);
-            }
-        }
-    }
-    return null;
-}
-
-function verifyTCB(vlekCertBuffer: Uint8Array, report: any) {
-    const certAsn1 = forge.asn1.fromDer(forge.util.createBuffer(uint8ArrayToBinaryString(vlekCertBuffer)));
-
-    const OID_BOOTLOADER = '1.3.6.1.4.1.3704.1.3.1';
-    const OID_TEE = '1.3.6.1.4.1.3704.1.3.2';
-    const OID_SNP = '1.3.6.1.4.1.3704.1.3.3';
-    const OID_MICROCODE = '1.3.6.1.4.1.3704.1.3.8';
-
-    const certTcb = {
-        bootloader: getExtValue(certAsn1, OID_BOOTLOADER),
-        tee: getExtValue(certAsn1, OID_TEE),
-        snp: getExtValue(certAsn1, OID_SNP),
-        microcode: getExtValue(certAsn1, OID_MICROCODE)
-    };
-
-    if (certTcb.bootloader !== null && report.reported_tcb.bootloader < certTcb.bootloader) {
-        throw new Error(`TCB Downgrade! Bootloader reported ${report.reported_tcb.bootloader}, but certificate requires ${certTcb.bootloader}`);
-    }
-    if (certTcb.tee !== null && report.reported_tcb.tee < certTcb.tee) {
-        throw new Error(`TCB Downgrade! TEE reported ${report.reported_tcb.tee}, but certificate requires ${certTcb.tee}`);
-    }
-    if (certTcb.snp !== null && report.reported_tcb.snp < certTcb.snp) {
-        throw new Error(`TCB Downgrade! SNP reported ${report.reported_tcb.snp}, but certificate requires ${certTcb.snp}`);
-    }
-    if (certTcb.microcode !== null && report.reported_tcb.microcode < certTcb.microcode) {
-        throw new Error(`TCB Downgrade! Microcode reported ${report.reported_tcb.microcode}, but certificate requires ${certTcb.microcode}`);
-    }
-}
-
-function parseAsn1Time(node: any): Date {
-    const s = node.value as string;
-    if (node.type === forge.asn1.Type.UTCTIME) {
-        // UTCTime: YYMMDDHHmmssZ
-        const yr = parseInt(s.substring(0, 2), 10);
-        return new Date(Date.UTC(
-            yr >= 50 ? 1900 + yr : 2000 + yr,
-            parseInt(s.substring(2, 4), 10) - 1,
-            parseInt(s.substring(4, 6), 10),
-            parseInt(s.substring(6, 8), 10),
-            parseInt(s.substring(8, 10), 10),
-            parseInt(s.substring(10, 12), 10)
-        ));
-    } else {
-        // GeneralizedTime: YYYYMMDDHHmmssZ
-        return new Date(Date.UTC(
-            parseInt(s.substring(0, 4), 10),
-            parseInt(s.substring(4, 6), 10) - 1,
-            parseInt(s.substring(6, 8), 10),
-            parseInt(s.substring(8, 10), 10),
-            parseInt(s.substring(10, 12), 10),
-            parseInt(s.substring(12, 14), 10)
-        ));
-    }
-}
-
-async function verifyCRL(crlBuf: Uint8Array, arkPem: string, vlekSerial: string): Promise<void> {
-    // Parse CRL: CertificateList SEQUENCE { TBSCertList, signatureAlgorithm, signatureValue }
-    const crlAsn1 = forge.asn1.fromDer(forge.util.createBuffer(uint8ArrayToBinaryString(crlBuf)));
-
-    if (!Array.isArray(crlAsn1.value) || crlAsn1.value.length < 3) {
-        throw new Error('CRL ASN.1 structure is invalid: expected SEQUENCE with TBSCertList, AlgorithmIdentifier, BIT STRING');
-    }
-
-    const tbsAsn1 = (crlAsn1.value as any[])[0];
-    const sigBitsAsn1 = (crlAsn1.value as any[])[2]; // BIT STRING containing the signature
-
-    if (!Array.isArray(tbsAsn1.value)) {
-        throw new Error('CRL TBSCertList is not a valid SEQUENCE');
-    }
-
-    const tbsFields = tbsAsn1.value as any[];
-    let fi = 0;
-
-    // Optional version field (UNIVERSAL INTEGER — present in CRL v2)
-    if (fi < tbsFields.length &&
-        tbsFields[fi].tagClass === forge.asn1.Class.UNIVERSAL &&
-        tbsFields[fi].type === forge.asn1.Type.INTEGER) {
-        fi++;
-    }
-
-    // signature AlgorithmIdentifier (skip, matches outer signatureAlgorithm)
-    if (fi < tbsFields.length) fi++;
-
-    // issuer Name
-    if (fi >= tbsFields.length) throw new Error('CRL TBSCertList missing issuer');
-    const issuerAsn1 = tbsFields[fi++];
-
-    // thisUpdate (UTCTime or GeneralizedTime)
-    if (fi >= tbsFields.length) throw new Error('CRL TBSCertList missing thisUpdate');
-    const thisUpdateAsn1 = tbsFields[fi++];
-
-    // nextUpdate (optional — UTCTime or GeneralizedTime)
-    let nextUpdateAsn1: any = null;
-    if (fi < tbsFields.length &&
-        tbsFields[fi].tagClass === forge.asn1.Class.UNIVERSAL &&
-        (tbsFields[fi].type === forge.asn1.Type.UTCTIME ||
-            tbsFields[fi].type === forge.asn1.Type.GENERALIZEDTIME)) {
-        nextUpdateAsn1 = tbsFields[fi++];
-    }
-
-    // revokedCertificates (optional UNIVERSAL SEQUENCE; skip context-specific extensions)
-    let revokedSeq: any = null;
-    if (fi < tbsFields.length &&
-        tbsFields[fi].tagClass === forge.asn1.Class.UNIVERSAL &&
-        tbsFields[fi].type === forge.asn1.Type.SEQUENCE) {
-        revokedSeq = tbsFields[fi];
-    }
-
-    // 1. Validity Period
-    const now = new Date();
-    const thisUpdate = parseAsn1Time(thisUpdateAsn1);
-    if (thisUpdate > now) {
-        throw new Error(`CRL is not yet valid: thisUpdate is ${thisUpdate.toISOString()}`);
-    }
-    if (nextUpdateAsn1) {
-        const nextUpdate = parseAsn1Time(nextUpdateAsn1);
-        if (nextUpdate < now) {
-            throw new Error(`CRL has expired: nextUpdate was ${nextUpdate.toISOString()}`);
-        }
-    }
-
-    // 2. Issuer Verification — compare CRL issuer DER bytes to ARK certificate subject DER bytes
-    // The AMD VLEK CRL is issued by the ARK (CN=ARK-Milan/Genoa), not the ASK
-    const crlIssuerDer = forge.asn1.toDer(issuerAsn1).getBytes();
-    const arkForgeCert = forge.pki.certificateFromPem(arkPem);
-    const arkCertAsn1 = forge.pki.certificateToAsn1(arkForgeCert);
-    // TBSCertificate field order: [0]version, serial, sigAlg, issuer, validity, subject, spki, ...
-    const arkSubjectAsn1 = ((arkCertAsn1.value as any[])[0].value as any[])[5];
-    const arkSubjectDer = forge.asn1.toDer(arkSubjectAsn1).getBytes();
-    if (crlIssuerDer !== arkSubjectDer) {
-        throw new Error('CRL issuer does not match AMD ARK certificate subject — chain mismatch');
-    }
-
-    // 3. Signature Verification (AMD CRL uses RSA-PSS with SHA-384, signed by ARK)
-    const tbsDerBuf = binaryStringToUint8Array(forge.asn1.toDer(tbsAsn1).getBytes());
-    // BIT STRING first byte = unused bits count, skip it
-    const sigRaw = typeof sigBitsAsn1.value === 'string' ? sigBitsAsn1.value : '';
-    const sigBuf = binaryStringToUint8Array(sigRaw.substring(1));
-
-    const cryptoSubtle = getSubtleCrypto();
-    const spkiBuf = binaryStringToUint8Array(
-        forge.asn1.toDer(forge.pki.publicKeyToAsn1(arkForgeCert.publicKey)).getBytes()
-    );
-    const arkCryptoKey = await cryptoSubtle.importKey(
-        'spki', spkiBuf,
-        { name: 'RSA-PSS', hash: 'SHA-384' },
-        false, ['verify']
-    );
-    const isValid = await cryptoSubtle.verify(
-        { name: 'RSA-PSS', saltLength: 48 }, // SHA-384 salt length is 48
-        arkCryptoKey,
-        sigBuf,
-        tbsDerBuf
-    );
-    if (!isValid) {
-        throw new Error('CRL signature is INVALID — the CRL may be tampered or forged');
-    }
-
-    // 4. Revocation Check — only inspect the revokedCertificates list, not arbitrary ASN.1 nodes
-    const targetSerial = normalizeSerial(vlekSerial);
-    if (revokedSeq && Array.isArray(revokedSeq.value)) {
-        for (const entry of revokedSeq.value) {
-            if (!Array.isArray(entry.value) || entry.value.length < 2) continue;
-            const serialAsn1 = entry.value[0];
-            if (serialAsn1.type !== forge.asn1.Type.INTEGER || typeof serialAsn1.value !== 'string') continue;
-            const serialHex = forge.util.bytesToHex(serialAsn1.value);
-            if (normalizeSerial(serialHex) === targetSerial) {
-                throw new Error('🚨 VLEK Certificate is REVOKED per AMD CRL! This hardware may be compromised.');
-            }
-        }
-    }
-}
-
-function assertCertValidity(label: string, cert: ParsedCert) {
-    const now = Date.now();
-    if (cert.notBefore && now < cert.notBefore.getTime()) {
-        throw new Error(`${label} certificate is not yet valid (notBefore: ${cert.notBefore.toISOString()})`);
-    }
-    if (cert.notAfter && now > cert.notAfter.getTime()) {
-        throw new Error(`${label} certificate expired on ${cert.notAfter.toISOString()}`);
-    }
-}
-
-async function verifyAMDChain(vlekCertBuffer: Uint8Array) {
-    const processors = ['Milan', 'Genoa'];
-    let chainVerified = false;
-
-    const vlek = parseCert(vlekCertBuffer);
-    assertCertValidity('VLEK', vlek);
-
-    for (const processor of processors) {
-        let matchedChain = false;
-        try {
-            const chainPem = AMD_CERTS[processor];
-            if (!chainPem) continue;
-
-            const certs = chainPem.split('-----END CERTIFICATE-----')
-                .map(c => c.trim())
-                .filter(c => c.length > 0)
-                .map(c => c + '\n-----END CERTIFICATE-----\n');
-
-            const askCert = forge.pki.certificateFromPem(certs[0]);
-            const arkCert = forge.pki.certificateFromPem(certs[1]);
-
-            const askDer = forge.asn1.toDer(forge.pki.certificateToAsn1(askCert)).getBytes();
-            const arkDer = forge.asn1.toDer(forge.pki.certificateToAsn1(arkCert)).getBytes();
-            const ask = parseCert(binaryStringToUint8Array(askDer));
-            const ark = parseCert(binaryStringToUint8Array(arkDer));
-            assertCertValidity('ASK', ask);
-            assertCertValidity('ARK', ark);
-
-            // ARK -> ASK -> VLEK
-            try {
-                await verifySignature(certs[1], ark.tbsDer, ark.signature, ark.sigAlgOid); // ARK Self-signed
-            } catch (e: any) { throw new Error(`AMD ARK self-signature verification failed: ${e.message}`); }
-
-            try {
-                await verifySignature(certs[1], ask.tbsDer, ask.signature, ask.sigAlgOid); // ASK signed by ARK
-            } catch (e: any) { throw new Error(`AMD ASK-by-ARK signature verification failed: ${e.message}`); }
-
-            try {
-                await verifySignature(certs[0], vlek.tbsDer, vlek.signature, vlek.sigAlgOid); // VLEK signed by ASK
-            } catch (e: any) { throw new Error(`VLEK-by-ASK signature verification failed: ${e.message}`); }
-
-            matchedChain = true;
-
-            // Check CRL
-            let crlBuf: Uint8Array | undefined;
-            const now = Date.now();
-            if (crlCache[processor] && now - crlCache[processor].fetchedAt < 3600000) {
-                crlBuf = crlCache[processor].buffer;
-            } else {
-                const crlUrl = `https://kdsintf.amd.com/vlek/v1/${processor}/crl`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-                const crlResp = await fetch(crlUrl, { signal: controller.signal });
-                clearTimeout(timeoutId);
-
-                if (!crlResp.ok) continue;
-                crlBuf = new Uint8Array(await crlResp.arrayBuffer());
-                crlCache[processor] = { buffer: crlBuf, fetchedAt: now };
-            }
-
-            if (vlek.serialNumber && crlBuf) {
-                await verifyCRL(crlBuf, certs[1], vlek.serialNumber);
-            }
-
-            chainVerified = true;
-            break;
-        } catch (e: any) {
-            if (matchedChain) {
-                throw e; // Hard fail if we matched the chain but CRL fetch/parse failed or cert is revoked
-            }
-            continue;
-        }
-    }
-
-    if (!chainVerified) {
-        throw new Error("VLEK Certificate failed verification against all known AMD Root of Trust chains!");
-    }
-}
-
-async function verifyHardwareSignature(reportBytes: Uint8Array, certBytes: Uint8Array) {
-    const vlek = parseCert(certBytes);
-
-    const sigOffset = 0x2A0;
-    const rLE = reportBytes.subarray(sigOffset, sigOffset + 72);
-    const sLE = reportBytes.subarray(sigOffset + 72, sigOffset + 144);
-
-    const rBE = reverseBytes(rLE);
-    const sBE = reverseBytes(sLE);
-
-    const signedData = reportBytes.subarray(0, 0x2A0);
-
-    const cryptoSubtle = getSubtleCrypto();
-
-    const importedKey = await cryptoSubtle.importKey(
-        "spki",
-        vlek.spkiDer,
-        { name: "ECDSA", namedCurve: "P-384" },
-        false,
-        ["verify"]
-    );
-
-    // the subtle crypto ECDSA signature needs to be raw (r || s), each 48 bytes long
-    // Our rBE and sBE are exactly 72 bytes. P-384 is 48 bytes!
-    // The AMD report reserves 72 bytes for R and 72 bytes for S padded with zeros.
-    // We MUST verify the dropped high-order bytes are zero to prevent malicious tampering.
-    const rPadding = rBE.subarray(0, rBE.length - 48);
-    const sPadding = sBE.subarray(0, sBE.length - 48);
-
-    if (!rPadding.every(b => b === 0) || !sPadding.every(b => b === 0)) {
-        throw new Error("Hardware ECDSA signature is malformed: non-zero padding bytes detected in the structural signature coordinates.");
-    }
-
-    const r48 = rBE.subarray(rBE.length - 48);
-    const s48 = sBE.subarray(sBE.length - 48);
-    const rawSignature = concatUint8Arrays([r48, s48]);
-
-    const isValid = await cryptoSubtle.verify(
-        { name: "ECDSA", hash: { name: "SHA-384" } },
-        importedKey,
-        rawSignature,
-        signedData
-    );
-
-    if (!isValid) {
-        throw new Error("Hardware ECDSA signature is completely invalid!");
-    }
-}
-
-async function verifyReportData(teeAttestation: TeeAttestation, proofContext: string, report: any) {
-    if (!teeAttestation.workload_digest || !teeAttestation.verifier_digest) {
-        throw new Error("POLICY CHECK FAILED: Missing workload_digest or verifier_digest in TEE attestation.");
-    }
-
-    const { attestationNonce: nonce } = JSON.parse(proofContext);
-
-    const cryptoSubtle = getSubtleCrypto();
-
-    // 1. Extract raw 32-byte SHA256 digest from image refs (part after "@sha256:")
-    const extractDigestBytes = (imageRef: string): Uint8Array => {
-        const marker = '@sha256:';
-        const idx = imageRef.lastIndexOf(marker);
-        if (idx < 0) throw new Error(`Image ref missing @sha256: digest: ${imageRef}`);
-        const hexDigest = imageRef.substring(idx + marker.length);
-        if (hexDigest.length !== 64) throw new Error(`SHA256 digest must be 64 hex chars, got ${hexDigest.length} in: ${imageRef}`);
-        const bytes = new Uint8Array(32);
-        for (let i = 0; i < 32; i++) bytes[i] = parseInt(hexDigest.substring(i * 2, i * 2 + 2), 16);
-        return bytes;
-    };
-
-    // 2. Hash COSIGN public key as canonical DER SPKI bytes (not PEM text)
-    const importedCosignKey = await cryptoSubtle.importKey(
-        'spki',
-        base64ToUint8Array(
-            COSIGN_PUBLIC_KEY
-                .replace('-----BEGIN PUBLIC KEY-----', '')
-                .replace('-----END PUBLIC KEY-----', '')
-                .replace(/\s+/g, '')
-        ),
-        { name: 'ECDSA', namedCurve: 'P-256' },
-        true,
-        ['verify']
-    );
-    const pubKeySpkiDer = await cryptoSubtle.exportKey('spki', importedCosignKey);
-    const pubKeyHashBuffer = await cryptoSubtle.digest('SHA-256', pubKeySpkiDer);
-    const pubKeyHashBytes = new Uint8Array(pubKeyHashBuffer);
-
-    // 3. Decode nonce from hex to raw bytes (strip 0x prefix)
-    const nonceHex = (teeAttestation.nonce || nonce).replace(/^0x/i, '');
-    const nonceBytes = new Uint8Array(nonceHex.length / 2);
-    for (let i = 0; i < nonceBytes.length; i++) nonceBytes[i] = parseInt(nonceHex.substring(i * 2, i * 2 + 2), 16);
-
-    // 4. Extract raw digest bytes from image refs
-    const workloadBytes = extractDigestBytes(teeAttestation.workload_digest);
-    const verifierBytes = extractDigestBytes(teeAttestation.verifier_digest);
-
-    // 5. Build canonical binary payload:
-    //    "POPCORN_TEE_REPORT_DATA_V1" || 0x01 || workload(32) || verifier(32) || pubkeyHash(32) || nonceBytes
-    const domainSep = new TextEncoder().encode('POPCORN_TEE_REPORT_DATA_V1');
-    const version = new Uint8Array([0x01]);
-    const payload = new Uint8Array(
-        domainSep.length + version.length +
-        workloadBytes.length + verifierBytes.length +
-        pubKeyHashBytes.length + nonceBytes.length
-    );
-    let offset = 0;
-    for (const chunk of [domainSep, version, workloadBytes, verifierBytes, pubKeyHashBytes, nonceBytes]) {
-        payload.set(chunk, offset);
-        offset += chunk.length;
-    }
-
-    // 6. Compute SHA-256 of the binary payload, duplicate to 64 bytes, compare to report_data
-    const hashBuffer = await cryptoSubtle.digest('SHA-256', payload);
-    const hashHex = arrayBufferToHex(hashBuffer);
-    const expected64ByteHex = hashHex + hashHex;
-
-    if (report.reportData !== expected64ByteHex) {
-        throw new Error(`REPORT_DATA Mismatch! Hardware report is not bound to these image digests or nonce.\nExpected: ${expected64ByteHex}\nGot:      ${report.reportData}`);
-    }
+export async function verifyTeeAttestation(
+    proof: Proof,
+    expectedApplicationId?: string,
+    expectedAppSecret?: string
+): Promise<boolean> {
+    assertNonBrowserEnvironment();
+    const result = await verifyTeeAttestationDetailed(proof, expectedApplicationId, expectedAppSecret);
+    return result.isVerified;
 }

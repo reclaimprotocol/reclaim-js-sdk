@@ -703,7 +703,7 @@ const { isVerified } = await verifyProof(proof, {
 
 ## TEE Attestation Verification
 
-The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. This provides hardware-level assurance that the proof was generated inside a secure enclave (AMD SEV-SNP).
+The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. The current attestation flow verifies the Google Confidential Computing OIDC token returned by Popcorn's GCP attestor and checks that it is bound to the proof nonce and image digests.
 
 ### Enabling TEE Attestation
 
@@ -723,7 +723,11 @@ Set `verifyTEE: true` in the config to require and verify TEE attestation. If TE
 import { verifyProof, TeeVerificationError } from "@reclaimprotocol/js-sdk";
 
 // Set verifyTEE in config to require TEE verification
-const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'], verifyTEE: true });
+const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, {
+  hashes: ['0xAbC...'],
+  verifyTEE: true,
+  teeVerificationSecret: APP_SECRET,
+});
 
 if (isVerified) {
   console.log("Proof is fully verified with hardware attestation");
@@ -741,21 +745,50 @@ When `verifyTEE` is `true`, the result includes `isTeeVerified`. The overall `is
 The TEE verification validates:
 - **Nonce binding**: Ensures the attestation nonce matches the proof context
 - **Application ID**: Confirms the attestation was generated for your application (optional)
-- **Timestamp**: Verifies the attestation timestamp is within an acceptable range of the proof timestamp
-- **SNP report**: Validates the AMD SEV-SNP hardware attestation report
-- **VLEK certificate**: Verifies the certificate chain against AMD's root of trust
-- **Report data**: Confirms the workload and verifier digests match the attestation
+- **Session and timestamp binding**: Verifies the nonce metadata matches the proof session and is within the allowed skew
+- **OIDC token signature**: Validates the Google Confidential Computing attestation JWT against Google's JWKS
+- **Platform claims**: Confirms the expected GCP confidential-computing claims such as issuer, secure boot, hardware model, and GCE instance metadata
+- **Digest binding**: Confirms the workload and verifier image digests are present in the attestation token nonce list
+
+For hash-based attestation nonces, pass your **Application Secret** as `teeVerificationSecret` so the SDK can recompute the expected nonce locally.
 
 You can also verify TEE attestation separately using the lower-level `verifyTeeAttestation` function:
 
 ```javascript
 import { verifyTeeAttestation } from "@reclaimprotocol/js-sdk";
 
-const isTeeValid = await verifyTeeAttestation(proof, APP_ID);
+const isTeeValid = await verifyTeeAttestation(proof, APP_ID, APP_SECRET);
 if (isTeeValid) {
   console.log("TEE attestation verified — proof was generated in a secure enclave");
 }
 ```
+
+### Browser vs Server Verification
+
+TEE verification validates the Google Confidential Computing attestation JWT by fetching Google's OIDC metadata and JWKS. In browser-only environments this may fail due to cross-origin restrictions when fetching Google's discovery endpoints.
+
+For web apps, prefer verifying TEE attestations on the server:
+
+```javascript
+// POST your proof(s) to your server and verify there
+const response = await fetch('/api/verify-tee', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    proofs,
+    expectedApplicationId: APP_ID,
+    applicationSecret: APP_SECRET,
+  }),
+});
+
+const { results } = await response.json();
+console.log(results);
+```
+
+The example app included in this repository now uses a server route for TEE verification:
+- `example/src/app/api/verify-tee/route.ts`
+
+That route returns per-proof TEE verification results and failure reasons so the UI can show why verification failed.
 
 ## Error Handling
 

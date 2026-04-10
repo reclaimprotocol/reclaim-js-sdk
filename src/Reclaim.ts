@@ -48,6 +48,7 @@ import { assertVerifiedProof, createLinkWithTemplateData, getAttestors } from '.
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
+import { generateAttestationNonce } from './utils/attestationNonce'
 import { canonicalStringify } from './utils/strings'
 import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
 import { verifyTeeAttestation } from './utils/verifyTee'
@@ -149,7 +150,9 @@ export async function verifyProof(
             }
 
             try {
-                const teeResults = await Promise.all(proofs.map(proof => verifyTeeAttestation(proof)));
+                const teeResults = await Promise.all(
+                    proofs.map(proof => verifyTeeAttestation(proof, undefined, config.teeVerificationSecret))
+                );
                 isTeeVerified = teeResults.every(r => r === true);
                 if (!isTeeVerified) {
                     const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
@@ -431,12 +434,14 @@ export class ReclaimProofRequest {
             proofRequestInstance.context.reclaimSessionId = data.sessionId
 
             if (options?.acceptTeeAttestation) {
-                const wallet = new ethers.Wallet(appSecret)
-                const nonceData = `${applicationId}:${data.sessionId}:${proofRequestInstance.timeStamp}`
-                const nonceMsg = ethers.getBytes(ethers.keccak256(new TextEncoder().encode(nonceData)))
-                const nonceSignature = await wallet.signMessage(nonceMsg)
+                const attestationNonce = generateAttestationNonce(
+                    appSecret,
+                    applicationId,
+                    data.sessionId,
+                    proofRequestInstance.timeStamp
+                )
 
-                proofRequestInstance.setAttestationContext(nonceSignature, {
+                proofRequestInstance.setAttestationContext(attestationNonce, {
                     applicationId,
                     sessionId: data.sessionId,
                     timestamp: proofRequestInstance.timeStamp

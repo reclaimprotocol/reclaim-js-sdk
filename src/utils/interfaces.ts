@@ -1,10 +1,24 @@
 export interface TeeAttestation {
-  workload_digest: string;
-  verifier_digest: string;
+  proof_version: string;
+  tee_provider: string;
+  tee_technology: string;
   nonce: string;
-  snp_report: string;
-  vlek_cert: string;
   timestamp: string;
+  workload: {
+    container_name: string;
+    image_digest: string;
+  };
+  verifier: {
+    container_name: string;
+    image_digest: string;
+  };
+  attestation: {
+    token: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
 }
 
 // Proof-related interfaces

@@ -80,6 +80,11 @@ export type VerificationConfig = ValidationConfig & {
      * if TEE data is missing or TEE verification fails.
      */
     verifyTEE?: boolean;
+    /**
+     * Application secret used to recompute hash-based TEE attestation nonces.
+     * Required for verifying newer hash-based attestation nonces.
+     */
+    teeVerificationSecret?: string;
 };
 
 
