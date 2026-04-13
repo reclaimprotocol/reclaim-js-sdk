@@ -70,7 +70,6 @@ export default function Home() {
         {
           log: true,
           // acceptTeeAttestation: true,
-          useAppClip: false,
           // portalUrl: 'https://portal.reclaimprotocol.org', // default
           // launchOptions: { verificationMode: 'app' }, // for native app flow
           // useAppClip: true, // for App Clip on iOS with verificationMode: 'app'
@@ -78,6 +77,8 @@ export default function Home() {
         }
       )
       proofRequest.setAppCallbackUrl('<YOUR_APP_CALLBACK_URL>', true)
+      
+
       setReclaimProofRequest(proofRequest)
       return proofRequest
     } catch (error) {

@@ -717,16 +717,16 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 
 ### Verifying TEE Attestation
 
-Set `verifyTEE: true` in the config to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
+Provide a `teeAttestation` config to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
 
 ```javascript
 import { verifyProof, TeeVerificationError } from "@reclaimprotocol/js-sdk";
 
-// Set verifyTEE in config to require TEE verification
 const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, {
   hashes: ['0xAbC...'],
-  verifyTEE: true,
-  teeVerificationSecret: APP_SECRET,
+  teeAttestation: {
+    appSecret: APP_SECRET,
+  },
 });
 
 if (isVerified) {
@@ -740,26 +740,28 @@ if (isVerified) {
 }
 ```
 
-When `verifyTEE` is `true`, the result includes `isTeeVerified`. The overall `isVerified` will be `false` if TEE data is missing or TEE verification fails.
+The result always includes `isTeeVerified`. It is `true` only when `teeAttestation` was provided and verification passed; `false` otherwise. The overall `isVerified` will be `false` if TEE data is missing or TEE verification fails.
 
 The TEE verification validates:
 - **Nonce binding**: Ensures the attestation nonce matches the proof context
-- **Application ID**: Confirms the attestation was generated for your application (optional)
+- **Application ID**: Confirms the attestation was generated for your application
 - **Session and timestamp binding**: Verifies the nonce metadata matches the proof session and is within the allowed skew
-- **OIDC token signature**: Validates the Google Confidential Computing attestation JWT against Google's JWKS
+- **OIDC token signature**: Validates the Google Confidential Computing attestation JWT against Google's JWKS (cached for 5 minutes)
 - **Platform claims**: Confirms the expected GCP confidential-computing claims such as issuer, secure boot, hardware model, and GCE instance metadata
 - **Digest binding**: Confirms the workload and verifier image digests are present in the attestation token nonce list
 
-For hash-based attestation nonces, pass your **Application Secret** as `teeVerificationSecret` so the SDK can recompute the expected nonce locally.
+For hash-based attestation nonces, pass your **Application Secret** as `appSecret` so the SDK can recompute the expected nonce locally.
 
-You can also verify TEE attestation separately using the lower-level `verifyTeeAttestation` function:
+You can also verify TEE attestation separately using the standalone `verifyTeeAttestation` function:
 
 ```javascript
 import { verifyTeeAttestation } from "@reclaimprotocol/js-sdk";
 
-const isTeeValid = await verifyTeeAttestation(proof, APP_ID, APP_SECRET);
-if (isTeeValid) {
+const { isVerified, error } = await verifyTeeAttestation(proof, APP_ID, APP_SECRET);
+if (isVerified) {
   console.log("TEE attestation verified — proof was generated in a secure enclave");
+} else {
+  console.log("TEE verification failed:", error);
 }
 ```
 

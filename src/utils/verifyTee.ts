@@ -149,16 +149,29 @@ async function sha256Hex(input: string): Promise<string> {
     return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedJwksUri: string | null = null;
+let cachedJwksKeys: JsonWebKeyLike[] | null = null;
+let cachedJwksAt = 0;
+
 async function verifyJwtSignature(token: string, issuer: string): Promise<Record<string, any>> {
     const { header, payload, signingInput, signature } = decodeJwt(token);
     assert(header.alg === 'RS256', `unexpected attestation signing algorithm: ${header.alg}`);
     assert(typeof header.kid === 'string' && header.kid.length > 0, 'attestation token kid is missing');
 
-    const oidc = await fetchJson(`${issuer}/.well-known/openid-configuration`);
-    assert(typeof oidc?.jwks_uri === 'string' && oidc.jwks_uri.length > 0, 'issuer JWKS URI is missing');
+    const isCacheFresh = cachedJwksKeys && (Date.now() - cachedJwksAt) < JWKS_CACHE_TTL_MS;
 
-    const jwks = await fetchJson(oidc.jwks_uri);
-    const jwk = (jwks?.keys || []).find((key: JsonWebKeyLike) => key.kid === header.kid) as JsonWebKeyLike | undefined;
+    if (!isCacheFresh) {
+        const oidc = await fetchJson(`${issuer}/.well-known/openid-configuration`);
+        assert(typeof oidc?.jwks_uri === 'string' && oidc.jwks_uri.length > 0, 'issuer JWKS URI is missing');
+        cachedJwksUri = oidc.jwks_uri;
+
+        const jwks = await fetchJson(cachedJwksUri!);
+        cachedJwksKeys = jwks?.keys || [];
+        cachedJwksAt = Date.now();
+    }
+
+    const jwk = cachedJwksKeys!.find((key: JsonWebKeyLike) => key.kid === header.kid) as JsonWebKeyLike | undefined;
     assert(jwk, `no JWKS key found for kid ${header.kid}`);
 
     const cryptoKey = await getSubtleCrypto().importKey(
@@ -180,23 +193,34 @@ async function verifyJwtSignature(token: string, issuer: string): Promise<Record
     return payload;
 }
 
-function parseProofContext(proof: Proof): { parsedContext: any; nonceDataObj: NonceContextData; expectedNonce: string } {
-    let parsedContext: any;
+function isNonceContextData(obj: unknown): obj is NonceContextData {
+    if (!obj || typeof obj !== 'object') return false;
+    const o = obj as Record<string, unknown>;
+    return typeof o.applicationId === 'string' && o.applicationId.length > 0
+        && typeof o.sessionId === 'string' && o.sessionId.length > 0
+        && typeof o.timestamp === 'string' && o.timestamp.length > 0;
+}
+
+function parseProofContext(proof: Proof): { parsedContext: Record<string, unknown>; nonceDataObj: NonceContextData; expectedNonce: string } {
+    let parsedContext: unknown;
     try {
         parsedContext = JSON.parse(proof.claimData.context);
     } catch {
-        throw new Error('Failed to parse proof context to extract attestationNonce');
+        throw new Error('Malformed proof: claimData.context is not valid JSON');
     }
 
-    const expectedNonce = parsedContext?.attestationNonce;
-    const nonceDataObj = parsedContext?.attestationNonceData as NonceContextData | undefined;
-    assert(expectedNonce, 'Proof context is missing attestationNonce or attestationNonceData');
-    assert(nonceDataObj, 'Proof context is missing attestationNonce or attestationNonceData');
-    assert(typeof nonceDataObj.applicationId === 'string' && nonceDataObj.applicationId.length > 0, 'Proof context attestationNonceData.applicationId is missing');
-    assert(typeof nonceDataObj.sessionId === 'string' && nonceDataObj.sessionId.length > 0, 'Proof context attestationNonceData.sessionId is missing');
-    assert(typeof nonceDataObj.timestamp === 'string' && nonceDataObj.timestamp.length > 0, 'Proof context attestationNonceData.timestamp is missing');
+    if (!parsedContext || typeof parsedContext !== 'object') {
+        throw new Error('Malformed proof: claimData.context is not a JSON object');
+    }
 
-    return { parsedContext, nonceDataObj, expectedNonce };
+    const ctx = parsedContext as Record<string, unknown>;
+    const expectedNonce = ctx.attestationNonce;
+    assert(typeof expectedNonce === 'string' && expectedNonce.length > 0, 'Proof context is missing attestationNonce');
+
+    const nonceDataObj = ctx.attestationNonceData;
+    assert(isNonceContextData(nonceDataObj), 'Proof context is missing or has invalid attestationNonceData (requires applicationId, sessionId, timestamp)');
+
+    return { parsedContext: ctx, nonceDataObj, expectedNonce };
 }
 
 function verifyApplicationAndSessionBinding(
@@ -214,11 +238,14 @@ function verifyApplicationAndSessionBinding(
         );
     }
 
-    let parsedParameters: any = {};
-    try {
-        parsedParameters = proof.claimData.parameters ? JSON.parse(proof.claimData.parameters) : {};
-    } catch {
-        parsedParameters = {};
+    let parsedParameters: Record<string, unknown> = {};
+    if (proof.claimData.parameters) {
+        try {
+            const parsed = JSON.parse(proof.claimData.parameters);
+            parsedParameters = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+        } catch {
+            throw new Error('Malformed proof: claimData.parameters is not valid JSON');
+        }
     }
 
     const contextSessionId = parsedContext?.reclaimSessionId;
@@ -345,9 +372,9 @@ async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: st
 
 /**
  * Validates the hardware TEE attestation included in the proof.
- * Throws an error if the attestation is invalid or compromised.
+ * Returns a result object with `isVerified` and an optional `error` message.
  */
-export async function verifyTeeAttestationDetailed(
+export async function verifyTeeAttestation(
     proof: Proof,
     expectedApplicationId?: string,
     expectedAppSecret?: string
@@ -386,14 +413,4 @@ export async function verifyTeeAttestationDetailed(
             error: error instanceof Error ? error.message : String(error),
         };
     }
-}
-
-export async function verifyTeeAttestation(
-    proof: Proof,
-    expectedApplicationId?: string,
-    expectedAppSecret?: string
-): Promise<boolean> {
-    assertNonBrowserEnvironment();
-    const result = await verifyTeeAttestationDetailed(proof, expectedApplicationId, expectedAppSecret);
-    return result.isVerified;
 }

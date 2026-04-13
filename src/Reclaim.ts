@@ -70,8 +70,8 @@ const sdkVersion = require('../package.json').version;
  * * All 3 functions above are alternatives of each other and result from these functions can be directly used as `config` parameter in this function for proof validation.
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
- * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `verifyTEE` to require TEE attestation verification.
- * @returns Verification result with `isVerified`, extracted `data` from each proof, optional `error` on failure, and `isTeeVerified` when `verifyTEE` is enabled.
+ * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `teeAttestation` to require TEE attestation verification.
+ * @returns Verification result with `isVerified`, extracted `data` from each proof, optional `error` on failure, and `isTeeVerified` when `teeAttestation` is provided.
  *
  * @example
  * ```typescript
@@ -79,7 +79,7 @@ const sdkVersion = require('../package.json').version;
  * const { isVerified, data } = await verifyProof(proof, request.getProviderVersion());
  *
  * // With TEE attestation verification (fails if TEE data is missing or invalid)
- * const { isVerified, isTeeVerified, data } = await verifyProof(proof, { ...request.getProviderVersion(), verifyTEE: true });
+ * const { isVerified, isTeeVerified, data } = await verifyProof(proof, { ...request.getProviderVersion(), teeAttestation: { appSecret: APP_SECRET } });
  * 
  * // Or, by manually providing the details:
  * 
@@ -138,10 +138,22 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
-        let isTeeVerified: boolean | undefined = undefined;
+        let isTeeVerified = false;
 
-        if (config.verifyTEE) {
-            const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
+        if (config.teeAttestation && 'dangerouslyDisableContentValidation' in config) {
+            logger.warn('teeAttestation is enabled but content validation is disabled — TEE attestation alone does not guarantee proof contents are valid');
+        }
+
+        if (config.teeAttestation) {
+            const hasTeeData = proofs.every(proof => {
+                if (proof.teeAttestation) return true;
+                try {
+                    const context = JSON.parse(proof.claimData.context);
+                    return !!context?.attestationNonce;
+                } catch {
+                    return false;
+                }
+            });
 
             if (!hasTeeData) {
                 const teeError = new TeeVerificationError('TEE verification requested but one or more proofs are missing TEE attestation data');
@@ -150,10 +162,12 @@ export async function verifyProof(
             }
 
             try {
+                const { appSecret } = config.teeAttestation;
+                const appId = new ethers.Wallet(appSecret).address;
                 const teeResults = await Promise.all(
-                    proofs.map(proof => verifyTeeAttestation(proof, undefined, config.teeVerificationSecret))
+                    proofs.map(proof => verifyTeeAttestation(proof, appId, appSecret))
                 );
-                isTeeVerified = teeResults.every(r => r === true);
+                isTeeVerified = teeResults.every(r => r.isVerified);
                 if (!isTeeVerified) {
                     const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
                     logger.error(teeError.message);
