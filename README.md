@@ -37,7 +37,7 @@ Install the Reclaim Protocol SDK and a QR code generator:
 npm install @reclaimprotocol/js-sdk react-qr-code
 ```
 
-**Current SDK Version**: 4.14.0
+**Current SDK Version**: 5.2.0
 
 ## Step 3: Set up your React component
 
