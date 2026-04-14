@@ -344,7 +344,7 @@ export type TrustedData = {
 
 export type VerifyProofResultSuccess = {
   isVerified: true;
-  isTeeVerified?: boolean;
+  isTeeAttestationVerified?: boolean;
   error: undefined;
   data: TrustedData[];
   publicData: any[];
@@ -352,7 +352,7 @@ export type VerifyProofResultSuccess = {
 
 export type VerifyProofResultFailure = {
   isVerified: false;
-  isTeeVerified?: boolean;
+  isTeeAttestationVerified?: boolean;
   error: Error;
   data: [];
   publicData: [];

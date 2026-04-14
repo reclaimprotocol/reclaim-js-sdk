@@ -703,7 +703,7 @@ const { isVerified } = await verifyProof(proof, {
 
 ## TEE Attestation Verification
 
-The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. This provides hardware-level assurance that the proof was generated inside a secure enclave (AMD SEV-SNP).
+The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. The attestation flow verifies the Google Confidential Computing OIDC token returned by Popcorn's GCP attestor and checks that it is bound to the proof nonce, application identity, and image digests.
 
 ### Enabling TEE Attestation
 
@@ -715,19 +715,23 @@ const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER
 });
 ```
 
-### Verifying TEE Attestation
+### Verifying TEE Attestation via `verifyProof`
 
-Set `verifyTEE: true` in the config to require and verify TEE attestation. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
+Provide a `teeAttestation` config to require and verify TEE attestation. The application ID is derived automatically from `appSecret`. If TEE data is missing or invalid, verification will fail with a `TeeVerificationError`.
 
 ```javascript
 import { verifyProof, TeeVerificationError } from "@reclaimprotocol/js-sdk";
 
-// Set verifyTEE in config to require TEE verification
-const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, { hashes: ['0xAbC...'], verifyTEE: true });
+const { isVerified, isTeeAttestationVerified, data, error } = await verifyProof(proof, {
+  hashes: ['0xAbC...'],
+  teeAttestation: {
+    appSecret: APP_SECRET,
+  },
+});
 
 if (isVerified) {
-  console.log("Proof is fully verified with hardware attestation");
-  console.log("TEE verified:", isTeeVerified);
+  console.log("Proof verified with hardware attestation");
+  console.log("TEE verified:", isTeeAttestationVerified); // always true when teeAttestation is provided and passes
   console.log("Extracted parameters:", data[0].extractedParameters);
 } else if (error instanceof TeeVerificationError) {
   console.log("TEE verification failed:", error.message);
@@ -736,26 +740,53 @@ if (isVerified) {
 }
 ```
 
-When `verifyTEE` is `true`, the result includes `isTeeVerified`. The overall `isVerified` will be `false` if TEE data is missing or TEE verification fails.
+The result includes `isTeeAttestationVerified`. It is `true` when `teeAttestation` was provided and verification passed, and `undefined` when `teeAttestation` was not requested.
 
-The TEE verification validates:
+### What TEE verification checks
+
+- **Application binding**: Derives the application ID from `appSecret` and confirms the attestation was generated for your application
 - **Nonce binding**: Ensures the attestation nonce matches the proof context
-- **Application ID**: Confirms the attestation was generated for your application (optional)
-- **Timestamp**: Verifies the attestation timestamp is within an acceptable range of the proof timestamp
-- **SNP report**: Validates the AMD SEV-SNP hardware attestation report
-- **VLEK certificate**: Verifies the certificate chain against AMD's root of trust
-- **Report data**: Confirms the workload and verifier digests match the attestation
+- **Session and timestamp binding**: Verifies the nonce metadata matches the proof session and is within the allowed skew
+- **OIDC token signature**: Validates the Google Confidential Computing attestation JWT against Google's JWKS (responses are cached for 5 minutes)
+- **Platform claims**: Confirms the expected GCP confidential-computing claims (issuer, secure boot, hardware model, GCE instance metadata)
+- **Digest binding**: Confirms the workload and verifier image digests are present in the attestation token nonce list
 
-You can also verify TEE attestation separately using the lower-level `verifyTeeAttestation` function:
+### Standalone `verifyTeeAttestation`
+
+You can verify TEE attestation for a single proof without running full proof verification:
 
 ```javascript
 import { verifyTeeAttestation } from "@reclaimprotocol/js-sdk";
 
-const isTeeValid = await verifyTeeAttestation(proof, APP_ID);
-if (isTeeValid) {
-  console.log("TEE attestation verified — proof was generated in a secure enclave");
+const { isVerified, error } = await verifyTeeAttestation(proof, APP_SECRET);
+if (isVerified) {
+  console.log("TEE attestation verified");
+} else {
+  console.log("TEE verification failed:", error);
 }
 ```
+
+`appSecret` is your Reclaim application secret. The application ID is derived from it automatically.
+
+### Browser vs Server Verification
+
+TEE verification fetches Google's OIDC metadata and JWKS endpoints. In browser-only environments this may fail due to cross-origin restrictions.
+
+For web apps, verify TEE attestations on the server:
+
+```javascript
+const response = await fetch('/api/verify-tee', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ proofs }),
+});
+
+const { results } = await response.json();
+console.log(results);
+```
+
+The server route should read the app secret from environment variables only (never accept it from the client request body). See the example app for a reference implementation:
+- `example/src/app/api/verify-tee/route.ts`
 
 ## Error Handling
 

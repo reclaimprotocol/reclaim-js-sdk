@@ -40,7 +40,6 @@ import {
     ErrorDuringVerificationError,
     CallbackUrlRequiredError,
     ProofNotValidatedError,
-    TeeVerificationError
 } from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
@@ -48,9 +47,10 @@ import { assertVerifiedProof, createLinkWithTemplateData, getAttestors } from '.
 import { QRCodeModal } from './utils/modalUtils'
 import loggerModule from './utils/logger';
 import { getDeviceType, getMobileDeviceType } from './utils/device'
+import { generateAttestationNonce } from './utils/attestationNonce'
 import { canonicalStringify } from './utils/strings'
 import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
-import { verifyTeeAttestation } from './utils/verifyTee'
+import { runTeeVerification } from './utils/verifyTee'
 import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
@@ -69,8 +69,8 @@ const sdkVersion = require('../package.json').version;
  * * All 3 functions above are alternatives of each other and result from these functions can be directly used as `config` parameter in this function for proof validation.
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
- * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `verifyTEE` to require TEE attestation verification.
- * @returns Verification result with `isVerified`, extracted `data` from each proof, optional `error` on failure, and `isTeeVerified` when `verifyTEE` is enabled.
+ * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `teeAttestation` to require TEE attestation verification.
+ * @returns Verification result with `isVerified`, `isTeeAttestationVerified` (always boolean), extracted `data` from each proof, and optional `error` on failure. The application ID is derived from `appSecret` automatically.
  *
  * @example
  * ```typescript
@@ -78,7 +78,7 @@ const sdkVersion = require('../package.json').version;
  * const { isVerified, data } = await verifyProof(proof, request.getProviderVersion());
  *
  * // With TEE attestation verification (fails if TEE data is missing or invalid)
- * const { isVerified, isTeeVerified, data } = await verifyProof(proof, { ...request.getProviderVersion(), verifyTEE: true });
+ * const { isVerified, isTeeAttestationVerified, data } = await verifyProof(proof, { ...request.getProviderVersion(), teeAttestation: { appSecret: APP_SECRET } });
  * 
  * // Or, by manually providing the details:
  * 
@@ -137,33 +137,18 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
-        let isTeeVerified: boolean | undefined = undefined;
+        let isTeeAttestationVerified: boolean | undefined;
 
-        if (config.verifyTEE) {
-            const hasTeeData = proofs.every(proof => proof.teeAttestation || JSON.parse(proof.claimData.context).attestationNonce);
-
-            if (!hasTeeData) {
-                const teeError = new TeeVerificationError('TEE verification requested but one or more proofs are missing TEE attestation data');
-                logger.error(teeError.message);
-                return createVerifyProofResultFailure(teeError, false);
-            }
-
-            try {
-                const teeResults = await Promise.all(proofs.map(proof => verifyTeeAttestation(proof)));
-                isTeeVerified = teeResults.every(r => r === true);
-                if (!isTeeVerified) {
-                    const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
-                    logger.error(teeError.message);
-                    return createVerifyProofResultFailure(teeError, false);
-                }
-            } catch (error) {
-                const teeError = new TeeVerificationError('Error verifying TEE attestation', error);
-                logger.error(teeError.message);
-                return createVerifyProofResultFailure(teeError, false);
-            }
+        if (config.teeAttestation && 'dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
+            logger.warn('teeAttestation is enabled but content validation is disabled — TEE attestation alone does not guarantee proof contents are valid');
         }
 
-        return createVerifyProofResultSuccess(proofs, isTeeVerified);
+        if (config.teeAttestation) {
+            await runTeeVerification(proofs, config.teeAttestation);
+            isTeeAttestationVerified = true;
+        }
+
+        return createVerifyProofResultSuccess(proofs, isTeeAttestationVerified);
     } catch (error) {
         logger.error('Error in validating proof:', error);
         const _error = error instanceof Error ? error : new Error(String(error));
@@ -431,12 +416,14 @@ export class ReclaimProofRequest {
             proofRequestInstance.context.reclaimSessionId = data.sessionId
 
             if (options?.acceptTeeAttestation) {
-                const wallet = new ethers.Wallet(appSecret)
-                const nonceData = `${applicationId}:${data.sessionId}:${proofRequestInstance.timeStamp}`
-                const nonceMsg = ethers.getBytes(ethers.keccak256(new TextEncoder().encode(nonceData)))
-                const nonceSignature = await wallet.signMessage(nonceMsg)
+                const attestationNonce = generateAttestationNonce(
+                    appSecret,
+                    applicationId,
+                    data.sessionId,
+                    proofRequestInstance.timeStamp
+                )
 
-                proofRequestInstance.setAttestationContext(nonceSignature, {
+                proofRequestInstance.setAttestationContext(attestationNonce, {
                     applicationId,
                     sessionId: data.sessionId,
                     timestamp: proofRequestInstance.timeStamp

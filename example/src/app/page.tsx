@@ -1,18 +1,58 @@
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { ReclaimProofRequest, verifyProof } from '@reclaimprotocol/js-sdk'
 import type { Proof, VerifyProofResult } from '@reclaimprotocol/js-sdk'
+
+type TeeCheckResult = {
+  index: number
+  isTeeAttestationVerified: boolean
+  error?: string
+}
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [proofData, setProofData] = useState<Proof[] | null>(null)
   const [verifyResult, setVerifyResult] = useState<VerifyProofResult | null>(null)
+  const [teeResults, setTeeResults] = useState<TeeCheckResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reclaimProofRequest, setReclaimProofRequest] = useState<ReclaimProofRequest | null>(null)
+  const [requestUrl, setRequestUrl] = useState<string | null>(null)
+  const [proofJsonInput, setProofJsonInput] = useState('')
 
-  useEffect(() => {
-    initializeReclaimProofRequest()
-  }, [])
+  async function verifyTeeOnServer(proofs: Proof[]): Promise<TeeCheckResult[]> {
+    const response = await fetch('/api/verify-tee', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proofs }),
+    })
+
+    const payload = await response.json()
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to verify TEE attestations on the server')
+    }
+
+    return payload.results as TeeCheckResult[]
+  }
+
+  async function runVerification(proofs: Proof[], proofConfig?: Parameters<typeof verifyProof>[1]) {
+    const proofVerification = await verifyProof(
+      proofs,
+      proofConfig ?? { dangerouslyDisableContentValidation: true }
+    )
+
+    const teeVerification = await verifyTeeOnServer(proofs)
+
+    setVerifyResult(proofVerification)
+    setTeeResults(teeVerification)
+  }
+
+  function parseProofInput(input: string): Proof[] {
+    const parsed = JSON.parse(input)
+    if (Array.isArray(parsed)) {
+      return parsed as Proof[]
+    }
+    return [parsed as Proof]
+  }
 
   async function initializeReclaimProofRequest() {
     try {
@@ -22,56 +62,55 @@ export default function Home() {
         process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_ID!,
         {
           log: true,
+          acceptTeeAttestation: true,
+          canAutoSubmit: false
           // portalUrl: 'https://portal.reclaimprotocol.org', // default
           // launchOptions: { verificationMode: 'app' }, // for native app flow
           // useAppClip: true, // for App Clip on iOS with verificationMode: 'app'
+          // portalUrl: 'https://portal.reclaimprotocol.org', 
         }
       )
+      //proofRequest.setAppCallbackUrl('https://webhooksite.net/cf05ecdb-2963-4555-83a4-61b24880d48a', true)
+      //proofRequest.setAppCallbackUrl('<YOUR_APP_CALLBACK_URL>', true)
+      
+
       setReclaimProofRequest(proofRequest)
+      return proofRequest
     } catch (error) {
       console.error('Error initializing ReclaimProofRequest:', error)
       setError('Failed to initialize Reclaim. Please try again.')
+      return null
     }
   }
 
   async function startClaimProcess() {
-    if (!reclaimProofRequest) {
-      setError('Reclaim not initialized. Please refresh the page.')
-      return
-    }
-
     setIsLoading(true)
     setError(null)
 
+    let proofRequest = reclaimProofRequest;
+    if (!proofRequest) {
+      proofRequest = await initializeReclaimProofRequest();
+      if (!proofRequest) {
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
-      // Portal flow (default) — opens portal in new tab
-      await reclaimProofRequest.triggerReclaimFlow()
+      const url = await proofRequest.getRequestUrl()
+      setRequestUrl(url)
 
-      // For native app flow, use:
-      //await reclaimProofRequest.triggerReclaimFlow({ verificationMode: 'app'})
-
-      await reclaimProofRequest.startSession({
+      await proofRequest.startSession({
         onSuccess: async (proof: Proof | Proof[] | undefined) => {
           setIsLoading(false)
 
           if (proof && typeof proof !== 'string') {
             const proofs = Array.isArray(proof) ? proof : [proof]
             setProofData(proofs)
+            setProofJsonInput(JSON.stringify(proofs, null, 2))
 
-            // Verify proofs and get extracted data
-            const providerVersion = reclaimProofRequest.getProviderVersion()
-            const { isVerified, data } = await verifyProof(proofs, providerVersion)
-            setVerifyResult({ isVerified, data })
-
-            if (isVerified) {
-              console.log('Proofs verified successfully')
-              data.forEach((d, i) => {
-                console.log(`Proof ${i + 1} context:`, d.context)
-                console.log(`Proof ${i + 1} params:`, d.extractedParameters)
-              })
-            } else {
-              console.warn('Proof verification failed')
-            }
+            const providerVersion = proofRequest.getProviderVersion()
+            await runVerification(proofs, providerVersion as Parameters<typeof verifyProof>[1])
           }
         },
         onError: (error: Error) => {
@@ -87,6 +126,26 @@ export default function Home() {
     }
   }
 
+  async function verifyPastedProof() {
+    try {
+      setError(null)
+      setIsLoading(true)
+
+      const proofs = parseProofInput(proofJsonInput)
+      setProofData(proofs)
+      setRequestUrl(null)
+      await runVerification(proofs)
+    } catch (error) {
+      console.error('Error verifying pasted proof:', error)
+      setVerifyResult(null)
+      setTeeResults(null)
+      setProofData(null)
+      setError(error instanceof Error ? error.message : 'Failed to verify pasted proof')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const getProviderUrl = (proof: Proof) => {
     try {
       const parameters = JSON.parse(proof.claimData.parameters)
@@ -96,12 +155,58 @@ export default function Home() {
     }
   }
 
+  const teeVerifiedCount = teeResults?.filter(result => result.isTeeAttestationVerified).length ?? 0
+
   return (
     <main className='flex min-h-screen flex-col items-center p-8 bg-gray-50'>
       <div className='max-w-4xl w-full mx-auto'>
         <h1 className='text-3xl font-bold mb-8 text-center'>Reclaim SDK</h1>
 
-        {!proofData && !isLoading && (
+        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900">Verify Pasted Proof</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Paste a proof JSON object or array below to verify the witness proof and the TEE attestation from the UI.
+          </p>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Proof JSON
+              </label>
+              <textarea
+                value={proofJsonInput}
+                onChange={(event) => setProofJsonInput(event.target.value)}
+                placeholder='Paste proof JSON here'
+                className="min-h-[240px] w-full rounded-lg border border-gray-300 p-3 font-mono text-sm text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={verifyPastedProof}
+                disabled={isLoading || !proofJsonInput.trim()}
+                className="rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white shadow-md transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+              >
+                Verify Pasted Proof + TEE
+              </button>
+              <button
+                onClick={() => {
+                  setProofJsonInput('')
+                  setProofData(null)
+                  setVerifyResult(null)
+                  setTeeResults(null)
+                  setError(null)
+                  setRequestUrl(null)
+                }}
+                className="rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {!proofData && !isLoading && !requestUrl && (
           <div className="text-center">
             <p className="mb-6 text-gray-700">
               Click the button below to start the claim process.
@@ -109,10 +214,23 @@ export default function Home() {
             <button
               onClick={startClaimProcess}
               className='bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-md'
-              disabled={!reclaimProofRequest}
             >
               Start Claim Process
             </button>
+          </div>
+        )}
+
+        {requestUrl && !proofData && (
+          <div className="text-center mt-6">
+            <p className="mb-4">Please complete the verification using this link:</p>
+            <a
+              href={requestUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 underline font-medium break-all"
+            >
+              {requestUrl}
+            </a>
           </div>
         )}
 
@@ -144,14 +262,42 @@ export default function Home() {
               </div>
             )}
 
+            {teeResults && (
+              <div className={`mb-6 rounded-md border p-4 text-sm font-medium ${teeVerifiedCount === teeResults.length
+                ? 'border-green-200 bg-green-50 text-green-700'
+                : 'border-amber-200 bg-amber-50 text-amber-700'
+                }`}>
+                {teeVerifiedCount === teeResults.length
+                  ? `TEE verification passed for all ${teeResults.length} proof(s)`
+                  : `TEE verification passed for ${teeVerifiedCount}/${teeResults.length} proof(s)`}
+              </div>
+            )}
+
             {proofData.map((proof, index) => (
               <div key={index} className="mb-8 bg-white p-8 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-xl font-medium">Proof #{index + 1}</h3>
+                  <div>
+                    <h3 className="text-xl font-medium">Proof #{index + 1}</h3>
+                    {teeResults && (
+                      <p className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${teeResults[index]?.isTeeAttestationVerified
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-800'
+                        }`}>
+                        {teeResults[index]?.isTeeAttestationVerified ? 'TEE Verified' : 'TEE Not Verified'}
+                      </p>
+                    )}
+                  </div>
                   {verifyResult?.isVerified && (
-                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">Verified</span>
+                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">Proof Verified</span>
                   )}
                 </div>
+
+                {teeResults && !teeResults[index]?.isTeeAttestationVerified && teeResults[index]?.error && (
+                  <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    <p className="font-medium">TEE verification reason</p>
+                    <p className="mt-1 break-all font-mono text-xs">{teeResults[index]?.error}</p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 gap-4 mb-4">
                   <div>
@@ -163,6 +309,34 @@ export default function Home() {
                     <p>{new Date(proof.claimData.timestampS * 1000).toLocaleString()}</p>
                   </div>
                 </div>
+
+                {proof.teeAttestation && (
+                  <div className="mt-5 pt-4 border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-500 mb-2">TEE Attestation Summary</p>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="rounded bg-gray-50 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">TEE Provider</p>
+                        <p className="mt-1 font-medium">{proof.teeAttestation.tee_provider}</p>
+                      </div>
+                      <div className="rounded bg-gray-50 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">TEE Technology</p>
+                        <p className="mt-1 font-medium">{proof.teeAttestation.tee_technology}</p>
+                      </div>
+                      <div className="rounded bg-gray-50 p-3 md:col-span-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">TEE Nonce</p>
+                        <p className="mt-1 break-all font-mono text-sm">{proof.teeAttestation.nonce}</p>
+                      </div>
+                      <div className="rounded bg-gray-50 p-3 md:col-span-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Workload Image</p>
+                        <p className="mt-1 break-all font-mono text-sm">{proof.teeAttestation.workload.image_digest}</p>
+                      </div>
+                      <div className="rounded bg-gray-50 p-3 md:col-span-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Verifier Image</p>
+                        <p className="mt-1 break-all font-mono text-sm">{proof.teeAttestation.verifier.image_digest}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Extracted parameters from verifyProof result */}
                 {verifyResult?.isVerified && verifyResult.data[index] && (
@@ -220,7 +394,11 @@ export default function Home() {
             ))}
 
             <button
-              onClick={() => { setProofData(null); setVerifyResult(null) }}
+              onClick={() => {
+                setProofData(null)
+                setVerifyResult(null)
+                setTeeResults(null)
+              }}
               className="mt-4 px-6 py-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors font-medium shadow-sm w-full md:w-auto"
             >
               Start New Claim
