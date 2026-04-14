@@ -70,7 +70,7 @@ const sdkVersion = require('../package.json').version;
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `teeAttestation` to require TEE attestation verification.
- * @returns Verification result with `isVerified`, `isTeeVerified` (always boolean), extracted `data` from each proof, and optional `error` on failure. The application ID is derived from `appSecret` automatically.
+ * @returns Verification result with `isVerified`, `isTeeAttestationVerified` (always boolean), extracted `data` from each proof, and optional `error` on failure. The application ID is derived from `appSecret` automatically.
  *
  * @example
  * ```typescript
@@ -78,7 +78,7 @@ const sdkVersion = require('../package.json').version;
  * const { isVerified, data } = await verifyProof(proof, request.getProviderVersion());
  *
  * // With TEE attestation verification (fails if TEE data is missing or invalid)
- * const { isVerified, isTeeVerified, data } = await verifyProof(proof, { ...request.getProviderVersion(), teeAttestation: { appSecret: APP_SECRET } });
+ * const { isVerified, isTeeAttestationVerified, data } = await verifyProof(proof, { ...request.getProviderVersion(), teeAttestation: { appSecret: APP_SECRET } });
  * 
  * // Or, by manually providing the details:
  * 
@@ -137,7 +137,7 @@ export async function verifyProof(
 
         await assertValidateProof(proofs, config);
 
-        let isTeeVerified = false;
+        let isTeeAttestationVerified: boolean | undefined;
 
         if (config.teeAttestation && 'dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
             logger.warn('teeAttestation is enabled but content validation is disabled — TEE attestation alone does not guarantee proof contents are valid');
@@ -145,10 +145,10 @@ export async function verifyProof(
 
         if (config.teeAttestation) {
             await runTeeVerification(proofs, config.teeAttestation);
-            isTeeVerified = true;
+            isTeeAttestationVerified = true;
         }
 
-        return createVerifyProofResultSuccess(proofs, isTeeVerified);
+        return createVerifyProofResultSuccess(proofs, isTeeAttestationVerified);
     } catch (error) {
         logger.error('Error in validating proof:', error);
         const _error = error instanceof Error ? error : new Error(String(error));

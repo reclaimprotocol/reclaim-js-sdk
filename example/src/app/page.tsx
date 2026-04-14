@@ -5,7 +5,7 @@ import type { Proof, VerifyProofResult } from '@reclaimprotocol/js-sdk'
 
 type TeeCheckResult = {
   index: number
-  isTeeVerified: boolean
+  isTeeAttestationVerified: boolean
   error?: string
 }
 
@@ -155,7 +155,7 @@ export default function Home() {
     }
   }
 
-  const teeVerifiedCount = teeResults?.filter(result => result.isTeeVerified).length ?? 0
+  const teeVerifiedCount = teeResults?.filter(result => result.isTeeAttestationVerified).length ?? 0
 
   return (
     <main className='flex min-h-screen flex-col items-center p-8 bg-gray-50'>
@@ -279,11 +279,11 @@ export default function Home() {
                   <div>
                     <h3 className="text-xl font-medium">Proof #{index + 1}</h3>
                     {teeResults && (
-                      <p className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${teeResults[index]?.isTeeVerified
+                      <p className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${teeResults[index]?.isTeeAttestationVerified
                         ? 'bg-green-100 text-green-800'
                         : 'bg-amber-100 text-amber-800'
                         }`}>
-                        {teeResults[index]?.isTeeVerified ? 'TEE Verified' : 'TEE Not Verified'}
+                        {teeResults[index]?.isTeeAttestationVerified ? 'TEE Verified' : 'TEE Not Verified'}
                       </p>
                     )}
                   </div>
@@ -292,7 +292,7 @@ export default function Home() {
                   )}
                 </div>
 
-                {teeResults && !teeResults[index]?.isTeeVerified && teeResults[index]?.error && (
+                {teeResults && !teeResults[index]?.isTeeAttestationVerified && teeResults[index]?.error && (
                   <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                     <p className="font-medium">TEE verification reason</p>
                     <p className="mt-1 break-all font-mono text-xs">{teeResults[index]?.error}</p>

@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
         return {
           index,
-          isTeeVerified: result.isVerified,
+          isTeeAttestationVerified: result.isVerified,
           error: result.error,
         }
       })

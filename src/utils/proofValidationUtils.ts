@@ -86,7 +86,7 @@ export type VerificationConfig = ValidationConfig & {
     /**
      * TEE attestation verification configuration.
      * When provided, verifies the TEE attestation included in the proof.
-     * The result will include `isTeeVerified` and `isVerified` will be false
+     * The result will include `isTeeAttestationVerified` and `isVerified` will be false
      * if TEE attestation data is missing or verification fails.
      */
     teeAttestation?: TeeAttestationConfig;

@@ -722,7 +722,7 @@ Provide a `teeAttestation` config to require and verify TEE attestation. The app
 ```javascript
 import { verifyProof, TeeVerificationError } from "@reclaimprotocol/js-sdk";
 
-const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, {
+const { isVerified, isTeeAttestationVerified, data, error } = await verifyProof(proof, {
   hashes: ['0xAbC...'],
   teeAttestation: {
     appSecret: APP_SECRET,
@@ -731,7 +731,7 @@ const { isVerified, isTeeVerified, data, error } = await verifyProof(proof, {
 
 if (isVerified) {
   console.log("Proof verified with hardware attestation");
-  console.log("TEE verified:", isTeeVerified); // always true when teeAttestation is provided and passes
+  console.log("TEE verified:", isTeeAttestationVerified); // always true when teeAttestation is provided and passes
   console.log("Extracted parameters:", data[0].extractedParameters);
 } else if (error instanceof TeeVerificationError) {
   console.log("TEE verification failed:", error.message);
@@ -740,7 +740,7 @@ if (isVerified) {
 }
 ```
 
-The result always includes `isTeeVerified` as a boolean. It is `true` only when `teeAttestation` was provided and verification passed; `false` otherwise.
+The result includes `isTeeAttestationVerified`. It is `true` when `teeAttestation` was provided and verification passed, and `undefined` when `teeAttestation` was not requested.
 
 ### What TEE verification checks
 

@@ -216,17 +216,17 @@ describe('verifyProof', () => {
         const proof = cloneProof();
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(result.isVerified).toBe(true);
-        expect(result.isTeeVerified).toBe(false);
+        expect(result.isTeeAttestationVerified).toBeUndefined();
         expect(result.error).toBeUndefined();
         expect(result.data).toHaveLength(1);
         expect(result.data[0].extractedParameters).toEqual({ DYNAMIC_GEO: 'IN', username: 'srivatsanqb' });
     });
 
-    it('returns isTeeVerified as false when teeAttestation is not requested', async () => {
+    it('returns isTeeAttestationVerified as undefined when teeAttestation is not requested', async () => {
         const proof = cloneProof();
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(result.isVerified).toBe(true);
-        expect(result.isTeeVerified).toBe(false);
+        expect(result.isTeeAttestationVerified).toBeUndefined();
     });
 
     it('returns error object when signature verification fails', async () => {
@@ -234,7 +234,7 @@ describe('verifyProof', () => {
         proof.signatures = ['0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff'];
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(result.isVerified).toBe(false);
-        expect(result.isTeeVerified).toBe(false);
+        expect(result.isTeeAttestationVerified).toBeUndefined();
         expect(result.error).toBeInstanceOf(Error);
         expect(result.data).toEqual([]);
     });
@@ -244,7 +244,7 @@ describe('verifyProof', () => {
         proof.claimData.timestampS = proof.claimData.timestampS + 60 * 60;
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(result.isVerified).toBe(false);
-        expect(result.isTeeVerified).toBe(false);
+        expect(result.isTeeAttestationVerified).toBeUndefined();
         expect(result.error).toBeInstanceOf(Error);
         expect(result.data).toEqual([]);
     });
@@ -256,7 +256,7 @@ describe('verifyProof', () => {
 
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, teeAttestation: { appSecret: TEST_APP_SECRET } });
         expect(result.isVerified).toBe(false);
-        expect(result.isTeeVerified).toBe(false);
+        expect(result.isTeeAttestationVerified).toBeUndefined();
         expect(result.error).toBeInstanceOf(TeeVerificationError);
     });
 
@@ -266,7 +266,7 @@ describe('verifyProof', () => {
 
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, teeAttestation: { appSecret: TEST_APP_SECRET } });
         expect(result.isVerified).toBe(false);
-        expect(result.isTeeVerified).toBe(false);
+        expect(result.isTeeAttestationVerified).toBeUndefined();
         expect(result.error).toBeInstanceOf(TeeVerificationError);
     });
 
