@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `verifyProof` config option renamed from `verifyTEE: boolean` to `teeAttestation: { appSecret }`. The app secret is now required so the SDK can verify application binding and recompute the attestation nonce.
 
 ### Added
+
 - GCP TEE attestation verification: OIDC token signature validation, platform claims, nonce/digest binding, application and session binding.
+- New `runTeeVerification(proofs, config)` export for batch TEE verification that throws `TeeVerificationError` on failure.
 - `isTeeVerified` field on `VerifyProofResult` (always a boolean).
 - `TeeVerificationError` exported for catching TEE-specific failures.
 
