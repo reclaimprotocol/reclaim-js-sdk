@@ -40,7 +40,6 @@ import {
     ErrorDuringVerificationError,
     CallbackUrlRequiredError,
     ProofNotValidatedError,
-    TeeVerificationError
 } from './utils/errors';
 import { validateContext, validateFunctionParams, validateParameters, validateSignature, validateURL, validateModalOptions, validateFunctionParamsWithFn, validateRedirectionMethod, validateRedirectionBody } from './utils/validationUtils'
 import { fetchStatusUrl, initSession, updateSession } from './utils/sessionUtils'
@@ -51,7 +50,7 @@ import { getDeviceType, getMobileDeviceType } from './utils/device'
 import { generateAttestationNonce } from './utils/attestationNonce'
 import { canonicalStringify } from './utils/strings'
 import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
-import { verifyTeeAttestation } from './utils/verifyTee'
+import { runTeeVerification } from './utils/verifyTee'
 import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
@@ -71,7 +70,7 @@ const sdkVersion = require('../package.json').version;
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `teeAttestation` to require TEE attestation verification.
- * @returns Verification result with `isVerified`, extracted `data` from each proof, optional `error` on failure, and `isTeeVerified` when `teeAttestation` is provided.
+ * @returns Verification result with `isVerified`, `isTeeVerified` (always boolean), extracted `data` from each proof, and optional `error` on failure. The application ID is derived from `appSecret` automatically.
  *
  * @example
  * ```typescript
@@ -140,44 +139,13 @@ export async function verifyProof(
 
         let isTeeVerified = false;
 
-        if (config.teeAttestation && 'dangerouslyDisableContentValidation' in config) {
+        if (config.teeAttestation && 'dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
             logger.warn('teeAttestation is enabled but content validation is disabled — TEE attestation alone does not guarantee proof contents are valid');
         }
 
         if (config.teeAttestation) {
-            const hasTeeData = proofs.every(proof => {
-                if (proof.teeAttestation) return true;
-                try {
-                    const context = JSON.parse(proof.claimData.context);
-                    return !!context?.attestationNonce;
-                } catch {
-                    return false;
-                }
-            });
-
-            if (!hasTeeData) {
-                const teeError = new TeeVerificationError('TEE verification requested but one or more proofs are missing TEE attestation data');
-                logger.error(teeError.message);
-                return createVerifyProofResultFailure(teeError, false);
-            }
-
-            try {
-                const { appSecret } = config.teeAttestation;
-                const appId = new ethers.Wallet(appSecret).address;
-                const teeResults = await Promise.all(
-                    proofs.map(proof => verifyTeeAttestation(proof, appId, appSecret))
-                );
-                isTeeVerified = teeResults.every(r => r.isVerified);
-                if (!isTeeVerified) {
-                    const teeError = new TeeVerificationError('TEE attestation verification failed for one or more proofs');
-                    logger.error(teeError.message);
-                    return createVerifyProofResultFailure(teeError, false);
-                }
-            } catch (error) {
-                const teeError = new TeeVerificationError('Error verifying TEE attestation', error);
-                logger.error(teeError.message);
-                return createVerifyProofResultFailure(teeError, false);
-            }
+            await runTeeVerification(proofs, config.teeAttestation);
+            isTeeVerified = true;
         }
 
         return createVerifyProofResultSuccess(proofs, isTeeVerified);

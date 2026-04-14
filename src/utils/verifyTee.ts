@@ -1,6 +1,8 @@
 import { Proof, TeeAttestation } from './interfaces';
 import { ethers } from 'ethers';
 import { generateAttestationNonce } from './attestationNonce';
+import { TeeVerificationError } from './errors';
+import type { TeeAttestationConfig } from './proofValidationUtils';
 import loggerModule from './logger';
 
 const logger = loggerModule.logger;
@@ -372,16 +374,23 @@ async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: st
 
 /**
  * Validates the hardware TEE attestation included in the proof.
+ * Derives the application ID from `appSecret` and verifies the attestation
+ * was generated for your application.
  * Returns a result object with `isVerified` and an optional `error` message.
+ *
+ * @param proof - The proof containing TEE attestation data
+ * @param appSecret - Your application secret (Ethereum private key). Used to
+ *   derive the application ID and recompute the attestation nonce.
  */
 export async function verifyTeeAttestation(
     proof: Proof,
-    expectedApplicationId?: string,
-    expectedAppSecret?: string
+    appSecret: string
 ): Promise<TeeVerificationResult> {
     assertNonBrowserEnvironment();
 
     try {
+        const appId = new ethers.Wallet(appSecret).address;
+
         let teeAttestation = proof.teeAttestation;
         if (!teeAttestation) {
             throw new Error('Missing teeAttestation in proof');
@@ -394,8 +403,8 @@ export async function verifyTeeAttestation(
         assertProofShape(teeAttestation);
 
         const { parsedContext, nonceDataObj, expectedNonce } = parseProofContext(proof);
-        verifyApplicationAndSessionBinding(proof, parsedContext, nonceDataObj, expectedApplicationId);
-        verifyNonceMaterial(expectedNonce, nonceDataObj, expectedAppSecret);
+        verifyApplicationAndSessionBinding(proof, parsedContext, nonceDataObj, appId);
+        verifyNonceMaterial(expectedNonce, nonceDataObj, appSecret);
 
         const cleanExpectedNonce = normalizeHex(expectedNonce);
         const cleanTeeNonce = normalizeHex(teeAttestation.nonce);
@@ -412,5 +421,37 @@ export async function verifyTeeAttestation(
             isVerified: false,
             error: error instanceof Error ? error.message : String(error),
         };
+    }
+}
+
+/**
+ * Verifies TEE attestation for all proofs.
+ * Throws `TeeVerificationError` if any proof is missing TEE data or fails verification.
+ *
+ * @param proofs - The proofs to verify
+ * @param config - TEE attestation configuration containing the app secret
+ * @throws {TeeVerificationError} When TEE data is missing or verification fails
+ */
+export async function runTeeVerification(proofs: Proof[], config: TeeAttestationConfig): Promise<void> {
+    const hasTeeData = proofs.every(proof => {
+        if (proof.teeAttestation) return true;
+        try {
+            const context = JSON.parse(proof.claimData.context);
+            return !!context?.attestationNonce;
+        } catch {
+            return false;
+        }
+    });
+
+    if (!hasTeeData) {
+        throw new TeeVerificationError('TEE verification requested but one or more proofs are missing TEE attestation data');
+    }
+
+    const teeResults = await Promise.all(
+        proofs.map(proof => verifyTeeAttestation(proof, config.appSecret))
+    );
+
+    if (!teeResults.every(r => r.isVerified)) {
+        throw new TeeVerificationError('TEE attestation verification failed for one or more proofs');
     }
 }
