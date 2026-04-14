@@ -18,19 +18,12 @@ export default function Home() {
   const [reclaimProofRequest, setReclaimProofRequest] = useState<ReclaimProofRequest | null>(null)
   const [requestUrl, setRequestUrl] = useState<string | null>(null)
   const [proofJsonInput, setProofJsonInput] = useState('')
-  const [applicationSecretInput, setApplicationSecretInput] = useState(process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET ?? '')
 
   async function verifyTeeOnServer(proofs: Proof[]): Promise<TeeCheckResult[]> {
     const response = await fetch('/api/verify-tee', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        proofs,
-        expectedApplicationId: process.env.NEXT_PUBLIC_RECLAIM_APP_ID,
-        applicationSecret: applicationSecretInput.trim() || undefined,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proofs }),
     })
 
     const payload = await response.json()
@@ -41,10 +34,10 @@ export default function Home() {
     return payload.results as TeeCheckResult[]
   }
 
-  async function runVerification(proofs: Proof[], options?: { strictProofConfig?: Parameters<typeof verifyProof>[1] }) {
+  async function runVerification(proofs: Proof[], proofConfig?: Parameters<typeof verifyProof>[1]) {
     const proofVerification = await verifyProof(
       proofs,
-      options?.strictProofConfig ?? { dangerouslyDisableContentValidation: true }
+      proofConfig ?? { dangerouslyDisableContentValidation: true }
     )
 
     const teeVerification = await verifyTeeOnServer(proofs)
@@ -69,14 +62,16 @@ export default function Home() {
         process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_ID!,
         {
           log: true,
-          // acceptTeeAttestation: true,
+          acceptTeeAttestation: true,
+          canAutoSubmit: false
           // portalUrl: 'https://portal.reclaimprotocol.org', // default
           // launchOptions: { verificationMode: 'app' }, // for native app flow
           // useAppClip: true, // for App Clip on iOS with verificationMode: 'app'
           // portalUrl: 'https://portal.reclaimprotocol.org', 
         }
       )
-      proofRequest.setAppCallbackUrl('<YOUR_APP_CALLBACK_URL>', true)
+      //proofRequest.setAppCallbackUrl('https://webhooksite.net/cf05ecdb-2963-4555-83a4-61b24880d48a', true)
+      //proofRequest.setAppCallbackUrl('<YOUR_APP_CALLBACK_URL>', true)
       
 
       setReclaimProofRequest(proofRequest)
@@ -115,7 +110,7 @@ export default function Home() {
             setProofJsonInput(JSON.stringify(proofs, null, 2))
 
             const providerVersion = proofRequest.getProviderVersion()
-            await runVerification(proofs, { strictProofConfig: providerVersion })
+            await runVerification(proofs, providerVersion as Parameters<typeof verifyProof>[1])
           }
         },
         onError: (error: Error) => {
@@ -184,22 +179,6 @@ export default function Home() {
                 placeholder='Paste proof JSON here'
                 className="min-h-[240px] w-full rounded-lg border border-gray-300 p-3 font-mono text-sm text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
               />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Application Secret
-              </label>
-              <input
-                type="text"
-                value={applicationSecretInput}
-                onChange={(event) => setApplicationSecretInput(event.target.value)}
-                placeholder="Required for hash-based attestation nonces"
-                className="w-full rounded-lg border border-gray-300 p-3 text-sm text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-              />
-              <p className="mt-2 text-xs text-gray-500">
-                This should be your Reclaim application secret so the TEE nonce can be recomputed locally.
-              </p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">

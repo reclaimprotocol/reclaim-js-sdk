@@ -18,16 +18,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const applicationId = process.env.RECLAIM_APP_ID || process.env.NEXT_PUBLIC_RECLAIM_APP_ID
     const appSecret = process.env.RECLAIM_APP_SECRET || process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET
 
     const results = await Promise.all(
       proofs.map(async (proof, index) => {
-        const result = await verifyTeeAttestation(
-          proof,
-          applicationId,
-          appSecret
-        )
+        const result = await verifyTeeAttestation(proof, appSecret!)
 
         return {
           index,
