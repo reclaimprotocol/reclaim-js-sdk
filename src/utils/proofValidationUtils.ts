@@ -73,18 +73,23 @@ export type ValidationConfig = ValidationConfigWithHash | ValidationConfigWithPr
  * Describes the comprehensive configuration required to initialize the proof verification process.
  * Aligns with `ValidationConfig` options for verifying signatures alongside proof contents.
  */
+export type TeeAttestationConfig = {
+    /**
+     * Your application secret (Ethereum private key).
+     * Used to recompute the TEE attestation nonce and to derive the application ID
+     * for binding the attestation to your application.
+     */
+    appSecret: string;
+};
+
 export type VerificationConfig = ValidationConfig & {
     /**
-     * If true, verifies TEE (Trusted Execution Environment) attestation included in the proof.
-     * When enabled, the result will include `isTeeVerified` and `isVerified` will be false
-     * if TEE data is missing or TEE verification fails.
+     * TEE attestation verification configuration.
+     * When provided, verifies the TEE attestation included in the proof.
+     * The result will include `isTeeVerified` and `isVerified` will be false
+     * if TEE attestation data is missing or verification fails.
      */
-    verifyTEE?: boolean;
-    /**
-     * Application secret used to recompute hash-based TEE attestation nonces.
-     * Required for verifying newer hash-based attestation nonces.
-     */
-    teeVerificationSecret?: string;
+    teeAttestation?: TeeAttestationConfig;
 };
 
 

@@ -12,7 +12,8 @@ import { ATTESTATION_NONCE_DOMAIN, generateAttestationNonce } from '../utils/att
 const GCP_ISSUER = 'https://confidentialcomputing.googleapis.com';
 const GCP_OIDC_URL = `${GCP_ISSUER}/.well-known/openid-configuration`;
 const GCP_JWKS_URL = `${GCP_ISSUER}/jwks`;
-const TEST_TEE_SECRET = 'test-app-secret';
+const TEST_TEE_SECRET = '0x49becaaf6bfe2472943302c64b7b2b6295a0ca5e28481bb6dc7c075d4dd50f82';
+const TEST_APP_SECRET = TEST_TEE_SECRET;
 const expectedApplicationId = '0xd116D518eacea61C7af9760E5d8D1b720a0CE8D5';
 const workloadDigest = 'us-docker.pkg.dev/rc-popcorn/popcorn-images/browser-node@sha256:97d4656f457831cf540b80a85daac40dcfa2f618beffcf3dd5966023ad8cab14';
 const verifierDigest = 'us-docker.pkg.dev/rc-popcorn/popcorn-images/attestor@sha256:acaa00688de4ce0517303172fc89efd085c6e1a9647ca50066353eba6b8cc228';
@@ -140,6 +141,10 @@ function attachLegacyNonceTeeAttestation(proof: Proof): TeeAttestation {
 
 function attachHashNonceTeeAttestation(proof: Proof, secret = TEST_TEE_SECRET): TeeAttestation {
     const context = JSON.parse(proof.claimData.context);
+    // Derive appId from the secret and update the context to match,
+    // so verifyTeeAttestation(proof, secret) can verify the binding.
+    const derivedAppId = new ethers.Wallet(secret).address;
+    context.attestationNonceData.applicationId = derivedAppId;
     const { applicationId, sessionId, timestamp } = context.attestationNonceData;
     const attestationNonce = generateAttestationNonce(secret, applicationId, sessionId, timestamp);
 
@@ -211,9 +216,17 @@ describe('verifyProof', () => {
         const proof = cloneProof();
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(result.isVerified).toBe(true);
+        expect(result.isTeeVerified).toBe(false);
         expect(result.error).toBeUndefined();
         expect(result.data).toHaveLength(1);
         expect(result.data[0].extractedParameters).toEqual({ DYNAMIC_GEO: 'IN', username: 'srivatsanqb' });
+    });
+
+    it('returns isTeeVerified as false when teeAttestation is not requested', async () => {
+        const proof = cloneProof();
+        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
+        expect(result.isVerified).toBe(true);
+        expect(result.isTeeVerified).toBe(false);
     });
 
     it('returns error object when signature verification fails', async () => {
@@ -221,6 +234,7 @@ describe('verifyProof', () => {
         proof.signatures = ['0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff'];
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(result.isVerified).toBe(false);
+        expect(result.isTeeVerified).toBe(false);
         expect(result.error).toBeInstanceOf(Error);
         expect(result.data).toEqual([]);
     });
@@ -230,6 +244,7 @@ describe('verifyProof', () => {
         proof.claimData.timestampS = proof.claimData.timestampS + 60 * 60;
         const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true });
         expect(result.isVerified).toBe(false);
+        expect(result.isTeeVerified).toBe(false);
         expect(result.error).toBeInstanceOf(Error);
         expect(result.data).toEqual([]);
     });
@@ -239,7 +254,7 @@ describe('verifyProof', () => {
         const attestation = attachLegacyNonceTeeAttestation(proof);
         attestation.workload.image_digest = `us-docker.pkg.dev/rc-popcorn/popcorn-images/browser-node@sha256:${'1'.repeat(64)}`;
 
-        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, verifyTEE: true });
+        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, teeAttestation: { appSecret: TEST_APP_SECRET } });
         expect(result.isVerified).toBe(false);
         expect(result.isTeeVerified).toBe(false);
         expect(result.error).toBeInstanceOf(TeeVerificationError);
@@ -249,7 +264,7 @@ describe('verifyProof', () => {
         const proof = cloneProof();
         delete (proof as any).teeAttestation;
 
-        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, verifyTEE: true });
+        const result = await verifyProof(proof, { dangerouslyDisableContentValidation: true, teeAttestation: { appSecret: TEST_APP_SECRET } });
         expect(result.isVerified).toBe(false);
         expect(result.isTeeVerified).toBe(false);
         expect(result.error).toBeInstanceOf(TeeVerificationError);
@@ -260,30 +275,29 @@ describe('verifyProof', () => {
         const attestation = attachLegacyNonceTeeAttestation(proof);
         attestation.workload.image_digest = `us-docker.pkg.dev/rc-popcorn/popcorn-images/browser-node@sha256:${'2'.repeat(64)}`;
 
-        await expect(verifyTeeAttestation(proof, expectedApplicationId)).resolves.toBe(false);
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(false);
+        expect(typeof result.error).toBe('string');
     });
 
     it('verifies a valid GCP TEE attestation when the hash-based nonce secret is provided', async () => {
         const proof = cloneProof();
         attachHashNonceTeeAttestation(proof);
 
-        await expect(
-            verifyTeeAttestation(proof, expectedApplicationId, TEST_TEE_SECRET)
-        ).resolves.toBe(true);
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(true);
+        expect(result.error).toBeUndefined();
     });
 
-    it('fails hash-based nonce verification when the verifier does not provide the app secret', async () => {
+    it('fails verification when the wrong app secret is provided', async () => {
         const proof = cloneProof();
         attachHashNonceTeeAttestation(proof);
 
-        await expect(verifyTeeAttestation(proof, expectedApplicationId)).resolves.toBe(false);
-    });
-
-    it('fails hash-based nonce verification when the verifier provides the wrong app secret', async () => {
-        const proof = cloneProof();
-        attachHashNonceTeeAttestation(proof);
-
-        await expect(verifyTeeAttestation(proof, expectedApplicationId, 'wrong-secret')).resolves.toBe(false);
+        // A valid private key that doesn't match the proof's application
+        const wrongSecret = '0x1111111111111111111111111111111111111111111111111111111111111111';
+        const result = await verifyTeeAttestation(proof, wrongSecret);
+        expect(result.isVerified).toBe(false);
+        expect(typeof result.error).toBe('string');
     });
 
     it('fails when the nonce is valid but generated for a different session', async () => {
@@ -304,9 +318,82 @@ describe('verifyProof', () => {
         proof.claimData.context = JSON.stringify(context);
         proof.teeAttestation = createGcpTeeAttestation(differentSessionNonce);
 
-        await expect(
-            verifyTeeAttestation(proof, expectedApplicationId, TEST_TEE_SECRET)
-        ).resolves.toBe(false);
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(false);
+        expect(typeof result.error).toBe('string');
+    });
+
+    it('caches JWKS keys across multiple verifyTeeAttestation calls', async () => {
+        const fetchSpy = global.fetch as jest.Mock;
+
+        // First call may or may not fetch (cache may be warm from earlier tests).
+        // Record the count before our two calls.
+        const proof1 = cloneProof();
+        attachHashNonceTeeAttestation(proof1);
+        const proof2 = cloneProof();
+        attachHashNonceTeeAttestation(proof2);
+
+        await verifyTeeAttestation(proof1, TEST_TEE_SECRET);
+        const countAfterFirst = fetchSpy.mock.calls.length;
+
+        await verifyTeeAttestation(proof2, TEST_TEE_SECRET);
+        const countAfterSecond = fetchSpy.mock.calls.length;
+
+        // Second call should not make any additional JWKS/OIDC fetches
+        expect(countAfterSecond).toBe(countAfterFirst);
+    });
+
+    it('returns error when proof context is malformed JSON', async () => {
+        const proof = cloneProof();
+        attachHashNonceTeeAttestation(proof);
+        proof.claimData.context = 'not-valid-json{{{';
+
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(false);
+        expect(result.error).toContain('Malformed proof');
+    });
+
+    it('returns error when proof context is missing attestationNonce', async () => {
+        const proof = cloneProof();
+        attachHashNonceTeeAttestation(proof);
+        const context = JSON.parse(proof.claimData.context);
+        delete context.attestationNonce;
+        proof.claimData.context = JSON.stringify(context);
+
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(false);
+        expect(result.error).toContain('attestationNonce');
+    });
+
+    it('returns error when proof context is missing attestationNonceData', async () => {
+        const proof = cloneProof();
+        attachHashNonceTeeAttestation(proof);
+        const context = JSON.parse(proof.claimData.context);
+        delete context.attestationNonceData;
+        proof.claimData.context = JSON.stringify(context);
+
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(false);
+        expect(result.error).toContain('attestationNonceData');
+    });
+
+    it('handles teeAttestation as a JSON string on the proof', async () => {
+        const proof = cloneProof();
+        const tee = attachHashNonceTeeAttestation(proof);
+        proof.teeAttestation = JSON.stringify(tee) as any;
+
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(true);
+    });
+
+    it('returns error when teeAttestation is missing from proof', async () => {
+        const proof = cloneProof();
+        attachHashNonceTeeAttestation(proof);
+        delete (proof as any).teeAttestation;
+
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(false);
+        expect(result.error).toContain('Missing teeAttestation');
     });
 
     it('throws immediately when TEE verification is invoked in a browser-like environment', async () => {
@@ -321,7 +408,7 @@ describe('verifyProof', () => {
             (globalThis as any).document = {};
 
             await expect(
-                verifyTeeAttestation(proof, expectedApplicationId, TEST_TEE_SECRET)
+                verifyTeeAttestation(proof, TEST_TEE_SECRET)
             ).rejects.toThrow(
                 'TEE attestation verification is only supported in non-browser environments'
             );

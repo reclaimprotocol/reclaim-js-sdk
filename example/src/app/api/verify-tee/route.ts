@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server'
-import { verifyTeeAttestationDetailed } from '@reclaimprotocol/js-sdk'
+import { verifyTeeAttestation } from '@reclaimprotocol/js-sdk'
 import type { Proof } from '@reclaimprotocol/js-sdk'
 
 type VerifyTeeRequestBody = {
   proofs?: Proof[]
-  expectedApplicationId?: string
-  applicationSecret?: string
-  teeVerificationSecret?: string
 }
 
 export async function POST(request: Request) {
@@ -21,28 +18,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const expectedApplicationId =
-      body.expectedApplicationId ||
-      process.env.RECLAIM_APP_ID ||
-      process.env.NEXT_PUBLIC_RECLAIM_APP_ID
-
-    const applicationSecret =
-      body.applicationSecret ||
-      body.teeVerificationSecret ||
-      process.env.RECLAIM_APP_SECRET ||
-      process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET
-
-    const teeVerificationSecret =
-      body.teeVerificationSecret ||
-      applicationSecret
+    const appSecret = process.env.RECLAIM_APP_SECRET || process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET
 
     const results = await Promise.all(
       proofs.map(async (proof, index) => {
-        const result = await verifyTeeAttestationDetailed(
-          proof,
-          expectedApplicationId,
-          teeVerificationSecret
-        )
+        const result = await verifyTeeAttestation(proof, appSecret!)
 
         return {
           index,
