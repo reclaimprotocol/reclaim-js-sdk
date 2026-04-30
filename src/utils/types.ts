@@ -131,7 +131,9 @@ export type ProofRequestOptions = {
    */
   metadata?: Record<string, string>;
   /**
-   * If true, generates a TEE attestation nonce during session initialization and expects a TEE attestation in the proof.
+   * Generates a TEE attestation nonce during session initialization and expects a TEE attestation in the proof.
+   *
+   * @default true
    */
   acceptTeeAttestation?: boolean;
 };

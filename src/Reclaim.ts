@@ -405,7 +405,12 @@ export class ReclaimProofRequest {
                 }
             }
 
-            const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options)
+            const proofRequestOptions = {
+                ...options,
+                acceptTeeAttestation: options?.acceptTeeAttestation ?? true
+            };
+
+            const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, proofRequestOptions)
 
             const signature = await proofRequestInstance.generateSignature(appSecret)
             proofRequestInstance.setSignature(signature)
@@ -415,7 +420,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
             proofRequestInstance.context.reclaimSessionId = data.sessionId
 
-            if (options?.acceptTeeAttestation) {
+            if (proofRequestOptions.acceptTeeAttestation) {
                 const attestationNonce = generateAttestationNonce(
                     appSecret,
                     applicationId,

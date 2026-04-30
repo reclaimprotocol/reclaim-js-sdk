@@ -705,15 +705,15 @@ const { isVerified } = await verifyProof(proof, {
 
 The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. The attestation flow verifies the Google Confidential Computing OIDC token returned by Popcorn's GCP attestor and checks that it is bound to the proof nonce, application identity, and image digests.
 
-### Enabling TEE Attestation
+### Requesting TEE Attestation
 
-To request TEE attestation during proof generation, enable it during initialization:
+TEE attestation is requested by default during proof generation:
 
 ```javascript
-const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
-  acceptTeeAttestation: true,
-});
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID);
 ```
+
+To opt out, set `acceptTeeAttestation: false` during initialization.
 
 ### Verifying TEE Attestation via `verifyProof`
 
