@@ -78,10 +78,24 @@ function signJwt(payload: Record<string, any>): string {
     return `${signingInput}.${signature}`;
 }
 
-function createDigestBinding(workloadImageDigest: string, verifierImageDigest: string): string {
-    return createHash('sha256')
-        .update(`${workloadImageDigest}\n${verifierImageDigest}`)
-        .digest('hex');
+function createDigestBinding(
+    proofVersion: string,
+    workloadContainerName: string,
+    workloadImageDigest: string,
+    verifierContainerName: string,
+    verifierImageDigest: string
+): string {
+    const payload = proofVersion === 'v3'
+        ? [
+            'v3',
+            `workload.container_name=${workloadContainerName}`,
+            `workload.image_digest=${workloadImageDigest}`,
+            `verifier.container_name=${verifierContainerName}`,
+            `verifier.image_digest=${verifierImageDigest}`,
+        ].join('\n')
+        : `${workloadImageDigest}\n${verifierImageDigest}`;
+
+    return createHash('sha256').update(payload).digest('hex');
 }
 
 function createGcpTeeAttestation(
@@ -90,7 +104,10 @@ function createGcpTeeAttestation(
     claimsOverrides: Record<string, any> = {}
 ): TeeAttestation {
     const now = Math.floor(Date.now() / 1000);
+    const proofVersion = overrides.proof_version ?? 'v2';
+    const nextWorkloadContainerName = overrides.workload?.container_name ?? 'neko';
     const nextWorkloadDigest = overrides.workload?.image_digest ?? workloadDigest;
+    const nextVerifierContainerName = overrides.verifier?.container_name ?? 'attestor';
     const nextVerifierDigest = overrides.verifier?.image_digest ?? verifierDigest;
 
     const token = signJwt({
@@ -100,7 +117,7 @@ function createGcpTeeAttestation(
         iss: GCP_ISSUER,
         nbf: now - 10,
         sub: 'https://www.googleapis.com/compute/v1/projects/rc-popcorn/zones/asia-south1-c/instances/test-instance',
-        eat_nonce: [nonce, createDigestBinding(nextWorkloadDigest, nextVerifierDigest)],
+        eat_nonce: [nonce, createDigestBinding(proofVersion, nextWorkloadContainerName, nextWorkloadDigest, nextVerifierContainerName, nextVerifierDigest)],
         hwmodel: 'GCP_AMD_SEV',
         secboot: true,
         submods: {
@@ -114,17 +131,17 @@ function createGcpTeeAttestation(
     });
 
     return {
-        proof_version: 'v2',
+        proof_version: proofVersion,
         tee_provider: 'gcp',
         tee_technology: 'amd-sev',
         nonce,
         timestamp: new Date().toISOString(),
         workload: {
-            container_name: 'neko',
+            container_name: nextWorkloadContainerName,
             image_digest: nextWorkloadDigest,
         },
         verifier: {
-            container_name: 'attestor',
+            container_name: nextVerifierContainerName,
             image_digest: nextVerifierDigest,
         },
         attestation: { token },
@@ -139,7 +156,7 @@ function attachLegacyNonceTeeAttestation(proof: Proof): TeeAttestation {
     return teeAttestation;
 }
 
-function attachHashNonceTeeAttestation(proof: Proof, secret = TEST_TEE_SECRET): TeeAttestation {
+function attachHashNonceTeeAttestation(proof: Proof, secret = TEST_TEE_SECRET, overrides: Partial<TeeAttestation> = {}): TeeAttestation {
     const context = JSON.parse(proof.claimData.context);
     // Derive appId from the secret and update the context to match,
     // so verifyTeeAttestation(proof, secret) can verify the binding.
@@ -151,7 +168,7 @@ function attachHashNonceTeeAttestation(proof: Proof, secret = TEST_TEE_SECRET): 
     context.attestationNonce = attestationNonce;
     proof.claimData.context = JSON.stringify(context);
 
-    const teeAttestation = createGcpTeeAttestation(attestationNonce);
+    const teeAttestation = createGcpTeeAttestation(attestationNonce, overrides);
     proof.teeAttestation = teeAttestation;
     return teeAttestation;
 }
@@ -291,8 +308,7 @@ describe('verifyProof', () => {
 
     it('verifies a valid v3 GCP TEE attestation', async () => {
         const proof = cloneProof();
-        const attestation = attachHashNonceTeeAttestation(proof);
-        attestation.proof_version = 'v3';
+        attachHashNonceTeeAttestation(proof, TEST_TEE_SECRET, { proof_version: 'v3' });
 
         const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
         expect(result.isVerified).toBe(true);

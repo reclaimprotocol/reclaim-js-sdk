@@ -337,12 +337,17 @@ function assertAudienceClaim(aud: unknown) {
     throw new Error('attestation token audience is missing');
 }
 
+function getProofVersion(teeAttestation: TeeAttestation): string | undefined {
+    return (teeAttestation as any).proof_version ?? (teeAttestation as any).proofVersion;
+}
+
 function assertProofShape(teeAttestation: TeeAttestation) {
     if (teeAttestation.error) {
         throw new Error(`${teeAttestation.error.code}: ${teeAttestation.error.message}`);
     }
 
-    assert(SUPPORTED_PROOF_VERSIONS.includes(teeAttestation.proof_version), `unexpected proof version: ${teeAttestation.proof_version}`);
+    const proofVersion = getProofVersion(teeAttestation);
+    assert(typeof proofVersion === 'string' && SUPPORTED_PROOF_VERSIONS.includes(proofVersion), `unexpected proof version: ${proofVersion}`);
     assert(teeAttestation.tee_provider === EXPECTED_TEE_PROVIDER, `unexpected tee provider: ${teeAttestation.tee_provider}`);
     assert(teeAttestation.tee_technology === EXPECTED_TEE_TECHNOLOGY, `unexpected tee technology: ${teeAttestation.tee_technology}`);
     assert(typeof teeAttestation.nonce === 'string' && teeAttestation.nonce.length > 0, 'tee attestation nonce missing');
@@ -353,6 +358,27 @@ function assertProofShape(teeAttestation: TeeAttestation) {
     assert(typeof teeAttestation.attestation?.token === 'string' && teeAttestation.attestation.token.length > 0, 'attestation token missing');
 }
 
+async function computeDigestBinding(teeAttestation: TeeAttestation): Promise<string> {
+    const proofVersion = getProofVersion(teeAttestation);
+
+    if (proofVersion === 'v3') {
+        assert(typeof teeAttestation.workload.container_name === 'string' && teeAttestation.workload.container_name.length > 0, 'workload container name missing');
+        assert(typeof teeAttestation.verifier.container_name === 'string' && teeAttestation.verifier.container_name.length > 0, 'verifier container name missing');
+
+        return sha256Hex([
+            'v3',
+            `workload.container_name=${teeAttestation.workload.container_name}`,
+            `workload.image_digest=${teeAttestation.workload.image_digest}`,
+            `verifier.container_name=${teeAttestation.verifier.container_name}`,
+            `verifier.image_digest=${teeAttestation.verifier.image_digest}`,
+        ].join('\n'));
+    }
+
+    return sha256Hex(
+        `${teeAttestation.workload.image_digest}\n${teeAttestation.verifier.image_digest}`
+    );
+}
+
 async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: string) {
     const claims = await verifyJwtSignature(teeAttestation.attestation.token, EXPECTED_ISSUER);
 
@@ -360,9 +386,7 @@ async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: st
     assertAudienceClaim(claims.aud);
     assert(Array.isArray(claims.eat_nonce), 'eat_nonce claim missing');
 
-    const digestBinding = await sha256Hex(
-        `${teeAttestation.workload.image_digest}\n${teeAttestation.verifier.image_digest}`
-    );
+    const digestBinding = await computeDigestBinding(teeAttestation);
 
     assert(claims.eat_nonce.includes(expectedNonce), 'request nonce is not present in attestation token');
     assert(claims.eat_nonce.includes(digestBinding), 'digest-binding nonce is not present in attestation token');
