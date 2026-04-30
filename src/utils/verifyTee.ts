@@ -11,6 +11,7 @@ const EXPECTED_ISSUER = 'https://confidentialcomputing.googleapis.com';
 const EXPECTED_HW_MODEL = 'GCP_AMD_SEV';
 const EXPECTED_TEE_PROVIDER = 'gcp';
 const EXPECTED_TEE_TECHNOLOGY = 'amd-sev';
+const SUPPORTED_PROOF_VERSIONS = ['v2', 'v3'];
 const TOKEN_CLOCK_SKEW_S = 60;
 const NONCE_TIMESTAMP_MAX_SKEW_MS = 10 * 60 * 1000;
 
@@ -341,7 +342,7 @@ function assertProofShape(teeAttestation: TeeAttestation) {
         throw new Error(`${teeAttestation.error.code}: ${teeAttestation.error.message}`);
     }
 
-    assert(teeAttestation.proof_version === 'v2', `unexpected proof version: ${teeAttestation.proof_version}`);
+    assert(SUPPORTED_PROOF_VERSIONS.includes(teeAttestation.proof_version), `unexpected proof version: ${teeAttestation.proof_version}`);
     assert(teeAttestation.tee_provider === EXPECTED_TEE_PROVIDER, `unexpected tee provider: ${teeAttestation.tee_provider}`);
     assert(teeAttestation.tee_technology === EXPECTED_TEE_TECHNOLOGY, `unexpected tee technology: ${teeAttestation.tee_technology}`);
     assert(typeof teeAttestation.nonce === 'string' && teeAttestation.nonce.length > 0, 'tee attestation nonce missing');

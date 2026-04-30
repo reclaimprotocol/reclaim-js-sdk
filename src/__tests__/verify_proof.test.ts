@@ -289,6 +289,16 @@ describe('verifyProof', () => {
         expect(result.error).toBeUndefined();
     });
 
+    it('verifies a valid v3 GCP TEE attestation', async () => {
+        const proof = cloneProof();
+        const attestation = attachHashNonceTeeAttestation(proof);
+        attestation.proof_version = 'v3';
+
+        const result = await verifyTeeAttestation(proof, TEST_TEE_SECRET);
+        expect(result.isVerified).toBe(true);
+        expect(result.error).toBeUndefined();
+    });
+
     it('fails verification when the wrong app secret is provided', async () => {
         const proof = cloneProof();
         attachHashNonceTeeAttestation(proof);
