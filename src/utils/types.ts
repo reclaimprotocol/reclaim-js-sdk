@@ -136,14 +136,6 @@ export type ProofRequestOptions = {
    * @default true
    */
   acceptTeeAttestation?: boolean;
-  /**
-   * TEE attestation proof version requested from the verification client.
-   *
-   * Set this explicitly when you need to keep older proof formats alive after a newer default is introduced.
-   *
-   * @default 'v3'
-   */
-  teeAttestationVersion?: TeeAttestationVersion;
 };
 
 export type ReclaimFlowInitOptions = {
@@ -346,7 +338,7 @@ export type TemplateData = {
   metadata?: Record<string, string>;
   preferredLocale?: ProofRequestOptions['preferredLocale'];
   acceptTeeAttestation?: boolean;
-  teeAttestationVersion?: ProofRequestOptions['teeAttestationVersion'];
+  teeAttestationVersion?: TeeAttestationVersion;
 };
 
 export type TrustedData = {

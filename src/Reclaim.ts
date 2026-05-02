@@ -4,7 +4,6 @@ import {
     RECLAIM_EXTENSION_ACTIONS,
     ExtensionMessage,
     ProviderVersionInfo,
-    SUPPORTED_TEE_ATTESTATION_VERSIONS,
 } from './utils/interfaces'
 import {
     ProofRequestOptions,
@@ -63,7 +62,7 @@ import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from 
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
-const DEFAULT_TEE_ATTESTATION_VERSION = 'v3' as const;
+const SDK_TEE_ATTESTATION_VERSION = 'v3' as const;
 
 /**
  * Verifies one or more Reclaim proofs by validating signatures, verifying witness information,
@@ -411,20 +410,11 @@ export class ReclaimProofRequest {
                         }
                     }, 'the constructor');
                 }
-                if (options.teeAttestationVersion) {
-                    validateFunctionParams([
-                        { paramName: 'teeAttestationVersion', input: options.teeAttestationVersion, isString: true }
-                    ], 'the constructor');
-                    if (!(SUPPORTED_TEE_ATTESTATION_VERSIONS as readonly string[]).includes(options.teeAttestationVersion)) {
-                        throw new InvalidParamError(`Invalid teeAttestationVersion. Expected one of: ${SUPPORTED_TEE_ATTESTATION_VERSIONS.join(', ')}`);
-                    }
-                }
             }
 
             const proofRequestOptions = {
                 ...options,
-                acceptTeeAttestation: options?.acceptTeeAttestation ?? true,
-                teeAttestationVersion: options?.teeAttestationVersion ?? DEFAULT_TEE_ATTESTATION_VERSION
+                acceptTeeAttestation: options?.acceptTeeAttestation ?? true
             };
 
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, proofRequestOptions)
@@ -449,7 +439,7 @@ export class ReclaimProofRequest {
                     applicationId,
                     sessionId: data.sessionId,
                     timestamp: proofRequestInstance.timeStamp,
-                    attestationVersion: proofRequestOptions.teeAttestationVersion
+                    attestationVersion: SDK_TEE_ATTESTATION_VERSION
                 })
             }
 
@@ -594,15 +584,6 @@ export class ReclaimProofRequest {
                     }
                 }, 'fromJsonString');
             }
-            if (options?.teeAttestationVersion) {
-                validateFunctionParams([
-                    { paramName: 'options.teeAttestationVersion', input: options.teeAttestationVersion, isString: true }
-                ], 'fromJsonString');
-                if (!(SUPPORTED_TEE_ATTESTATION_VERSIONS as readonly string[]).includes(options.teeAttestationVersion)) {
-                    throw new InvalidParamError(`Invalid options.teeAttestationVersion. Expected one of: ${SUPPORTED_TEE_ATTESTATION_VERSIONS.join(', ')}`);
-                }
-            }
-
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
@@ -1238,7 +1219,7 @@ export class ReclaimProofRequest {
             metadata: this.options?.metadata,
             preferredLocale: this.options?.preferredLocale,
             acceptTeeAttestation: this.options?.acceptTeeAttestation,
-            teeAttestationVersion: this.options?.teeAttestationVersion,
+            teeAttestationVersion: this.context.attestationNonceData?.attestationVersion ?? SDK_TEE_ATTESTATION_VERSION,
         }
 
         return templateData;

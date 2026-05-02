@@ -713,13 +713,7 @@ TEE attestation is requested by default during proof generation:
 const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID);
 ```
 
-By default, the SDK requests `teeAttestationVersion: 'v3'`. Pin this value when you need to keep an older attestation format alive after a newer default is introduced:
-
-```javascript
-const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
-  teeAttestationVersion: 'v3',
-});
-```
+The request includes the SDK's attestation version so the attestor can continue serving older SDK clients when newer attestation formats are introduced.
 
 To opt out, set `acceptTeeAttestation: false` during initialization.
 
