@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Request TEE attestations by default when initializing proof requests.
+- Include the SDK-controlled TEE attestation version in request templates and attestation nonce context so attestors can keep older SDK clients on compatible proof formats.
+- Add example support for server-side TEE attestation verification and displaying returned TEE proof details.
+
+### Fixed
+
+- Support v3 TEE digest binding verification while keeping v2 verification compatible.
+
 ## [5.2.0]
 
 ### Changed
