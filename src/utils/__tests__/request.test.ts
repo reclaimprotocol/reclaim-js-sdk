@@ -53,7 +53,14 @@ describe('Request', () => {
             "sessionId": "123",
             "context": {
                 "reclaimSessionId": "123",
-                "user": "john@example.com"
+                "user": "john@example.com",
+                "attestationNonce": actualOutput.context.attestationNonce,
+                "attestationNonceData": {
+                    "applicationId": testAppId,
+                    "sessionId": "123",
+                    "timestamp": actualOutput.timestamp,
+                    "attestationVersion": "v3"
+                }
             },
             "appCallbackUrl": "https://api.example.com/success?session=def",
             "claimCreationType": "createClaim",
@@ -85,6 +92,7 @@ describe('Request', () => {
                 "metadata": {
                     "theme": "dark"
                 },
+                "acceptTeeAttestation": true,
                 "useBrowserExtension": true
             },
             // this can change in future
@@ -94,6 +102,7 @@ describe('Request', () => {
         };
 
         expect(actualOutput.applicationId).toEqual(testAppId);
+        expect(actualOutput.context.attestationNonce).toEqual(expect.any(String));
         expect(validateSignature(testProviderId, actualOutput.signature, actualOutput.applicationId, actualOutput.timestamp)).toBeUndefined();
         expect(actualOutput).toEqual(expectedOutput);
     });
@@ -164,6 +173,57 @@ describe('Request', () => {
         const output = JSON.parse(request.toJsonString());
         expect(output.options.customSharePageUrl).toEqual('https://portal.reclaimprotocol.org');
         expect(output.options.useAppClip).toEqual(false);
+        expect(output.options.acceptTeeAttestation).toEqual(true);
+        expect(output.context.attestationNonce).toEqual(expect.any(String));
+        expect(output.context.attestationNonceData).toEqual({
+            applicationId: testAppId,
+            sessionId: '999',
+            timestamp: output.timestamp,
+            attestationVersion: 'v3'
+        });
+    });
+
+    it('should include the SDK TEE attestation version in the request template', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '999',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example'
+        );
+
+        globalThis.fetch = mockFetchBy(() => ({ success: true }));
+
+        const url = await request.getRequestUrl();
+        const template = new URL(url).searchParams.get('template');
+        const templateData = JSON.parse(decodeURIComponent(template!));
+        const context = JSON.parse(templateData.context);
+
+        expect(templateData.acceptTeeAttestation).toEqual(true);
+        expect(templateData.teeAttestationVersion).toEqual('v3');
+        expect(context.attestationNonceData.attestationVersion).toEqual('v3');
+    });
+
+    it('should not add TEE attestation context when explicitly disabled', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '999',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example',
+            { acceptTeeAttestation: false }
+        );
+
+        const output = JSON.parse(request.toJsonString());
+        expect(output.options.acceptTeeAttestation).toEqual(false);
+        expect(output.context.attestationNonce).toBeUndefined();
+        expect(output.context.attestationNonceData).toBeUndefined();
     });
 
     describe('portalUrl alias', () => {

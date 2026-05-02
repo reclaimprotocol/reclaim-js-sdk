@@ -1,4 +1,10 @@
-import { type Proof, type Context, RECLAIM_EXTENSION_ACTIONS, ExtensionMessage, ProviderVersionInfo } from './utils/interfaces'
+import {
+    type Proof,
+    type Context,
+    RECLAIM_EXTENSION_ACTIONS,
+    ExtensionMessage,
+    ProviderVersionInfo,
+} from './utils/interfaces'
 import {
     ProofRequestOptions,
     StartSessionParams,
@@ -56,6 +62,7 @@ import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from 
 const logger = loggerModule.logger
 
 const sdkVersion = require('../package.json').version;
+const SDK_TEE_ATTESTATION_VERSION = 'v3' as const;
 
 /**
  * Verifies one or more Reclaim proofs by validating signatures, verifying witness information,
@@ -67,6 +74,13 @@ const sdkVersion = require('../package.json').version;
  * * `fetchProviderHashRequirementsBy()` - To get the expected proof hash requirements for a provider version by providing providerId and exactProviderVersionString.
  * * `getProviderHashRequirementsFromSpec()` - To get the expected proof hash requirements from a provider spec.
  * * All 3 functions above are alternatives of each other and result from these functions can be directly used as `config` parameter in this function for proof validation.
+ *
+ * Replay protection: this function is stateless. It verifies that a proof is cryptographically
+ * bound to a specific `sessionId`/`applicationId` (via the `appSecret`-keyed attestation nonce
+ * when `teeAttestation` is provided) but does not track which proofs have already been
+ * verified. Callers must (a) verify the proof's `sessionId` matches a session they initiated
+ * and (b) persist accepted `sessionId`s and reject duplicates. See the README's
+ * "Replay Protection" section for details.
  *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `teeAttestation` to require TEE attestation verification.
@@ -405,7 +419,12 @@ export class ReclaimProofRequest {
                 }
             }
 
-            const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options)
+            const proofRequestOptions = {
+                ...options,
+                acceptTeeAttestation: options?.acceptTeeAttestation ?? true
+            };
+
+            const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, proofRequestOptions)
 
             const signature = await proofRequestInstance.generateSignature(appSecret)
             proofRequestInstance.setSignature(signature)
@@ -415,7 +434,7 @@ export class ReclaimProofRequest {
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
             proofRequestInstance.context.reclaimSessionId = data.sessionId
 
-            if (options?.acceptTeeAttestation) {
+            if (proofRequestOptions.acceptTeeAttestation) {
                 const attestationNonce = generateAttestationNonce(
                     appSecret,
                     applicationId,
@@ -426,7 +445,8 @@ export class ReclaimProofRequest {
                 proofRequestInstance.setAttestationContext(attestationNonce, {
                     applicationId,
                     sessionId: data.sessionId,
-                    timestamp: proofRequestInstance.timeStamp
+                    timestamp: proofRequestInstance.timeStamp,
+                    attestationVersion: SDK_TEE_ATTESTATION_VERSION
                 })
             }
 
@@ -571,7 +591,6 @@ export class ReclaimProofRequest {
                     }
                 }, 'fromJsonString');
             }
-
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
@@ -1206,6 +1225,8 @@ export class ReclaimProofRequest {
             canAutoSubmit: this.options?.canAutoSubmit ?? true,
             metadata: this.options?.metadata,
             preferredLocale: this.options?.preferredLocale,
+            acceptTeeAttestation: this.options?.acceptTeeAttestation,
+            teeAttestationVersion: this.context.attestationNonceData?.attestationVersion ?? SDK_TEE_ATTESTATION_VERSION,
         }
 
         return templateData;

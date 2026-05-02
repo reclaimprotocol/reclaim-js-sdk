@@ -1,4 +1,4 @@
-import type { Context, Proof, ProviderClaimData, TeeAttestation } from './interfaces';
+import type { Context, Proof, ProviderClaimData, TeeAttestation, TeeAttestationVersion } from './interfaces';
 import { VerificationConfig } from './proofValidationUtils';
 import { ProviderHashRequirementsConfig, ReclaimProviderConfigWithRequestSpec, RequestSpec, ResponseMatchSpec, ResponseRedactionSpec } from './providerUtils';
 
@@ -131,7 +131,9 @@ export type ProofRequestOptions = {
    */
   metadata?: Record<string, string>;
   /**
-   * If true, generates a TEE attestation nonce during session initialization and expects a TEE attestation in the proof.
+   * Generates a TEE attestation nonce during session initialization and expects a TEE attestation in the proof.
+   *
+   * @default true
    */
   acceptTeeAttestation?: boolean;
 };
@@ -335,6 +337,8 @@ export type TemplateData = {
   canAutoSubmit?: boolean;
   metadata?: Record<string, string>;
   preferredLocale?: ProofRequestOptions['preferredLocale'];
+  acceptTeeAttestation?: boolean;
+  teeAttestationVersion?: TeeAttestationVersion;
 };
 
 export type TrustedData = {

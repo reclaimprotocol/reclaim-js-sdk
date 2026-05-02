@@ -701,19 +701,67 @@ const { isVerified } = await verifyProof(proof, {
 });
 ```
 
+### Replay Protection
+
+Proofs are submitted by the user, so the server must not trust any field on the proof in isolation. `verifyProof` (and `verifyTeeAttestation`) cryptographically bind a proof to a specific session, but **the SDK is stateless** — it cannot tell whether the same valid proof has already been verified. Preventing replay is the caller's responsibility.
+
+**What the SDK guarantees**
+
+The `attestationNonce` baked into the proof context is computed as `keccak256("RECLAIM_TEE_NONCE_V1" : applicationId : sessionId : timestamp : appSecret)`. When you call `verifyProof` with `teeAttestation: { appSecret }`, the SDK:
+
+- Recomputes the nonce from `(applicationId, sessionId, timestamp)` in the proof context using **your** `appSecret` and asserts it matches — only the holder of the app secret can mint a valid nonce, so the user cannot rebind a proof to a different `sessionId` or `applicationId`.
+- Confirms the recomputed nonce appears in the TEE attestation token's `eat_nonce` (signed by Google's Confidential Computing OIDC issuer), so the TEE-signed binding cannot be forged either.
+- Asserts the `applicationId` in the nonce data matches the address derived from `appSecret`, and that `sessionId` in the nonce data agrees with `reclaimSessionId` in `claimData.context` and `proxySessionId`/`sessionId` in `claimData.parameters`.
+- Asserts `claimData.timestampS` is within 10 minutes of the nonce timestamp.
+
+In short: the user cannot mutate `sessionId`, `applicationId`, or `timestamp` on a proof without invalidating it. They *can*, however, resubmit the same valid proof.
+
+**What you must do on your server**
+
+1. **Use a session you initiated.** Call `ReclaimProofRequest.init(...)` and `getSessionId()` server-side (or record the `sessionId` returned to your callback). When verifying, reject any proof whose `sessionId` you did not issue.
+2. **Dedupe by `sessionId`.** Persist accepted `sessionId`s (e.g., a unique index in your DB or a TTL cache) and reject a `sessionId` that has already been verified. This is the primary replay defense.
+3. **Require `teeAttestation`** in `verifyProof` for any flow where replay or tampering matters — without it, the cryptographic binding to `appSecret` is not checked.
+4. **Enforce a freshness window.** Reject proofs whose `claimData.timestampS` is older than your business policy allows (the SDK only enforces a 10-minute skew between the nonce timestamp and claim timestamp, not absolute freshness).
+
+```javascript
+// Pseudocode for a server-side verification handler
+const expectedSessionId = await loadSessionForUser(req.user); // session you created
+const sessionId = JSON.parse(proof.claimData.context).reclaimSessionId;
+
+if (sessionId !== expectedSessionId) {
+  throw new Error("session mismatch");
+}
+if (await db.consumedSessions.has(sessionId)) {
+  throw new Error("proof already used"); // replay
+}
+
+const { isVerified, error } = await verifyProof(proof, {
+  ...providerVersion,
+  teeAttestation: { appSecret: process.env.APP_SECRET },
+});
+if (!isVerified) throw error;
+
+await db.consumedSessions.add(sessionId); // mark consumed atomically
+```
+
+> [!WARNING]
+> Without server-side session tracking and dedup, a malicious user can submit the same valid proof repeatedly. The cryptographic checks in `verifyProof` are necessary but not sufficient for replay protection.
+
 ## TEE Attestation Verification
 
 The SDK supports verifying TEE (Trusted Execution Environment) attestations included in proofs. The attestation flow verifies the Google Confidential Computing OIDC token returned by Popcorn's GCP attestor and checks that it is bound to the proof nonce, application identity, and image digests.
 
-### Enabling TEE Attestation
+### Requesting TEE Attestation
 
-To request TEE attestation during proof generation, enable it during initialization:
+TEE attestation is requested by default during proof generation:
 
 ```javascript
-const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID, {
-  acceptTeeAttestation: true,
-});
+const proofRequest = await ReclaimProofRequest.init(APP_ID, APP_SECRET, PROVIDER_ID);
 ```
+
+The request includes the SDK's attestation version so the attestor can continue serving older SDK clients when newer attestation formats are introduced.
+
+To opt out, set `acceptTeeAttestation: false` during initialization.
 
 ### Verifying TEE Attestation via `verifyProof`
 

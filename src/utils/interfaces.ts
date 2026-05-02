@@ -1,5 +1,9 @@
+export const SUPPORTED_TEE_ATTESTATION_VERSIONS = ['v2', 'v3'] as const;
+
+export type TeeAttestationVersion = typeof SUPPORTED_TEE_ATTESTATION_VERSIONS[number];
+
 export interface TeeAttestation {
-  proof_version: string;
+  proof_version: TeeAttestationVersion;
   tee_provider: string;
   tee_technology: string;
   nonce: string;
@@ -79,6 +83,7 @@ export interface Context {
     applicationId: string;
     sessionId: string;
     timestamp: string;
+    attestationVersion?: TeeAttestationVersion;
   };
 }
 
