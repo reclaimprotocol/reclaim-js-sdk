@@ -75,6 +75,13 @@ const SDK_TEE_ATTESTATION_VERSION = 'v3' as const;
  * * `getProviderHashRequirementsFromSpec()` - To get the expected proof hash requirements from a provider spec.
  * * All 3 functions above are alternatives of each other and result from these functions can be directly used as `config` parameter in this function for proof validation.
  *
+ * Replay protection: this function is stateless. It verifies that a proof is cryptographically
+ * bound to a specific `sessionId`/`applicationId` (via the `appSecret`-keyed attestation nonce
+ * when `teeAttestation` is provided) but does not track which proofs have already been
+ * verified. Callers must (a) verify the proof's `sessionId` matches a session they initiated
+ * and (b) persist accepted `sessionId`s and reject duplicates. See the README's
+ * "Replay Protection" section for details.
+ *
  * @param proofOrProofs - A single proof object or an array of proof objects to be verified.
  * @param config - Verification configuration that specifies required hashes, allowed extra hashes, or disables content validation. Optionally includes `teeAttestation` to require TEE attestation verification.
  * @returns Verification result with `isVerified`, `isTeeAttestationVerified` (always boolean), extracted `data` from each proof, and optional `error` on failure. The application ID is derived from `appSecret` automatically.

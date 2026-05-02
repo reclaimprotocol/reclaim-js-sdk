@@ -403,6 +403,10 @@ async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: st
  * was generated for your application.
  * Returns a result object with `isVerified` and an optional `error` message.
  *
+ * This check is stateless and does not protect against replay of a previously
+ * valid proof. Callers must enforce session matching and dedup `sessionId` on
+ * their server. See the README's "Replay Protection" section.
+ *
  * @param proof - The proof containing TEE attestation data
  * @param appSecret - Your application secret (Ethereum private key). Used to
  *   derive the application ID and recompute the attestation nonce.
