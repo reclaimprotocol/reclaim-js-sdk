@@ -58,7 +58,8 @@ describe('Request', () => {
                 "attestationNonceData": {
                     "applicationId": testAppId,
                     "sessionId": "123",
-                    "timestamp": actualOutput.timestamp
+                    "timestamp": actualOutput.timestamp,
+                    "attestationVersion": "v3"
                 }
             },
             "appCallbackUrl": "https://api.example.com/success?session=def",
@@ -92,6 +93,7 @@ describe('Request', () => {
                     "theme": "dark"
                 },
                 "acceptTeeAttestation": true,
+                "teeAttestationVersion": "v3",
                 "useBrowserExtension": true
             },
             // this can change in future
@@ -177,8 +179,52 @@ describe('Request', () => {
         expect(output.context.attestationNonceData).toEqual({
             applicationId: testAppId,
             sessionId: '999',
-            timestamp: output.timestamp
+            timestamp: output.timestamp,
+            attestationVersion: 'v3'
         });
+    });
+
+    it('should allow pinning the TEE attestation version in the request', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '999',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example',
+            { teeAttestationVersion: 'v2' }
+        );
+
+        const output = JSON.parse(request.toJsonString());
+        expect(output.options.teeAttestationVersion).toEqual('v2');
+        expect(output.context.attestationNonceData.attestationVersion).toEqual('v2');
+    });
+
+    it('should include the TEE attestation version in the request template', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '999',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example',
+            { teeAttestationVersion: 'v2' }
+        );
+
+        globalThis.fetch = mockFetchBy(() => ({ success: true }));
+
+        const url = await request.getRequestUrl();
+        const template = new URL(url).searchParams.get('template');
+        const templateData = JSON.parse(decodeURIComponent(template!));
+        const context = JSON.parse(templateData.context);
+
+        expect(templateData.acceptTeeAttestation).toEqual(true);
+        expect(templateData.teeAttestationVersion).toEqual('v2');
+        expect(context.attestationNonceData.attestationVersion).toEqual('v2');
     });
 
     it('should not add TEE attestation context when explicitly disabled', async () => {
