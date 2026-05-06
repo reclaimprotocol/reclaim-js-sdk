@@ -344,80 +344,7 @@ export class ReclaimProofRequest {
                 { paramName: 'appSecret', input: appSecret, isString: true }
             ], 'the constructor')
 
-            // check if options is provided and validate each property of options
-            if (options) {
-                if (options.acceptAiProviders) {
-                    validateFunctionParams([
-                        { paramName: 'acceptAiProviders', input: options.acceptAiProviders }
-                    ], 'the constructor')
-                }
-                if (options.providerVersion) {
-                    validateFunctionParams([
-                        { paramName: 'providerVersion', input: options.providerVersion, isString: true }
-                    ], 'the constructor')
-                }
-                if (options.log) {
-                    validateFunctionParams([
-                        { paramName: 'log', input: options.log }
-                    ], 'the constructor')
-                }
-                if (options.useAppClip) {
-                    validateFunctionParams([
-                        { paramName: 'useAppClip', input: options.useAppClip }
-                    ], 'the constructor')
-                }
-                if (options.device) {
-                    validateFunctionParams([
-                        { paramName: 'device', input: options.device, isString: true }
-                    ], 'the constructor')
-                }
-                if (options.useBrowserExtension) {
-                    validateFunctionParams([
-                        { paramName: 'useBrowserExtension', input: options.useBrowserExtension }
-                    ], 'the constructor')
-                }
-                if (options.extensionID) {
-                    validateFunctionParams([
-                        { paramName: 'extensionID', input: options.extensionID, isString: true }
-                    ], 'the constructor')
-                }
-                if (options.envUrl) {
-                    validateFunctionParams([
-                        { paramName: 'envUrl', input: options.envUrl, isString: true }
-                    ], 'the constructor')
-                }
-                if (options.portalUrl) {
-                    validateFunctionParams([
-                        { paramName: 'portalUrl', input: options.portalUrl, isString: true }
-                    ], 'the constructor')
-                }
-                if (options.customSharePageUrl) {
-                    validateFunctionParams([
-                        { paramName: 'customSharePageUrl', input: options.customSharePageUrl, isString: true }
-                    ], 'the constructor')
-                }
-                if (options.customAppClipUrl) {
-                    validateFunctionParams([
-                        { paramName: 'customAppClipUrl', input: options.customAppClipUrl, isString: true }
-                    ], 'the constructor')
-                }
-                if (options.preferredLocale) {
-                    validateFunctionParams([
-                        { paramName: 'preferredLocale', input: options.preferredLocale, isString: true }
-                    ], 'the constructor');
-                    validateFunctionParamsWithFn({
-                        paramName: 'preferredLocale', input: options.preferredLocale, isValid: () => {
-                            try {
-                                Intl.getCanonicalLocales(options.preferredLocale);
-                                return true;
-                            } catch (error) {
-                                logger.info('Failed to canonicalize locale', error);
-                                return false;
-                            }
-                        }
-                    }, 'the constructor');
-                }
-            }
+            ReclaimProofRequest.validateInitOptions(options, 'the constructor')
 
             const proofRequestOptions = {
                 ...options,
@@ -455,6 +382,112 @@ export class ReclaimProofRequest {
             console.error(error);
             logger.info('Failed to initialize ReclaimProofRequest', error as Error);
             throw new InitError('Failed to initialize ReclaimProofRequest', error as Error)
+        }
+    }
+
+    /**
+     * Initializes a new Reclaim proof request using a signature computed externally
+     * (e.g. on a trusted backend), so `appSecret` never has to live on the client.
+     *
+     * The signature must be produced over `canonicalize({ providerId, timestamp })`
+     * using the application's `appSecret` — see `generateInitSignature()` for the
+     * exact algorithm. The same `timestamp` used at signing time must be passed here.
+     *
+     * TEE attestation: the attestation nonce depends on `sessionId`, which is only
+     * known after the backend init call. To use TEE without exposing `appSecret`,
+     * pass an async `getAttestationNonce` callback that derives the nonce on your
+     * server using `generateAttestationNonce(appSecret, applicationId, sessionId, timestamp)`.
+     * If `acceptTeeAttestation` is left enabled but no callback is provided, init throws.
+     *
+     * @param applicationId - Your Reclaim application ID
+     * @param providerId - The ID of the provider to use for proof generation
+     * @param sessionAuth - Pre-computed signature, the timestamp it was signed over,
+     *                      and an optional async callback to compute the attestation nonce.
+     * @param options - Optional configuration options for the proof request
+     *
+     * @example
+     * ```typescript
+     * // Backend (Node):
+     * const timestamp = Date.now().toString();
+     * const signature = await generateInitSignature(APP_SECRET, providerId, timestamp);
+     * // ...return { signature, timestamp } to the client...
+     *
+     * // Client:
+     * const proofRequest = await ReclaimProofRequest.initWithSignature(
+     *   applicationId,
+     *   providerId,
+     *   { signature, timestamp },
+     *   { acceptTeeAttestation: false }
+     * );
+     * ```
+     */
+    static async initWithSignature(
+        applicationId: string,
+        providerId: string,
+        sessionAuth: {
+            signature: string;
+            timestamp: string;
+            getAttestationNonce?: (sessionId: string) => Promise<string> | string;
+        },
+        options?: ProofRequestOptions
+    ): Promise<ReclaimProofRequest> {
+        try {
+            validateFunctionParams([
+                { paramName: 'applicationId', input: applicationId, isString: true },
+                { paramName: 'providerId', input: providerId, isString: true },
+                { paramName: 'signature', input: sessionAuth?.signature, isString: true },
+                { paramName: 'timestamp', input: sessionAuth?.timestamp, isString: true }
+            ], 'initWithSignature')
+
+            ReclaimProofRequest.validateInitOptions(options, 'initWithSignature')
+
+            const proofRequestOptions = {
+                ...options,
+                acceptTeeAttestation: options?.acceptTeeAttestation ?? true
+            };
+
+            if (proofRequestOptions.acceptTeeAttestation && !sessionAuth.getAttestationNonce) {
+                throw new InvalidParamError(
+                    'initWithSignature requires a `getAttestationNonce` callback when `acceptTeeAttestation` is enabled. ' +
+                    'Either pass `acceptTeeAttestation: false`, or provide a callback that computes the nonce server-side ' +
+                    'using `generateAttestationNonce(appSecret, applicationId, sessionId, timestamp)`.'
+                )
+            }
+
+            const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, proofRequestOptions)
+            proofRequestInstance.timeStamp = sessionAuth.timestamp
+            proofRequestInstance.setSignature(sessionAuth.signature)
+
+            const data: InitSessionResponse = await initSession(
+                providerId,
+                applicationId,
+                sessionAuth.timestamp,
+                sessionAuth.signature,
+                options?.providerVersion
+            );
+            proofRequestInstance.sessionId = data.sessionId
+            proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
+            proofRequestInstance.context.reclaimSessionId = data.sessionId
+
+            if (proofRequestOptions.acceptTeeAttestation && sessionAuth.getAttestationNonce) {
+                const attestationNonce = await sessionAuth.getAttestationNonce(data.sessionId)
+                validateFunctionParams(
+                    [{ input: attestationNonce, paramName: 'attestationNonce', isString: true }],
+                    'initWithSignature'
+                )
+                proofRequestInstance.setAttestationContext(attestationNonce, {
+                    applicationId,
+                    sessionId: data.sessionId,
+                    timestamp: sessionAuth.timestamp,
+                    attestationVersion: SDK_TEE_ATTESTATION_VERSION
+                })
+            }
+
+            return proofRequestInstance
+        } catch (error) {
+            console.error(error);
+            logger.info('Failed to initialize ReclaimProofRequest with signature', error as Error);
+            throw new InitError('Failed to initialize ReclaimProofRequest with signature', error as Error)
         }
     }
 
@@ -983,6 +1016,57 @@ export class ReclaimProofRequest {
             throw new SessionNotStartedError("SessionId is not set");
         }
         return this.sessionId;
+    }
+
+    private static validateInitOptions(options: ProofRequestOptions | undefined, caller: string): void {
+        if (!options) return;
+        if (options.acceptAiProviders) {
+            validateFunctionParams([{ paramName: 'acceptAiProviders', input: options.acceptAiProviders }], caller)
+        }
+        if (options.providerVersion) {
+            validateFunctionParams([{ paramName: 'providerVersion', input: options.providerVersion, isString: true }], caller)
+        }
+        if (options.log) {
+            validateFunctionParams([{ paramName: 'log', input: options.log }], caller)
+        }
+        if (options.useAppClip) {
+            validateFunctionParams([{ paramName: 'useAppClip', input: options.useAppClip }], caller)
+        }
+        if (options.device) {
+            validateFunctionParams([{ paramName: 'device', input: options.device, isString: true }], caller)
+        }
+        if (options.useBrowserExtension) {
+            validateFunctionParams([{ paramName: 'useBrowserExtension', input: options.useBrowserExtension }], caller)
+        }
+        if (options.extensionID) {
+            validateFunctionParams([{ paramName: 'extensionID', input: options.extensionID, isString: true }], caller)
+        }
+        if (options.envUrl) {
+            validateFunctionParams([{ paramName: 'envUrl', input: options.envUrl, isString: true }], caller)
+        }
+        if (options.portalUrl) {
+            validateFunctionParams([{ paramName: 'portalUrl', input: options.portalUrl, isString: true }], caller)
+        }
+        if (options.customSharePageUrl) {
+            validateFunctionParams([{ paramName: 'customSharePageUrl', input: options.customSharePageUrl, isString: true }], caller)
+        }
+        if (options.customAppClipUrl) {
+            validateFunctionParams([{ paramName: 'customAppClipUrl', input: options.customAppClipUrl, isString: true }], caller)
+        }
+        if (options.preferredLocale) {
+            validateFunctionParams([{ paramName: 'preferredLocale', input: options.preferredLocale, isString: true }], caller);
+            validateFunctionParamsWithFn({
+                paramName: 'preferredLocale', input: options.preferredLocale, isValid: () => {
+                    try {
+                        Intl.getCanonicalLocales(options.preferredLocale);
+                        return true;
+                    } catch (error) {
+                        logger.info('Failed to canonicalize locale', error);
+                        return false;
+                    }
+                }
+            }, caller);
+        }
     }
 
     // Private helper methods
