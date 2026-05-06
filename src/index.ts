@@ -9,6 +9,8 @@ export * from './utils/providerUtils';
 export type * from './utils/providerUtils';
 export * from './utils/sessionUtils';
 export type * from './utils/sessionUtils';
+export { generateInitSignature } from './utils/signatureUtils';
+export { generateAttestationNonce } from './utils/attestationNonce';
 export * from './witness';
 export type * from './witness';
 export { verifyTeeAttestation, runTeeVerification } from './utils/verifyTee';
