@@ -1,0 +1,239 @@
+import crypto, { X509Certificate } from 'crypto';
+
+const BROWSER_ENVIRONMENT_ERROR =
+    'Attestor TEE attestation verification is only supported in non-browser environments. Run verifyAttestorTeeAttestation on your server or API route.';
+
+function isBrowserEnvironment(): boolean {
+    if (typeof window !== 'undefined' || typeof document !== 'undefined') {
+        return true;
+    }
+    if (typeof navigator !== 'undefined' && typeof process === 'undefined') {
+        return true;
+    }
+    const workerGlobalScope = (globalThis as any).WorkerGlobalScope;
+    if (
+        typeof workerGlobalScope !== 'undefined' &&
+        typeof self !== 'undefined' &&
+        self instanceof workerGlobalScope
+    ) {
+        return true;
+    }
+    return false;
+}
+
+function assertNonBrowserEnvironment() {
+    if (isBrowserEnvironment()) {
+        throw new Error(BROWSER_ENVIRONMENT_ERROR);
+    }
+}
+
+/**
+ * Result of verifying an attestor TEE attestation.
+ */
+export type AttestorTeeVerificationResult = {
+    isVerified: boolean;
+    error?: string;
+    /** sha256 image digest of the attestor container, on success. */
+    imageDigest?: string;
+};
+
+// GCP Confidential Space Root CA — pinned. Rotates infrequently
+// (current cert valid 2024-2034).
+const GCP_CONFIDENTIAL_SPACE_ROOT_CA = `-----BEGIN CERTIFICATE-----
+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
+uyT5CnJulxSC5CT1
+-----END CERTIFICATE-----`;
+
+const ATTESTOR_NONCE_PATTERN = /^attestor_public_key:0x([0-9a-fA-F]{40})$/;
+const EXPECTED_ISSUER = 'https://confidentialcomputing.googleapis.com';
+const TOKEN_CLOCK_SKEW_S = 60;
+
+function decodeBase64Url(input: string): Buffer {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    return Buffer.from(padded, 'base64');
+}
+
+function normalizeAddress(address: string): string {
+    return address.trim().toLowerCase().replace(/^0x/, '');
+}
+
+/**
+ * Walks the x5c certificate chain (leaf first) and verifies each link
+ * up to the pinned GCP Confidential Space Root CA. Returns the leaf
+ * certificate's public key on success.
+ */
+function verifyX5cChain(x5cChain: string[]): crypto.KeyObject {
+    if (!x5cChain || x5cChain.length === 0) {
+        throw new Error('Empty x5c certificate chain');
+    }
+
+    const certs = x5cChain.map(
+        (b64) => new X509Certificate(`-----BEGIN CERTIFICATE-----\n${b64}\n-----END CERTIFICATE-----`)
+    );
+    const root = new X509Certificate(GCP_CONFIDENTIAL_SPACE_ROOT_CA);
+
+    for (let i = 0; i < certs.length - 1; i++) {
+        if (!certs[i].verify(certs[i + 1].publicKey)) {
+            throw new Error(`Certificate chain verification failed at level ${i}`);
+        }
+    }
+
+    const top = certs[certs.length - 1];
+    if (!top.verify(root.publicKey)) {
+        throw new Error('Certificate chain does not root to GCP Confidential Space Root CA');
+    }
+
+    return certs[0].publicKey;
+}
+
+/**
+ * Validates a GCP Confidential Space attestation JWT produced by an
+ * attestor running in a Confidential Space VM, and asserts that the
+ * attestation binds to the given attestor address.
+ *
+ * The attestor (running inside the TEE) calls the Confidential Space
+ * launcher's attestation endpoint with two nonces:
+ *   - `attestor_public_key:<eth-address>` - binds to the signing key.
+ *   - `attestor_cert_hash:<sha256-hex>`   - binds to the live TLS cert.
+ *
+ * This function only verifies the public-key nonce. The TLS cert hash
+ * binding is informational and not checked here. Callers that need to
+ * pin to a specific attestor image should compare the returned
+ * `imageDigest` against a known-good value.
+ *
+ * The JWT signature is verified by walking the x5c certificate chain
+ * to a pinned GCP Confidential Space Root CA. No outbound network
+ * calls are made.
+ *
+ * Node-only (uses node:crypto). Mirrors the environment restriction in
+ * the existing `verifyTeeAttestation` helper.
+ *
+ * @param report - the raw JWT string (header.payload.signature).
+ * @param expectedAttestorAddress - hex ETH address (0x-prefixed or
+ *   unprefixed) that the attestation should be bound to.
+ */
+export async function verifyAttestorTeeAttestation(
+    report: string,
+    expectedAttestorAddress: string
+): Promise<AttestorTeeVerificationResult> {
+    try {
+        assertNonBrowserEnvironment();
+
+        if (!report || typeof report !== 'string') {
+            throw new Error('attestation report is empty or not a string');
+        }
+        if (!expectedAttestorAddress || typeof expectedAttestorAddress !== 'string') {
+            throw new Error('expectedAttestorAddress is required');
+        }
+
+        const parts = report.split('.');
+        if (parts.length !== 3) {
+            throw new Error('attestation report is not a JWT (expected 3 parts)');
+        }
+        const [headerB64, payloadB64, signatureB64] = parts;
+
+        const header = JSON.parse(decodeBase64Url(headerB64).toString('utf8'));
+        const payload = JSON.parse(decodeBase64Url(payloadB64).toString('utf8'));
+
+        if (header.alg !== 'RS256') {
+            throw new Error(`unexpected signing algorithm: ${header.alg}`);
+        }
+        if (!Array.isArray(header.x5c) || header.x5c.length === 0) {
+            throw new Error('attestation report is missing x5c certificate chain');
+        }
+
+        if (payload.iss !== EXPECTED_ISSUER) {
+            throw new Error(`unexpected issuer: ${payload.iss}`);
+        }
+
+        const now = Math.floor(Date.now() / 1000);
+        if (typeof payload.nbf === 'number' && now + TOKEN_CLOCK_SKEW_S < payload.nbf) {
+            throw new Error(`attestation not yet valid (nbf=${payload.nbf})`);
+        }
+        if (typeof payload.exp === 'number' && now - TOKEN_CLOCK_SKEW_S > payload.exp) {
+            throw new Error(`attestation expired (exp=${payload.exp})`);
+        }
+        if (typeof payload.iat === 'number' && payload.iat > now + TOKEN_CLOCK_SKEW_S) {
+            throw new Error(`attestation issued in future (iat=${payload.iat})`);
+        }
+
+        const publicKey = verifyX5cChain(header.x5c);
+
+        const verifier = crypto.createVerify('RSA-SHA256');
+        verifier.update(`${headerB64}.${payloadB64}`);
+        if (!verifier.verify(publicKey, new Uint8Array(decodeBase64Url(signatureB64)))) {
+            throw new Error('attestation signature verification failed');
+        }
+
+        if (!payload.eat_nonce) {
+            throw new Error('eat_nonce claim is missing');
+        }
+        const nonces: string[] = Array.isArray(payload.eat_nonce)
+            ? payload.eat_nonce
+            : [payload.eat_nonce];
+
+        let attestedAddress: string | undefined;
+        for (const n of nonces) {
+            const m = typeof n === 'string' ? n.match(ATTESTOR_NONCE_PATTERN) : null;
+            if (m) {
+                attestedAddress = m[1];
+                break;
+            }
+        }
+        if (!attestedAddress) {
+            throw new Error(
+                `attestor_public_key nonce not found in eat_nonce: ${JSON.stringify(payload.eat_nonce)}`
+            );
+        }
+
+        if (normalizeAddress(attestedAddress) !== normalizeAddress(expectedAttestorAddress)) {
+            throw new Error(
+                `attestor address mismatch: attestation binds to 0x${attestedAddress.toLowerCase()}, ` +
+                `expected ${expectedAttestorAddress}`
+            );
+        }
+
+        const imageDigest: string | undefined =
+            payload.submods?.container?.image_digest
+            ?? payload.google?.compute_engine?.image_digest;
+
+        return { isVerified: true, imageDigest };
+    } catch (error) {
+        return {
+            isVerified: false,
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
