@@ -1798,7 +1798,18 @@ export class ReclaimProofRequest {
                     if (statusUrlResponse.session.proofs && statusUrlResponse.session.proofs.length > 0) {
                         const proofs = statusUrlResponse.session.proofs;
                         if (this.claimCreationType === ClaimCreationType.STANDALONE) {
-                            const result = await verifyProof(proofs, verificationConfig ?? this.getProviderVersion());
+                            // Validate against the version the backend actually used for this
+                            // session, not the version resolved at init. AI patches created
+                            // mid-session shift the effective version; validating with the
+                            // init-time version yields UnknownProofsNotValidatedError for
+                            // proofs that are in fact valid against the AI patch.
+                            const sessionProviderVersion = statusUrlResponse.session.providerVersionString;
+                            const effectiveConfig: VerificationConfig = verificationConfig ?? {
+                                providerId: this.providerId,
+                                providerVersion: sessionProviderVersion || this.resolvedProviderVersion || '',
+                                allowedTags: this.options?.acceptAiProviders ? ['ai'] : [],
+                            };
+                            const result = await verifyProof(proofs, effectiveConfig);
                             if (!result.isVerified) {
                                 logger.info(`Proofs not verified: count=${proofs?.length}`);
                                 throw new ProofNotVerifiedError(`Proofs not verified: count=${proofs?.length}`, result.error);
