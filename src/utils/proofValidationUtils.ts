@@ -4,6 +4,7 @@ import { ProofNotValidatedError, UnknownProofsNotValidatedError } from "./errors
 import loggerModule from './logger';
 import { Proof, ProviderVersionInfo } from "./interfaces";
 import { fetchProviderHashRequirementsBy, HashRequirement, ProviderHashRequirementsConfig } from "./providerUtils";
+import type { AttestorTeeAttestationConfig } from "./verifyAttestorTee";
 
 const logger = loggerModule.logger;
 
@@ -90,6 +91,20 @@ export type VerificationConfig = ValidationConfig & {
      * if TEE attestation data is missing or verification fails.
      */
     teeAttestation?: TeeAttestationConfig;
+    /**
+     * Attestor TEE attestation verification configuration.
+     * When provided, verifies that every witness on every proof has a valid
+     * `claimAttestation` from an attestor running inside a TEE (GCP
+     * Confidential Space).
+     *
+     * Independent of `teeAttestation`, which verifies the verifier-app's
+     * own TEE attestation. Both can be enabled together.
+     *
+     * The result will include `isAttestorTeeAttestationVerified` and
+     * `isVerified` will be false if any witness is missing TEE attestation
+     * data or its verification fails.
+     */
+    attestorTeeAttestation?: AttestorTeeAttestationConfig;
 };
 
 

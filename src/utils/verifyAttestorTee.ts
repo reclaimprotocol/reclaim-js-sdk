@@ -1,4 +1,11 @@
 import crypto, { X509Certificate } from 'crypto';
+import { ethers } from 'ethers';
+import { createSignDataForClaim } from '../witness';
+import { AttestorTeeVerificationError } from './errors';
+import type { AttestorClaimAttestation, Proof } from './interfaces';
+import loggerModule from './logger';
+
+const logger = loggerModule.logger;
 
 const BROWSER_ENVIRONMENT_ERROR =
     'Attestor TEE attestation verification is only supported in non-browser environments. Run verifyAttestorTeeAttestation on your server or API route.';
@@ -235,5 +242,146 @@ export async function verifyAttestorTeeAttestation(
             isVerified: false,
             error: error instanceof Error ? error.message : String(error),
         };
+    }
+}
+
+/**
+ * Configuration for verifying the attestor's TEE attestation on each
+ * witness of the proof.
+ */
+export type AttestorTeeAttestationConfig = {
+    /**
+     * Optional allowlist of expected attestor container image digests
+     * (e.g. `"sha256:4906340f..."`). When provided, the attestation's
+     * `submods.container.image_digest` must be in this list.
+     *
+     * Leave undefined to skip image pinning and rely solely on the JWT
+     * chain rooting to the GCP Confidential Space Root CA + nonce
+     * binding to the attestor address.
+     */
+    expectedImageDigests?: string[];
+};
+
+function normalizeAttestorAddress(address: string): string {
+    return address.trim().toLowerCase();
+}
+
+function normalizeSignature(sig: string): string {
+    return sig.trim().toLowerCase();
+}
+
+async function verifyAttestorTeeForProof(
+    proof: Proof,
+    config: AttestorTeeAttestationConfig
+): Promise<void> {
+    if (!proof.witnesses || proof.witnesses.length === 0) {
+        throw new AttestorTeeVerificationError('Proof has no witnesses');
+    }
+
+    const expectedDigests = config.expectedImageDigests?.map(d => d.trim());
+
+    const proofSignatures = new Set((proof.signatures || []).map(normalizeSignature));
+    const claimSignData = createSignDataForClaim(proof.claimData);
+
+    for (const witness of proof.witnesses) {
+        const att: AttestorClaimAttestation | undefined = witness.claimAttestation;
+        if (!att) {
+            throw new AttestorTeeVerificationError(
+                `Witness ${witness.id} is missing claimAttestation`
+            );
+        }
+
+        if (normalizeAttestorAddress(att.attestor_address) !== normalizeAttestorAddress(witness.id)) {
+            throw new AttestorTeeVerificationError(
+                `claimAttestation.attestor_address ${att.attestor_address} does not match witness id ${witness.id}`
+            );
+        }
+
+        if (!proofSignatures.has(normalizeSignature(att.claim_signature))) {
+            throw new AttestorTeeVerificationError(
+                `claimAttestation.claim_signature for witness ${witness.id} is not present in proof.signatures`
+            );
+        }
+
+        let recoveredSigner: string;
+        try {
+            recoveredSigner = ethers.verifyMessage(claimSignData, att.claim_signature);
+        } catch (error) {
+            throw new AttestorTeeVerificationError(
+                `Failed to recover signer from claimAttestation.claim_signature for witness ${witness.id}`,
+                error
+            );
+        }
+        if (normalizeAttestorAddress(recoveredSigner) !== normalizeAttestorAddress(witness.id)) {
+            throw new AttestorTeeVerificationError(
+                `claim_signature recovers to ${recoveredSigner}, expected attestor ${witness.id}`
+            );
+        }
+
+        const result = await verifyAttestorTeeAttestation(att.attestation_report, witness.id);
+        if (!result.isVerified) {
+            throw new AttestorTeeVerificationError(
+                `Attestor TEE attestation verification failed for witness ${witness.id}: ${result.error}`
+            );
+        }
+
+        if (expectedDigests && expectedDigests.length > 0) {
+            if (!result.imageDigest) {
+                throw new AttestorTeeVerificationError(
+                    `Attestor TEE attestation for witness ${witness.id} did not expose an image digest to check against expectedImageDigests`
+                );
+            }
+            if (!expectedDigests.includes(result.imageDigest)) {
+                throw new AttestorTeeVerificationError(
+                    `Attestor image digest ${result.imageDigest} for witness ${witness.id} is not in expectedImageDigests`
+                );
+            }
+        }
+    }
+}
+
+/**
+ * Verifies the attestor's TEE attestation for every witness of every
+ * provided proof. Throws `AttestorTeeVerificationError` on the first
+ * failure.
+ *
+ * Each witness must carry a `claimAttestation`. For each one, this:
+ *   1. Asserts `attestor_address` matches `witness.id`.
+ *   2. Asserts `claim_signature` is present in `proof.signatures`.
+ *   3. Recovers the signer of `claim_signature` from the claim data and
+ *      asserts it equals `witness.id` (binds the signature to the
+ *      attestor that the TEE attestation will cover).
+ *   4. Calls `verifyAttestorTeeAttestation` to validate the JWT against
+ *      the pinned GCP Confidential Space Root CA and the attestor-key
+ *      nonce.
+ *   5. If `expectedImageDigests` is provided, asserts the attestation's
+ *      container image digest is in the allowlist.
+ *
+ * Node-only (uses node:crypto), like `verifyTeeAttestation`.
+ *
+ * @param proofs - The proofs to verify.
+ * @param config - Optional config; see {@link AttestorTeeAttestationConfig}.
+ */
+export async function runAttestorTeeVerification(
+    proofs: Proof[],
+    config: AttestorTeeAttestationConfig = {}
+): Promise<void> {
+    if (!proofs || proofs.length === 0) {
+        throw new AttestorTeeVerificationError('No proofs provided for attestor TEE verification');
+    }
+
+    try {
+        for (const proof of proofs) {
+            await verifyAttestorTeeForProof(proof, config);
+        }
+    } catch (error) {
+        logger.error('Attestor TEE attestation verification failed:', error);
+        if (error instanceof AttestorTeeVerificationError) {
+            throw error;
+        }
+        throw new AttestorTeeVerificationError(
+            'Attestor TEE attestation verification failed',
+            error
+        );
     }
 }
