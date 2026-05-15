@@ -45,3 +45,4 @@ export const ProofSubmissionFailedError = createErrorClass('ProofSubmissionFaile
 export const ErrorDuringVerificationError = createErrorClass('ErrorDuringVerificationError');
 export const CallbackUrlRequiredError = createErrorClass('CallbackUrlRequiredError');
 export const TeeVerificationError = createErrorClass('TeeVerificationError');
+export const AttestorTeeVerificationError = createErrorClass('AttestorTeeVerificationError');

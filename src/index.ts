@@ -15,6 +15,8 @@ export * from './witness';
 export type * from './witness';
 export { verifyTeeAttestation, runTeeVerification } from './utils/verifyTee';
 export type { TeeVerificationResult } from './utils/verifyTee';
+export { verifyAttestorTeeAttestation } from './utils/verifyAttestorTee';
+export type { AttestorTeeVerificationResult } from './utils/verifyAttestorTee';
 export { TeeVerificationError } from './utils/errors';
 // Export device detection utilities for debugging (optional)
 export {

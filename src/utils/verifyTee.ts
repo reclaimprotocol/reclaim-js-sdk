@@ -1,13 +1,13 @@
 import { Proof, TeeAttestation } from './interfaces';
 import { ethers } from 'ethers';
 import { generateAttestationNonce } from './attestationNonce';
+import { GCP_CONFIDENTIAL_SPACE_ISSUER } from './constants';
 import { TeeVerificationError } from './errors';
 import type { TeeAttestationConfig } from './proofValidationUtils';
 import loggerModule from './logger';
 
 const logger = loggerModule.logger;
 
-const EXPECTED_ISSUER = 'https://confidentialcomputing.googleapis.com';
 const EXPECTED_HW_MODEL = 'GCP_AMD_SEV';
 const EXPECTED_TEE_PROVIDER = 'gcp';
 const EXPECTED_TEE_TECHNOLOGY = 'amd-sev';
@@ -380,9 +380,9 @@ async function computeDigestBinding(teeAttestation: TeeAttestation): Promise<str
 }
 
 async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: string) {
-    const claims = await verifyJwtSignature(teeAttestation.attestation.token, EXPECTED_ISSUER);
+    const claims = await verifyJwtSignature(teeAttestation.attestation.token, GCP_CONFIDENTIAL_SPACE_ISSUER);
 
-    assert(claims.iss === EXPECTED_ISSUER, `unexpected issuer: ${claims.iss}`);
+    assert(claims.iss === GCP_CONFIDENTIAL_SPACE_ISSUER, `unexpected issuer: ${claims.iss}`);
     assertAudienceClaim(claims.aud);
     assert(Array.isArray(claims.eat_nonce), 'eat_nonce claim missing');
 

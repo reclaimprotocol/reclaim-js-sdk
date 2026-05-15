@@ -57,6 +57,7 @@ import { generateAttestationNonce } from './utils/attestationNonce'
 import { canonicalStringify } from './utils/strings'
 import { assertValidateProof, VerificationConfig } from './utils/proofValidationUtils'
 import { runTeeVerification } from './utils/verifyTee'
+import { runAttestorTeeVerification } from './utils/verifyAttestorTee'
 import { fetchProviderHashRequirementsBy, ProviderHashRequirementsConfig } from './utils/providerUtils'
 
 const logger = loggerModule.logger
@@ -152,6 +153,7 @@ export async function verifyProof(
         await assertValidateProof(proofs, config);
 
         let isTeeAttestationVerified: boolean | undefined;
+        let isAttestorTeeAttestationVerified: boolean | undefined;
 
         if (config.teeAttestation && 'dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
             logger.warn('teeAttestation is enabled but content validation is disabled — TEE attestation alone does not guarantee proof contents are valid');
@@ -162,7 +164,12 @@ export async function verifyProof(
             isTeeAttestationVerified = true;
         }
 
-        return createVerifyProofResultSuccess(proofs, isTeeAttestationVerified);
+        if (config.attestorTeeAttestation) {
+            await runAttestorTeeVerification(proofs, config.attestorTeeAttestation);
+            isAttestorTeeAttestationVerified = true;
+        }
+
+        return createVerifyProofResultSuccess(proofs, isTeeAttestationVerified, isAttestorTeeAttestationVerified);
     } catch (error) {
         logger.error('Error in validating proof:', error);
         const _error = error instanceof Error ? error : new Error(String(error));

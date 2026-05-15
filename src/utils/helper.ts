@@ -50,10 +50,15 @@ export function scheduleIntervalEndingTask(
   }, timeout)
 }
 
-export const createVerifyProofResultSuccess = (proofs: Proof[], isTeeAttestationVerified?: boolean): VerifyProofResultSuccess => {
+export const createVerifyProofResultSuccess = (
+  proofs: Proof[],
+  isTeeAttestationVerified?: boolean,
+  isAttestorTeeAttestationVerified?: boolean,
+): VerifyProofResultSuccess => {
   return {
     isVerified: true,
     isTeeAttestationVerified,
+    isAttestorTeeAttestationVerified,
     error: undefined,
     data: proofs.map(createTrustedDataFromProofData),
     publicData: getPublicDataFromProofs(proofs),
@@ -61,10 +66,15 @@ export const createVerifyProofResultSuccess = (proofs: Proof[], isTeeAttestation
 }
 
 
-export const createVerifyProofResultFailure = (error: Error, isTeeAttestationVerified?: boolean): VerifyProofResultFailure => {
+export const createVerifyProofResultFailure = (
+  error: Error,
+  isTeeAttestationVerified?: boolean,
+  isAttestorTeeAttestationVerified?: boolean,
+): VerifyProofResultFailure => {
   return {
     isVerified: false,
     isTeeAttestationVerified,
+    isAttestorTeeAttestationVerified,
     error,
     data: [],
     publicData: [],

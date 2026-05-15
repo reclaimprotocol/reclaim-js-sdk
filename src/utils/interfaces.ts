@@ -59,6 +59,23 @@ export interface ExtensionMessage {
 export interface WitnessData {
   id: string;
   url: string;
+  claimAttestation?: AttestorClaimAttestation;
+}
+
+/**
+ * Attestation produced by an attestor running inside a Trusted Execution
+ * Environment. Binds the attestor's signing key (and its signature over
+ * the claim) to a hardware-backed enclave identity.
+ *
+ * Verified by `runAttestorTeeVerification`.
+ */
+export interface AttestorClaimAttestation {
+  /** ETH address of the attestor whose enclave produced the attestation. Matches `WitnessData.id`. */
+  attestor_address: string;
+  /** Attestor signature over the claim. Must equal the corresponding entry in `Proof.signatures`. */
+  claim_signature: string;
+  /** Raw attestation report. For GCP Confidential Space, a JWT (header.payload.signature). */
+  attestation_report: string;
 }
 
 export interface ProviderClaimData {
