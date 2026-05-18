@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.1]
+
+### Fixed
+
+- `startSession` now validates submitted proofs against the version the backend actually used for the session (read from `session.providerVersionString` on the status response) instead of the version resolved at init. Previously, if a provider's AI patch (e.g. `1.0.0-ai.6`) was created mid-session and the proof was generated against that patch, the default-callback validation path threw `UnknownProofsNotValidatedError` because it kept asking for hashes against the init-time base version. Callers that pass an explicit `verificationConfig` to `startSession` are unaffected.
+
 ## [5.4.0]
 
 ### Added
