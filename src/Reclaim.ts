@@ -145,12 +145,16 @@ export async function verifyProof(
             throw new ProofNotValidatedError('Verification configuration is required for `verifyProof(proof, config)`');
         }
 
-        const attestors = await getAttestors()
-        for (const proof of proofs) {
-            await assertVerifiedProof(proof, attestors)
+        // If hasNoPii is not explicitly set to true, verify the proofs against the attestors
+        if (config.hasNoPii !== true) {
+            console.info({ pii: config.hasNoPii })
+            const attestors = await getAttestors()
+            for (const proof of proofs) {
+                await assertVerifiedProof(proof, attestors)
+            }
         }
 
-        await assertValidateProof(proofs, config);
+        await assertValidateProof(proofs, config, { hasNoPii: config.hasNoPii });
 
         let isTeeAttestationVerified: boolean | undefined;
         let isAttestorTeeAttestationVerified: boolean | undefined;

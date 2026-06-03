@@ -13,7 +13,7 @@ const EXPECTED_TEE_PROVIDER = 'gcp';
 const EXPECTED_TEE_TECHNOLOGY = 'amd-sev';
 const SUPPORTED_PROOF_VERSIONS = ['v2', 'v3'];
 const TOKEN_CLOCK_SKEW_S = 60;
-const NONCE_TIMESTAMP_MAX_SKEW_MS = 10 * 60 * 1000;
+export const NONCE_TIMESTAMP_MAX_SKEW_MS = 10 * 60 * 1000;
 
 type JsonWebKeyLike = JsonWebKey & {
     kid?: string;
@@ -69,17 +69,17 @@ function isBrowserEnvironment(): boolean {
     return false;
 }
 
-function assertNonBrowserEnvironment() {
+export function assertNonBrowserEnvironment() {
     if (isBrowserEnvironment()) {
         throw new Error(BROWSER_ENVIRONMENT_ERROR);
     }
 }
 
-function normalizeHex(value: string | undefined | null): string {
+export function normalizeHex(value: string | undefined | null): string {
     return (value || '').trim().replace(/^0x/i, '').toLowerCase();
 }
 
-function isHex(value: string): boolean {
+export function isHex(value: string): boolean {
     return /^[0-9a-f]+$/i.test(value);
 }
 
@@ -196,7 +196,7 @@ async function verifyJwtSignature(token: string, issuer: string): Promise<Record
     return payload;
 }
 
-function isNonceContextData(obj: unknown): obj is NonceContextData {
+export function isNonceContextData(obj: unknown): obj is NonceContextData {
     if (!obj || typeof obj !== 'object') return false;
     const o = obj as Record<string, unknown>;
     return typeof o.applicationId === 'string' && o.applicationId.length > 0
@@ -272,7 +272,7 @@ function verifyApplicationAndSessionBinding(
     }
 }
 
-function verifyNonceMaterial(
+export function verifyNonceMaterial(
     expectedNonce: string,
     nonceDataObj: NonceContextData,
     expectedAppSecret?: string
@@ -341,7 +341,7 @@ function getProofVersion(teeAttestation: TeeAttestation): string | undefined {
     return (teeAttestation as any).proof_version ?? (teeAttestation as any).proofVersion;
 }
 
-function assertProofShape(teeAttestation: TeeAttestation) {
+export function assertProofShape(teeAttestation: TeeAttestation) {
     if (teeAttestation.error) {
         throw new Error(`${teeAttestation.error.code}: ${teeAttestation.error.message}`);
     }
@@ -379,7 +379,7 @@ async function computeDigestBinding(teeAttestation: TeeAttestation): Promise<str
     );
 }
 
-async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: string) {
+export async function verifyGcpClaims(teeAttestation: TeeAttestation, expectedNonce: string) {
     const claims = await verifyJwtSignature(teeAttestation.attestation.token, GCP_CONFIDENTIAL_SPACE_ISSUER);
 
     assert(claims.iss === GCP_CONFIDENTIAL_SPACE_ISSUER, `unexpected issuer: ${claims.iss}`);

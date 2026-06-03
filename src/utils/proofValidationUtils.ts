@@ -1,3 +1,4 @@
+import assert from 'assert';
 import { HttpProviderClaimParams } from "./types";
 import { hashProofClaimParams } from "../witness";
 import { ProofNotValidatedError, UnknownProofsNotValidatedError } from "./errors";
@@ -83,13 +84,13 @@ export type TeeAttestationConfig = {
     appSecret: string;
 };
 
-export type VerificationConfig = ValidationConfig & {
+export type VerifyAttestationConfig = {
     /**
-     * TEE attestation verification configuration.
-     * When provided, verifies the TEE attestation included in the proof.
-     * The result will include `isTeeAttestationVerified` and `isVerified` will be false
-     * if TEE attestation data is missing or verification fails.
-     */
+    * TEE attestation verification configuration.
+    * When provided, verifies the TEE attestation included in the proof.
+    * The result will include `isTeeAttestationVerified` and `isVerified` will be false
+    * if TEE attestation data is missing or verification fails.
+    */
     teeAttestation?: TeeAttestationConfig;
     /**
      * Attestor TEE attestation verification configuration.
@@ -105,13 +106,35 @@ export type VerificationConfig = ValidationConfig & {
      * data or its verification fails.
      */
     attestorTeeAttestation?: AttestorTeeAttestationConfig;
-};
+}
 
+export type PiiVerificationConfig = {
+    hasNoPii?: true
+}
 
-const HASH_REQUIRED_DEFAULT = true;
-const HASH_MATCH_MULTIPLE_DEFAULT = true;
+export type VerificationConfig = ValidationConfig & VerifyAttestationConfig & PiiVerificationConfig;
 
-export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig) {
+export const HASH_REQUIRED_DEFAULT = true;
+export const HASH_MATCH_MULTIPLE_DEFAULT = true;
+
+export function getHashFromProof(proof: Proof, piiConfig?: PiiVerificationConfig): string[] {
+    if (piiConfig?.hasNoPii === true) {
+        // We use the providerHash from proof.claimData.context when piiConfig is set
+        const contextObject = JSON.parse(proof.claimData.context);
+        assert(contextObject, 'Context must be present in proof\'s claimData');
+        const providerHash = contextObject.providerHash;
+        assert(providerHash, 'Provider hash must be present in proof\'s claimData.context');
+        return [providerHash];
+    }
+    const claimParams = getHttpProviderClaimParamsFromProof(proof);
+    const computedHashesOfProof = hashProofClaimParams(claimParams);
+    const proofHashes = Array.isArray(computedHashesOfProof)
+        ? computedHashesOfProof.map(h => h.toLowerCase().trim())
+        : [computedHashesOfProof.toLowerCase().trim()];
+    return proofHashes;
+}
+
+export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashRequirementsConfig, piiConfig?: PiiVerificationConfig) {
     if (!config.hashes) {
         throw new ProofNotValidatedError('No proof hash was provided for validation');
     }
@@ -120,11 +143,7 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
 
     for (let i = 0; i < proofs.length; i++) {
         const proof = proofs[i];
-        const claimParams = getHttpProviderClaimParamsFromProof(proof);
-        const computedHashesOfProof = hashProofClaimParams(claimParams);
-        const proofHashes = Array.isArray(computedHashesOfProof)
-            ? computedHashesOfProof.map(h => h.toLowerCase().trim())
-            : [computedHashesOfProof.toLowerCase().trim()];
+        const proofHashes = getHashFromProof(proof, piiConfig);
         unvalidatedProofHashByIndex.set(i, proofHashes);
     }
 
@@ -141,7 +160,9 @@ export function assertValidProofsByHash(proofs: Proof[], config: ProviderHashReq
 
         // Iterate through unvalidated proofs to assert that the generated deterministic hash 
         // derived from the User's actual matched elements structurally matches ANY of the permissible configurations.
-        for (const [i, proofHashes] of unvalidatedProofHashByIndex.entries()) {
+        for (let i = 0; i < proofs.length; i++) {
+            if (!unvalidatedProofHashByIndex.has(i)) continue;
+            const proofHashes = unvalidatedProofHashByIndex.get(i)!;
             const intersection = expectedHashes.filter(eh => proofHashes.includes(eh));
 
             // If the Proof's claim exactly replicates one of the Valid Config permutations:
@@ -212,7 +233,7 @@ export function getHttpProviderClaimParamsFromProof(proof: Proof): HttpProviderC
  * @param config - The validation config
  * @throws {ProofNotValidatedError} When the proof is not validated
  */
-export async function assertValidateProof(proofs: Proof[], config: VerificationConfig) {
+export async function assertValidateProof(proofs: Proof[], config: VerificationConfig, piiConfig?: PiiVerificationConfig) {
     if ('dangerouslyDisableContentValidation' in config && config.dangerouslyDisableContentValidation) {
         logger.warn('Validation skipped because it was disabled during proof verification')
         return
@@ -233,14 +254,14 @@ export async function assertValidateProof(proofs: Proof[], config: VerificationC
             let lastError: unknown | null = null;
             for (const hashRequirement of hashRequirementsFromProvider) {
                 try {
-                    return await assertValidateProof(proofs, hashRequirement);
+                    return await assertValidateProof(proofs, hashRequirement, piiConfig);
                 } catch (e) {
                     lastError = e;
                 }
             }
             throw new ProofNotValidatedError('Could not validate proof', lastError as any);
         } else {
-            return assertValidateProof(proofs, hashRequirementsFromProvider[0]);
+            return assertValidateProof(proofs, hashRequirementsFromProvider[0], piiConfig);
         }
     }
 
@@ -254,7 +275,11 @@ export async function assertValidateProof(proofs: Proof[], config: VerificationC
         }
     });
 
-    return assertValidProofsByHash(proofs, {
-        hashes: effectiveHashRequirement,
-    })
+    return assertValidProofsByHash(
+        proofs,
+        {
+            hashes: effectiveHashRequirement,
+        },
+        piiConfig
+    )
 }
