@@ -1219,6 +1219,67 @@ export class ReclaimProofRequest {
     }
 
     /**
+     * Cancels an in-progress verification session.
+     *
+     * Use this when the user abandons the flow (e.g. navigates back) before a
+     * proof is produced. It tears down all local session machinery — the status
+     * polling interval, the 10-minute interval-ending timeout, and any portal UI
+     * (modal / tab / embedded iframe) — and marks the session CANCELLED on the
+     * backend.
+     *
+     * Marking the session CANCELLED is what prevents a stale, abandoned session
+     * from later being reported as a failure: the portal's inactivity monitor
+     * treats a cancelled session as a clean terminal state and will not emit a
+     * connection-failure error to the cancel/error callback. Because that callback
+     * URL is typically shared across sessions, suppressing it here stops an
+     * abandoned session from contaminating the next one.
+     *
+     * `onSuccess` / `onError` are intentionally NOT invoked — cancellation is a
+     * deliberate, silent teardown, not a verification outcome. Safe to call more
+     * than once; a no-op when no session is active.
+     *
+     * @example
+     * ```typescript
+     * // e.g. in a React effect cleanup when the user navigates away
+     * await proofRequest.cancelSession();
+     * ```
+     */
+    async cancelSession(): Promise<void> {
+        // TODO: Once existing clients stop treating an error callback as a hard
+        // "breaker" in multi-session flows (i.e. they key error handling by
+        // sessionId rather than failing the whole verification on any error to
+        // the shared callback URL), migrate cancellation to be reported as an
+        // *error* (an explicit USER_CANCELLED error status that fires the
+        // cancel/error callback) instead of the current silent SESSION_CANCELLED
+        // terminal. Doing that today would re-introduce the cross-session
+        // contamination this method was built to avoid, so it must be coordinated
+        // with clients first.
+        if (!this.sessionId) {
+            return;
+        }
+        const sessionId = this.sessionId;
+        logger.info(`Cancelling session: ${sessionId}`);
+
+        // Stop all local machinery first so nothing can fire after we return:
+        // closeEmbeddedFlow() clears the polling interval (and removes the embedded
+        // iframe); deleting the interval also neutralizes the 10-minute
+        // scheduleIntervalEndingTask, which no-ops once the sessionId is gone from
+        // the intervals map.
+        this.closeModal();
+        this.closePortalTab();
+        this.closeEmbeddedFlow();
+
+        // Best-effort backend update. Swallow errors: by the time we cancel, the
+        // user is already leaving, and a backend that has moved the session to a
+        // final state will reject the update (which is fine — nothing to cancel).
+        try {
+            await updateSession(sessionId, SessionStatus.SESSION_CANCELLED);
+        } catch (error) {
+            logger.info(`cancelSession: backend update failed for ${sessionId}: ${error}`);
+        }
+    }
+
+    /**
      * Exports the Reclaim proof verification request as a JSON string
      *
      * This serialized format can be sent to the frontend to recreate this request using
