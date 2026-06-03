@@ -145,7 +145,7 @@ export async function verifyProof(
             throw new ProofNotValidatedError('Verification configuration is required for `verifyProof(proof, config)`');
         }
 
-        // If hasNoPii is not explicitly set to true, verify the proofs against the attestors
+        // If hasNoPii is not explicitly set to true, verify the proofs against the attestors (Defaults to verifying)
         if (config.hasNoPii !== true) {
             console.info({ pii: config.hasNoPii })
             const attestors = await getAttestors()
