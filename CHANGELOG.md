@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.5.0]
+
+### Added
+
+- New `ReclaimProofRequest.cancelSession()` method to deliberately cancel an in-progress verification (e.g. the user navigates away before a proof is produced). It tears down all local session machinery — the status polling interval, the 10-minute interval-ending timeout, and any portal UI (modal / tab / embedded iframe) — and marks the session `SESSION_CANCELLED` on the backend. `onSuccess` / `onError` are intentionally not invoked; cancellation is a silent, deliberate teardown rather than a verification outcome. Safe to call multiple times; a no-op when no session is active.
+- New `SessionStatus.SESSION_CANCELLED` enum value. Marking a session cancelled lets the portal treat it as a clean terminal state, so an abandoned session is not later reported as a connection failure to the (typically shared) cancel/error callback URL — preventing a stale session from contaminating the next one in multi-session flows.
+
 ## [5.4.1]
 
 ### Fixed
