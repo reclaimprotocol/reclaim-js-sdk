@@ -1268,6 +1268,7 @@ export class ReclaimProofRequest {
         this.closeModal();
         this.closePortalTab();
         this.closeEmbeddedFlow();
+        this.sessionId = '';
 
         // Best-effort backend update. Swallow errors: by the time we cancel, the
         // user is already leaving, and a backend that has moved the session to a

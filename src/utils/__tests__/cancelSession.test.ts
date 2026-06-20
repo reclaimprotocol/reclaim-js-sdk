@@ -33,6 +33,28 @@ describe('cancelSession', () => {
         expect(body).toEqual({ sessionId: '123', status: SessionStatus.SESSION_CANCELLED });
     });
 
+    it('does not cancel the same session more than once', async () => {
+        globalThis.fetch = mockFetch({
+            sessionId: '123',
+            resolvedProviderVersion: '1.0.0'
+        });
+
+        const request = await ReclaimProofRequest.init(
+            testAppId,
+            testAppSecret,
+            'example',
+            { log: false, acceptAiProviders: false }
+        );
+
+        const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: () => ({}) });
+        globalThis.fetch = fetchMock;
+
+        await request.cancelSession();
+        await request.cancelSession();
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('is a no-op when there is no active session', async () => {
         globalThis.fetch = mockFetch({
             sessionId: '123',
