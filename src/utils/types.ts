@@ -146,10 +146,9 @@ export type ReclaimFlowInitOptions = {
    * that automatically launches the verification flow after they install the app, ensuring
    * a seamless continuation of the verification process.
    *
-   * **Platform Support:** Currently Android only
-   *
-   * **Default Behavior:** Opt-in during rollout phase. Will default to `true` for all apps
-   * once fully released. See: https://blog.reclaimprotocol.org/posts/moving-beyond-google-play-instant
+   * **Default Behavior:** Enabled by default for Android. Opt-in during rollout phase for iOS. 
+   * Will default to `true` for all apps once fully released. 
+   * See: https://blog.reclaimprotocol.org/posts/moving-beyond-google-play-instant
    */
   canUseDeferredDeepLinksFlow?: boolean;
   /**
@@ -164,6 +163,17 @@ export type ReclaimFlowInitOptions = {
    * @default 'portal'
    */
   verificationMode?: 'app' | 'portal';
+  /**
+   * The deeplink to ios mobile application.
+   * Defaults to `reclaimverifier://org.reclaimprotocol.app`. 
+   */
+  iosDeepLinkBaseUrl?: string;
+  /**
+   * The link to ios app store page.
+   * Defaults to Reclaim Verifier's iOS App store page
+   * `itms-apps://apps.apple.com/in/app/reclaim-verifier/id6503247508`
+   */
+  iosAppDownloadUrl?: string;
 }
 
 export type ReclaimFlowLaunchOptions = ReclaimFlowInitOptions & {

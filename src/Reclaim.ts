@@ -1141,8 +1141,8 @@ export class ReclaimProofRequest {
         return template;
     }
 
-    private buildSharePageUrl(template: string): string {
-        return `${this.appSharePageUrl}/?template=${template}`;
+    private buildSharePageUrl(template: string, url?: string): string {
+        return `${url ?? this.appSharePageUrl}/?template=${template}`;
     }
 
     private async openPortalTab(templateData: TemplateData, preOpenedTab?: Window | null): Promise<void> {
@@ -1546,12 +1546,13 @@ export class ReclaimProofRequest {
             } else if (deviceType === DeviceType.MOBILE) {
                 if (mode === 'app') {
                     // App Clip only if useAppClip is true and iOS
-                    if (this.options?.useAppClip && getMobileDeviceType() === DeviceType.IOS) {
-                        logger.info('Redirecting to iOS app clip');
-                        this.redirectToAppClip();
+                    if ((this.options?.useAppClip || options.canUseDeferredDeepLinksFlow)
+                        && getMobileDeviceType() === DeviceType.IOS) {
+                        logger.info('Redirecting for iOS');
+                        await this.redirectToiOSApp(options);
                     } else {
                         // Share page for Android and iOS without useAppClip
-                        logger.info('Redirecting to share page');
+                        logger.info('Redirecting for android');
                         await this.redirectToInstantApp(options);
                     }
                 } else {
@@ -1652,7 +1653,7 @@ export class ReclaimProofRequest {
             let instantAppUrl = this.buildSharePageUrl(template);
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
-            const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
+            const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? true;
 
             if (isDeferredDeeplinksFlowEnabled) {
                 instantAppUrl = instantAppUrl.replace("/verifier", "/link");
@@ -1745,6 +1746,89 @@ export class ReclaimProofRequest {
             }, 5 * 1000);
         } catch (error) {
             logger.info('Error redirecting to app clip:', error);
+            throw error;
+        }
+    }
+
+    private async redirectToiOSApp(options: ReclaimFlowLaunchOptions): Promise<void> {
+        try {
+            logger.info('Preparing to launch for iOS app: ', options);
+
+            const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
+
+            if (!isDeferredDeeplinksFlowEnabled) {
+                return this.redirectToAppClip();
+            }
+
+            const template = this.encodeTemplateData(this.templateData);
+            const defaultiOSDeepLinkUrlBase = 'reclaimverifier://org.reclaimprotocol.app';
+            // Construct iOS deep link
+            const deepLink = this.buildSharePageUrl(
+                template,
+                options.iosDeepLinkBaseUrl || defaultiOSDeepLinkUrlBase
+            );
+            const iosAppInstallUrl = options.iosAppDownloadUrl || 'itms-apps://apps.apple.com/in/app/reclaim-verifier/id6503247508';
+            logger.info('Redirecting to iOS app: ' + deepLink, 'or store: ', iosAppInstallUrl);
+
+            try {
+                window.navigator.clipboard.writeText(deepLink).catch(() => {
+                    console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
+                });
+
+                let appInstalled = false;
+                let timeoutId: string | number | NodeJS.Timeout | undefined;
+
+                // Create hidden iframe to test deep link
+                const iframe = document.createElement("iframe");
+                iframe.style.display = "none";
+                iframe.style.width = "1px";
+                iframe.style.height = "1px";
+                document.body.appendChild(iframe);
+
+                // Function to clean up
+                const cleanup = () => {
+                    if (iframe.parentNode) {
+                        document.body.removeChild(iframe);
+                    }
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                    }
+                };
+
+                // If page becomes hidden, app opened successfully
+                const onVisibilityChange = () => {
+                    if (document.hidden) {
+                        logger.info('App maybe installed, document hidden')
+                        appInstalled = true;
+                        cleanup();
+                        // Open in main window since app is installed
+                        window.location.href = deepLink;
+                    }
+                };
+
+                // Listen for visibility change
+                document.addEventListener("visibilitychange", onVisibilityChange, { once: true });
+
+                // Test reclaimverifier deep link in iframe
+                iframe.src = deepLink;
+
+                // After timeout, assume app not installed
+                timeoutId = setTimeout(() => {
+                    document.removeEventListener("visibilitychange", onVisibilityChange);
+                    cleanup();
+
+                    if (!appInstalled) {
+                        // App not installed - redirect to the store page to install the app
+                        window.location.href = iosAppInstallUrl;
+                    }
+                }, 1500);
+            } catch (e) {
+                console.error('something went wrong during launch, opening store', e);
+                // Final fallback → verifier
+                window.location.href = iosAppInstallUrl;
+            }
+        } catch (error) {
+            logger.info('Error redirecting to instant app:', error);
             throw error;
         }
     }
