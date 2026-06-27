@@ -4,15 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "(cd ../; npm run build;) && vite",
+    "build": "(cd ../; npm run build;) && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@reclaimprotocol/js-sdk": "file:..",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "@reclaimprotocol/js-sdk": "../"
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

@@ -1702,16 +1702,17 @@ export class ReclaimProofRequest {
                     // Test reclaimverifier deep link in iframe
                     iframe.src = deepLink.replace('intent:', 'reclaimverifier:');
 
+                    // App not installed - redirect to the store page to install the app
+                    window.navigator.clipboard.writeText(requestUrl).catch(() => {
+                        console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
+                    });
+
                     // After timeout, assume app not installed
                     timeoutId = setTimeout(() => {
                         document.removeEventListener("visibilitychange", onVisibilityChange);
                         cleanup();
 
                         if (!appInstalled) {
-                            // App not installed - redirect to the store page to install the app
-                            window.navigator.clipboard.writeText(requestUrl).catch(() => {
-                                console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
-                            });
                             window.location.href = deepLink;
                         }
                     }, 1500);
@@ -1730,10 +1731,16 @@ export class ReclaimProofRequest {
         }
     }
 
+    private buildAppClipUrl(): string {
+        const template = this.encodeTemplateData(this.templateData);
+        const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+        return appClipUrl;
+    }
+
     private redirectToAppClip(): void {
         try {
             const template = this.encodeTemplateData(this.templateData);
-            const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+            const appClipUrl = this.buildAppClipUrl();
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
             const verifierUrl = `${this.appSharePageUrl}/?template=${template}`;
 
@@ -1767,29 +1774,16 @@ export class ReclaimProofRequest {
                 template,
                 options.iosDeepLinkBaseUrl || defaultiOSDeepLinkUrlBase
             );
+            const appClipUrl = this.buildAppClipUrl();
             const iosAppInstallUrl = options.iosAppDownloadUrl || 'itms-apps://apps.apple.com/in/app/reclaim-verifier/id6503247508';
             logger.info('Redirecting to iOS app: ' + deepLink, 'or store: ', iosAppInstallUrl);
 
             try {
-                window.navigator.clipboard.writeText(deepLink).catch(() => {
-                    console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
-                });
-
                 let appInstalled = false;
                 let timeoutId: string | number | NodeJS.Timeout | undefined;
 
-                // Create hidden iframe to test deep link
-                const iframe = document.createElement("iframe");
-                iframe.style.display = "none";
-                iframe.style.width = "1px";
-                iframe.style.height = "1px";
-                document.body.appendChild(iframe);
-
                 // Function to clean up
                 const cleanup = () => {
-                    if (iframe.parentNode) {
-                        document.body.removeChild(iframe);
-                    }
                     if (timeoutId) {
                         clearTimeout(timeoutId);
                     }
@@ -1797,12 +1791,10 @@ export class ReclaimProofRequest {
 
                 // If page becomes hidden, app opened successfully
                 const onVisibilityChange = () => {
+                    logger.info(`App maybe installed, document hidden ${document.hidden}`)
                     if (document.hidden) {
-                        logger.info('App maybe installed, document hidden')
                         appInstalled = true;
                         cleanup();
-                        // Open in main window since app is installed
-                        window.location.href = deepLink;
                     }
                 };
 
@@ -1810,10 +1802,18 @@ export class ReclaimProofRequest {
                 document.addEventListener("visibilitychange", onVisibilityChange, { once: true });
 
                 // Test reclaimverifier deep link in iframe
-                iframe.src = deepLink;
+                // iframe.src = deepLink;
+                window.location.href = deepLink;
+                // window.location.href = appClipUrl;
+
+                window.navigator.clipboard.writeText(deepLink).catch(() => {
+                    console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
+                });
 
                 // After timeout, assume app not installed
                 timeoutId = setTimeout(() => {
+                    logger.info(`App may not be installed, document hidden ${document.hidden}, appInstalled: ${appInstalled}`)
+
                     document.removeEventListener("visibilitychange", onVisibilityChange);
                     cleanup();
 
@@ -1821,7 +1821,7 @@ export class ReclaimProofRequest {
                         // App not installed - redirect to the store page to install the app
                         window.location.href = iosAppInstallUrl;
                     }
-                }, 1500);
+                }, 3000);
             } catch (e) {
                 console.error('something went wrong during launch, opening store', e);
                 // Final fallback → verifier
