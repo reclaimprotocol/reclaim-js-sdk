@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "(cd ../; npm run build;) && vite",
-    "build": "(cd ../; npm run build;) && tsc -b && vite build",
+    "dev": "vite",
+    "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
