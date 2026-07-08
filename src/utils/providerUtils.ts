@@ -160,7 +160,17 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
 }
 
 export function takeTemplateParametersFromProofs(proofs?: Proof[]): Record<string, string[]> {
-    return takePairsWhereValueIsArray(proofs?.map(it => JSON.parse(it.claimData.context).extractedParameters as Record<string, string>).reduce((acc, it) => ({ ...acc, ...it }), {}));
+    return takePairsWhereValueIsArray(proofs?.map(it => {
+        let parameters: Record<string, string> = {};
+        let contextParameters: Record<string, string> = {};
+        try {
+            parameters = JSON.parse(it.claimData.parameters).paramValues as Record<string, string>;
+        } catch (_) { }
+        try {
+            contextParameters = JSON.parse(it.claimData.context).extractedParameters as Record<string, string>;
+        } catch (_) { }
+        return { ...parameters, ...contextParameters };
+    }).reduce((acc, it) => ({ ...acc, ...it }), {}));
 }
 
 export function takePairsWhereValueIsArray(o: Record<string, string> | undefined): Record<string, string[]> {
