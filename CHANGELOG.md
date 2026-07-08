@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.1]
+
+### Added
+
+- `RequestSpec.templateParamsMode` (`'separate' | 'merge'`, defaults to `'separate'`) controls how `generateSpecsFromRequestSpecTemplate` expands a template with multiple `templateParams` values. `'separate'` is the existing/default behavior — one independent spec (and expected hash) per value, matching N separate proofs. `'merge'` is new: it folds every value into a single spec whose `responseMatches`/`responseRedactions` gain one entry per value, matching one proof that bundles many values into a single claim (e.g. a `customInjection` provider that proves 30+ playlist names in one claim instead of 30 separate ones). See the README's "Provider Authors: Validating Dynamically Injected Claims" section for examples.
+
 ## [5.6.0]
 
 - Enable deferred deep links for android by default.
