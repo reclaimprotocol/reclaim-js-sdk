@@ -56,6 +56,56 @@ describe('generateSpecsFromRequestSpecTemplate', () => {
         expect(result[1].responseRedactions[1].regex).toBe('"department":"(?<Bio>.*)"');
     });
 
+    // Bundled claims (e.g. one Spotify libraryV3 claim proving 30+ playlist
+    // names at once) need N values folded into ONE spec, not N separate specs
+    // (see the 'separate' test above, which is the default and remains
+    // unchanged). Opt in via `templateParamsMode: 'merge'`.
+    it('with templateParamsMode "merge" should fold multiple template values into ONE spec with one match/redaction entry per value', () => {
+        const specWithMatches: RequestSpec = {
+            ...baseSpec,
+            responseMatches: [
+                { value: '"id":${idx}', invert: undefined, isOptional: undefined, type: "contains" }
+            ],
+            responseRedactions: [
+                { jsonPath: "$.items[${idx}].id", regex: '', xPath: '' }
+            ],
+            templateParams: ['idx'],
+            templateParamsMode: 'merge',
+        };
+
+        const result = generateSpecsFromRequestSpecTemplate([specWithMatches], { idx: ['1', '2', '3'] });
+
+        // One spec, with one match/redaction per value baked in.
+        expect(result).toHaveLength(1);
+        expect(result[0].responseMatches).toHaveLength(3);
+        expect(result[0].responseMatches[0].value).toBe('"id":1');
+        expect(result[0].responseMatches[1].value).toBe('"id":2');
+        expect(result[0].responseMatches[2].value).toBe('"id":3');
+        expect(result[0].responseRedactions[0].jsonPath).toBe('$.items[1].id');
+        expect(result[0].responseRedactions[1].jsonPath).toBe('$.items[2].id');
+        expect(result[0].responseRedactions[2].jsonPath).toBe('$.items[3].id');
+    });
+
+    it('templateParamsMode "merge" with a single value behaves the same as "separate" for N=1', () => {
+        const specWithMatches: RequestSpec = {
+            ...baseSpec,
+            responseMatches: [
+                { value: '"id":${idx}', invert: undefined, isOptional: undefined, type: "contains" }
+            ],
+            responseRedactions: [
+                { jsonPath: "$.items[${idx}].id", regex: '', xPath: '' }
+            ],
+            templateParams: ['idx'],
+            templateParamsMode: 'merge',
+        };
+
+        const result = generateSpecsFromRequestSpecTemplate([specWithMatches], { idx: ['1'] });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].responseMatches).toHaveLength(1);
+        expect(result[0].responseMatches[0].value).toBe('"id":1');
+    });
+
     it('should not mutate the original template spec', () => {
         const specWithMatches: RequestSpec = {
             ...baseSpec,
