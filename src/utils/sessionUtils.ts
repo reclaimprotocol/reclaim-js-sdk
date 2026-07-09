@@ -54,10 +54,11 @@ export async function initSession(
  * Updates the status of an existing session
  * @param sessionId - The ID of the session to update
  * @param status - The new status of the session
+ * @param orgId - Optional partner organization id for attribution (omitted from the request when not set)
  * @returns A promise that resolves to the update response
  * @throws UpdateSessionError if the session update fails
  */
-export async function updateSession(sessionId: string, status: SessionStatus) {
+export async function updateSession(sessionId: string, status: SessionStatus, orgId?: string) {
   logger.info(`Updating session status for sessionId: ${sessionId}, new status: ${status}`);
   validateFunctionParams(
     [{ input: sessionId, paramName: 'sessionId', isString: true }],
@@ -68,7 +69,7 @@ export async function updateSession(sessionId: string, status: SessionStatus) {
     const response = await http.client(`${BACKEND_BASE_URL}/api/sdk/update/session/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, status })
+      body: JSON.stringify({ sessionId, status, ...(orgId ? { orgId } : {}) })
     });
 
     const res = await response.json();

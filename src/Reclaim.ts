@@ -631,6 +631,12 @@ export class ReclaimProofRequest {
                     }
                 }, 'fromJsonString');
             }
+
+            if (options?.orgId) {
+                validateFunctionParams([
+                    { input: options.orgId, paramName: 'options.orgId', isString: true }
+                ], 'fromJsonString');
+            }
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
             proofRequestInstance.context = context;
@@ -1273,7 +1279,7 @@ export class ReclaimProofRequest {
         // user is already leaving, and a backend that has moved the session to a
         // final state will reject the update (which is fine — nothing to cancel).
         try {
-            await updateSession(sessionId, SessionStatus.SESSION_CANCELLED);
+            await updateSession(sessionId, SessionStatus.SESSION_CANCELLED, this.options?.orgId);
         } catch (error) {
             logger.info(`cancelSession: backend update failed for ${sessionId}: ${error}`);
         }
@@ -1378,6 +1384,7 @@ export class ReclaimProofRequest {
             metadata: this.options?.metadata,
             preferredLocale: this.options?.preferredLocale,
             acceptTeeAttestation: this.options?.acceptTeeAttestation,
+            orgId: this.options?.orgId,
             teeAttestationVersion: this.context.attestationNonceData?.attestationVersion ?? SDK_TEE_ATTESTATION_VERSION,
         }
 
@@ -1419,7 +1426,7 @@ export class ReclaimProofRequest {
 
         try {
             const templateData = this.getTemplateData()
-            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
+            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED, this.options?.orgId)
 
             if (mode === 'app') {
                 const template = this.encodeTemplateData(templateData);
@@ -1506,7 +1513,7 @@ export class ReclaimProofRequest {
             logger.info(`Triggering Reclaim flow (mode: ${mode})`);
 
             const deviceType = getDeviceType();
-            updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
+            updateSession(this.sessionId, SessionStatus.SESSION_STARTED, this.options?.orgId)
 
             // Iframe embedding — takes priority when target element is provided
             if (launchOptions && 'target' in launchOptions && !launchOptions.target) {

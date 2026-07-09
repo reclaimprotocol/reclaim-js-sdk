@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.0]
+
+### Added
+
+- New `ProofRequestOptions.orgId` option for partner organization attribution (e.g. the SheerID orgId). When set, the SDK includes it in the body of its own session status updates (`SESSION_STARTED`, `SESSION_CANCELLED`) and embeds it top-level in the request template so the verification client forwards it on every status update it posts. Round-trips through `toJsonString`/`fromJsonString`. Optional and omitted entirely when unset; it has no effect on the verification process.
+
 ## [5.6.2]
 
 ### Fix

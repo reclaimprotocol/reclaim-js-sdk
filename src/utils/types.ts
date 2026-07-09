@@ -136,6 +136,17 @@ export type ProofRequestOptions = {
    * @default true
    */
   acceptTeeAttestation?: boolean;
+  /**
+   * Identifier of the partner organization (e.g. the SheerID orgId) this
+   * verification session belongs to.
+   *
+   * When set, it is included on session status updates sent by the SDK and in
+   * the template passed to the verification client, which forwards it on its
+   * own status updates. Used for per-organization attribution/analytics.
+   *
+   * This has no effect on the verification process.
+   */
+  orgId?: string;
 };
 
 export type ReclaimFlowInitOptions = {
@@ -350,6 +361,7 @@ export type TemplateData = {
   preferredLocale?: ProofRequestOptions['preferredLocale'];
   acceptTeeAttestation?: boolean;
   teeAttestationVersion?: TeeAttestationVersion;
+  orgId?: string;
 };
 
 export type TrustedData = {
