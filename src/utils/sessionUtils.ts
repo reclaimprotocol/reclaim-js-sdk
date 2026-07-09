@@ -18,6 +18,8 @@ const logger = loggerModule.logger;
  * @param appId - The ID of the application
  * @param timestamp - The timestamp of the request
  * @param signature - The signature for authentication
+ * @param versionNumber - Optional provider version to pin the session to
+ * @param orgId - Optional partner organization id for attribution at session creation (omitted from the request when not set)
  * @returns A promise that resolves to an InitSessionResponse
  * @throws InitSessionError if the session initialization fails
  */
@@ -26,14 +28,15 @@ export async function initSession(
   appId: string,
   timestamp: string,
   signature: string,
-  versionNumber?: string
+  versionNumber?: string,
+  orgId?: string
 ): Promise<InitSessionResponse> {
   logger.info(`Initializing session for providerId: ${providerId}, appId: ${appId}`);
   try {
     const response = await http.client(`${BACKEND_BASE_URL}/api/sdk/init/session/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providerId, appId, timestamp, signature, versionNumber })
+      body: JSON.stringify({ providerId, appId, timestamp, signature, versionNumber, ...(orgId ? { orgId } : {}) })
     });
 
     const res = await response.json();

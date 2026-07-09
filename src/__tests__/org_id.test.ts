@@ -1,4 +1,4 @@
-import { updateSession } from '../utils/sessionUtils';
+import { initSession, updateSession } from '../utils/sessionUtils';
 import { http } from '../utils/fetch';
 import { SessionStatus } from '../utils/types';
 
@@ -44,6 +44,31 @@ describe('updateSession orgId', () => {
 
   it('omits the orgId key when empty string', async () => {
     await updateSession('session-1', SessionStatus.SESSION_STARTED, '');
+
+    const body = JSON.parse(mockClient.mock.calls[0][1].body);
+    expect('orgId' in body).toBe(false);
+  });
+});
+
+describe('initSession orgId', () => {
+  beforeEach(() => {
+    mockClient.mockReset();
+    mockClient.mockResolvedValue({
+      ok: true,
+      json: async () => ({ sessionId: 'session-1', resolvedProviderVersion: '1.0.0' }),
+    });
+  });
+
+  it('includes orgId in the init body when provided', async () => {
+    await initSession('provider-1', 'app-1', '1700000000000', '0xsig', undefined, 'org-123');
+
+    const body = JSON.parse(mockClient.mock.calls[0][1].body);
+    expect(body.orgId).toBe('org-123');
+    expect(body.providerId).toBe('provider-1');
+  });
+
+  it('omits the orgId key from the init body when not provided', async () => {
+    await initSession('provider-1', 'app-1', '1700000000000', '0xsig');
 
     const body = JSON.parse(mockClient.mock.calls[0][1].body);
     expect('orgId' in body).toBe(false);
