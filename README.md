@@ -701,6 +701,48 @@ const { isVerified } = await verifyProof(proof, {
 });
 ```
 
+### 5. Provider Authors: Validating Dynamically Injected Claims
+
+Some providers use a `customInjection` script that calls `window.Reclaim.requestClaim(...)` itself at runtime (a "HAWKEYE" provider), instead of relying only on a fixed, pre-declared request. Because the exact shape of those claims isn't known ahead of time, the provider config carries a separate `allowedInjectedRequestData` list of *templates* — each one describing what's allowed, with `${paramName}` placeholders that get filled in from the proof's own `extractedParameters` at verification time (via `templateParams`).
+
+There are two ways a template can expand, controlled by `templateParamsMode`:
+
+**`'separate'` (default)** — one value produces one independent claim. Use this when the same small claim shape is expected to show up as several separate proofs, e.g. proving a name for each of several employee records one claim at a time:
+
+```javascript
+{
+  url: "https://example.com/api/employee",
+  method: "GET",
+  urlType: "API",
+  bodySniff: { enabled: false, template: "" },
+  responseMatches: [{ type: "contains", value: "\"name\":\"{{${name}}}\"" }],
+  responseRedactions: [{ jsonPath: "$.name" }],
+  templateParams: ["name"],
+  // templateParamsMode: "separate" is the default, no need to set it explicitly
+}
+```
+If the submitted proofs' `extractedParameters` contain `name: ["alex", "bob"]`, this expands into **two** separate expected hashes — one claim proving "alex", another proving "bob".
+
+**`'merge'`** — all values are folded into a single claim. Use this when one claim bundles many values together in one shot, e.g. a single claim that proves 30 playlist names at once:
+
+```javascript
+{
+  url: "https://api-partner.spotify.com/pathfinder/v2/query",
+  method: "POST",
+  urlType: "CONSTANT",
+  bodySniff: { enabled: true, template: "<the libraryV3 request body>" },
+  responseMatches: [{ type: "contains", value: "\"name\":\"{{name_${idx}}}\"" }],
+  responseRedactions: [{ jsonPath: "$.data.me.libraryV3.items[${idx}].item.data.name" }],
+  templateParams: ["idx"],
+  templateParamsMode: "merge",
+}
+```
+If `extractedParameters.idx` is `["1", "2", "3"]`, this expands into **one** claim spec whose `responseMatches`/`responseRedactions` each gain three entries — matching a single proof that bundled all three names into one claim, instead of expecting three separate proofs.
+
+For `'merge'` to work, the claim itself needs to carry the index list as a witness parameter your extraction script controls — e.g. `witnessParameters.idx = JSON.stringify([1, 2, 3])` — since `extractedParameters` values are only treated as arrays when they're already an array or a string that parses into one.
+
+If a provider's injected claims genuinely can't be expressed by either mode (e.g. an unbounded, unpredictable mix of different extraction shapes in one claim), fall back to `dangerouslyDisableContentValidation` for that provider and, if you need some structural assurance beyond the signature check, inspect `JSON.parse(proof.claimData.parameters).url`/`.method` yourself after verification.
+
 ### Replay Protection
 
 Proofs are submitted by the user, so the server must not trust any field on the proof in isolation. `verifyProof` (and `verifyTeeAttestation`) cryptographically bind a proof to a specific session, but **the SDK is stateless** — it cannot tell whether the same valid proof has already been verified. Preventing replay is the caller's responsibility.
