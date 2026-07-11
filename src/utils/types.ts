@@ -140,9 +140,10 @@ export type ProofRequestOptions = {
    * Identifier of the partner organization (e.g. the SheerID orgId) this
    * verification session belongs to.
    *
-   * When set, it is included on session status updates sent by the SDK and in
-   * the template passed to the verification client, which forwards it on its
-   * own status updates. Used for per-organization attribution/analytics.
+   * When set, it is included on session initialization and on session status
+   * updates sent by the SDK, and in the template passed to the verification
+   * client, which forwards it on its own status updates. Used for
+   * per-organization attribution/analytics.
    *
    * This has no effect on the verification process.
    */

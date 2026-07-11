@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.0]
+
+### Added
+
+- `ProofRequestOptions.orgId` is now also sent on session initialization (`POST /api/sdk/init/session/`), so the backend can attribute the session — and its `SESSION_INIT` analytics record — to the partner organization at creation time instead of waiting for the first status update. Omitted entirely when unset.
+
 ## [5.7.0]
 
 ### Added

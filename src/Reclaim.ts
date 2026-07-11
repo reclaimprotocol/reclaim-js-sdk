@@ -363,7 +363,7 @@ export class ReclaimProofRequest {
             const signature = await proofRequestInstance.generateSignature(appSecret)
             proofRequestInstance.setSignature(signature)
 
-            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion);
+            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion, options?.orgId);
             proofRequestInstance.sessionId = data.sessionId
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
             proofRequestInstance.context.reclaimSessionId = data.sessionId
@@ -470,7 +470,8 @@ export class ReclaimProofRequest {
                 applicationId,
                 sessionAuth.timestamp,
                 sessionAuth.signature,
-                options?.providerVersion
+                options?.providerVersion,
+                options?.orgId
             );
             proofRequestInstance.sessionId = data.sessionId
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
