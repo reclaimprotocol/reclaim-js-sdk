@@ -70,6 +70,28 @@ describe('generateSpecsFromRequestSpecTemplate', () => {
         expect(result[1].responseRedactions[1].regex).toBe('"department":"(?<Bio>.*)"');
     });
 
+    it('should not throw when a redaction has empty, null, or undefined jsonPath/xPath/regex', () => {
+        const specWithMatches: RequestSpec = {
+            ...baseSpec,
+            templateParams: ['param1'],
+            responseRedactions: [
+                // Provider configs from the wire may omit or null these fields
+                // despite the type declaring them as required strings.
+                { jsonPath: '$.name["${param1}"]', regex: '', xPath: undefined as unknown as string },
+                { jsonPath: null as unknown as string, regex: '"name":"(?<${param1}>.*)"', xPath: '' },
+            ]
+        };
+
+        const result = generateSpecsFromRequestSpecTemplate([specWithMatches], { 'param1': ['alex'] });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].responseRedactions[0].jsonPath).toBe('$.name["alex"]');
+        expect(result[0].responseRedactions[0].regex).toBe('');
+        expect(result[0].responseRedactions[0].xPath).toBeUndefined();
+        expect(result[0].responseRedactions[1].jsonPath).toBeNull();
+        expect(result[0].responseRedactions[1].regex).toBe('"name":"(?<alex>.*)"');
+    });
+
     // Bundled claims (e.g. one Spotify libraryV3 claim proving 30+ playlist
     // names at once) need N values folded into ONE spec, not N separate specs
     // (see the 'separate' test above, which is the default and remains

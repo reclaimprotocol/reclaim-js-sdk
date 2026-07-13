@@ -1,9 +1,19 @@
 {
   "name": "@reclaimprotocol/js-sdk",
-  "version": "5.8.1",
+  "version": "5.8.2",
   "description": "Designed to request proofs from the Reclaim protocol and manage the flow of claims and witness interactions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "default": "./dist/internal.js"
+    }
+  },
   "keywords": [
     "reclaim",
     "protocol",
@@ -24,7 +34,8 @@
   ],
   "tsup": {
     "entry": [
-      "src/index.ts"
+      "src/index.ts",
+      "src/internal.ts"
     ],
     "splitting": false,
     "sourcemap": true,
