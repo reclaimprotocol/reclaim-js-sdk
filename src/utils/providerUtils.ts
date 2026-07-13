@@ -96,9 +96,9 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
     const substituteRedaction = (redaction: ResponseRedactionSpec, currentTemplateParams: Record<string, string>): ResponseRedactionSpec => {
         const copy = { ...redaction };
         for (const [key, value] of Object.entries(currentTemplateParams)) {
-            copy.jsonPath = copy.jsonPath.split(getRequestSpecVariableTemplate(key)).join(value);
-            copy.xPath = copy.xPath.split(getRequestSpecVariableTemplate(key)).join(value);
-            copy.regex = copy.regex.split(getRequestSpecVariableTemplate(key)).join(value);
+            copy.jsonPath = copy.jsonPath ? copy.jsonPath.split(getRequestSpecVariableTemplate(key)).join(value) : copy.jsonPath;
+            copy.xPath = copy.xPath ? copy.xPath.split(getRequestSpecVariableTemplate(key)).join(value) : copy.xPath;
+            copy.regex = copy.regex ? copy.regex.split(getRequestSpecVariableTemplate(key)).join(value): copy.regex;
         }
         return copy;
     }
