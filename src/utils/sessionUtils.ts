@@ -149,12 +149,7 @@ export async function fetchProviderConfigs(providerId: string, exactProviderVers
       headers: { 'Content-Type': 'application/json' }
     });
 
-    
     const res = await response.json();
-    console.info({
-      url: response.url,
-      res: res,
-    });
 
     if (!response.ok) {
       const errorMessage = `Error fetching provider config for providerId: ${providerId}, exactProviderVersionString: ${exactProviderVersionString}. Status Code: ${response.status}`;
