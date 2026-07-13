@@ -26,6 +26,20 @@ describe('generateSpecsFromRequestSpecTemplate', () => {
         expect(() => generateSpecsFromRequestSpecTemplate([baseSpec], { 'param1': ['1', '2'], 'param2': ['1'] })).toThrow(InvalidRequestSpecError);
     });
 
+    it('should silently skip (not throw) an optional template whose params are entirely absent', () => {
+        const optionalSpec: RequestSpec = { ...baseSpec, required: false, templateParams: ['optionalParam1', 'optionalParam2'] };
+        expect(generateSpecsFromRequestSpecTemplate([optionalSpec], {})).toEqual([]);
+        // Only baseSpec's params are present — optionalSpec's are absent and skipped,
+        // baseSpec still generates normally.
+        expect(generateSpecsFromRequestSpecTemplate([optionalSpec, baseSpec], { 'param1': ['1'], 'param2': ['2'] }))
+            .toEqual([{ ...baseSpec }]);
+    });
+
+    it('should still throw for an optional template with a partial (inconsistent) param match', () => {
+        const optionalSpec: RequestSpec = { ...baseSpec, required: false };
+        expect(() => generateSpecsFromRequestSpecTemplate([optionalSpec], { 'param1': ['1'] })).toThrow(InvalidRequestSpecError);
+    });
+
     it('should generate multiple request specs when template parameters have multiple values', () => {
         const specWithMatches: RequestSpec = {
             ...baseSpec,

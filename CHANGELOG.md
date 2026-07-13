@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.1]
+
+### Fixed
+
+- `generateSpecsFromRequestSpecTemplate` no longer throws `InvalidRequestSpecError` for an optional (`required: false`) `templateParams` template whose params are entirely absent from the submitted proofs (e.g. a user with zero followed artists never produces that group's witness params at all) — it's now silently skipped instead of aborting the whole `verifyProof` call. A template with only some of its declared params present (a partial, inconsistent match) still throws regardless of `required`, and a required (default) template missing any params still throws as before.
+
 ## [5.8.0]
 
 ### Added

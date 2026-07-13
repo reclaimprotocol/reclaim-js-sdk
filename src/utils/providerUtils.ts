@@ -58,14 +58,23 @@ export async function fetchProviderHashRequirementsBy(providerId: string, exactP
  *   entries), expected to match one proof that bundles all N values into a single claim.
  *
  * The function ensures that:
- * 1. Parameters strictly specified in `template.templateParams` are found.
+ * 1. Parameters strictly specified in `template.templateParams` are found — unless NONE of them
+ *    are present at all AND the template is optional (`template.required === false`), in which
+ *    case that template is silently skipped (contributes no spec) rather than throwing. This is
+ *    the expected shape for a template describing data a user may legitimately not have at all
+ *    (e.g. zero followed artists never produces that group's witness params in any proof).
+ *    A required (default) template with missing params still throws, and a template with only
+ *    SOME of its declared params present (a partial, inconsistent match) still throws regardless
+ *    of `required` — that indicates malformed data, not legitimate absence.
  * 2. All specified template parameters arrays have the exact same length (pairwise mapping).
  * 3. String replacements are fully applied (all occurrences) to `responseMatches` (value) and `responseRedactions` (jsonPath, xPath, regex).
  *
  * @param requestSpecTemplates - The base template `RequestSpec` containing parameter placeholders.
  * @param templateParameters - A record mapping parameter names to arrays of strings representing the extracted values.
- * @returns An array of fully constructed `RequestSpec` objects with templates replaced.
- * @throws {InvalidRequestSpecError} If required parameters are missing or parameter value arrays have mismatched lengths.
+ * @returns An array of fully constructed `RequestSpec` objects with templates replaced. May contain
+ *   fewer entries than `requestSpecTemplates` when optional templates were skipped per the above.
+ * @throws {InvalidRequestSpecError} If a required template's parameters are missing, or any template's
+ *   parameter value arrays have mismatched lengths.
  */
 export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: RequestSpec[], templateParameters: Record<string, string[]>): RequestSpec[] {
     if (!requestSpecTemplates) return [];
@@ -104,6 +113,17 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
         const templateParamsPairMatch = Object.entries(templateParameters).filter(([key, value]) => templateVariables.includes(key) && value.length)
         const hasAllTemplateVariableMatch = templateParamsPairMatch.length === templateVariables.length;
         if (!hasAllTemplateVariableMatch) {
+            // An optional template (required: false) with NONE of its params present
+            // at all just means this run has nothing to prove for it (e.g. a user
+            // with zero followed artists never submits a proof carrying that group's
+            // index list) — skip it rather than aborting the whole batch. A partial
+            // match (some but not all params present) is a different, inconsistent
+            // situation regardless of `required` — that's malformed data, not
+            // legitimate absence, so it still throws. A required (default) template
+            // missing any params, partial or total, also still throws as before.
+            if (template.required === false && templateParamsPairMatch.length === 0) {
+                continue;
+            }
             throw new InvalidRequestSpecError(`Not all template variables are present for template`);
         }
 
