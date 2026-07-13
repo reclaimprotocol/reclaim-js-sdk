@@ -367,7 +367,7 @@ export class ReclaimProofRequest {
             const signature = await proofRequestInstance.generateSignature(appSecret)
             proofRequestInstance.setSignature(signature)
 
-            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion);
+            const data: InitSessionResponse = await initSession(providerId, applicationId, proofRequestInstance.timeStamp, signature, options?.providerVersion, options?.orgId);
             proofRequestInstance.sessionId = data.sessionId
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
             proofRequestInstance.context.reclaimSessionId = data.sessionId
@@ -474,7 +474,8 @@ export class ReclaimProofRequest {
                 applicationId,
                 sessionAuth.timestamp,
                 sessionAuth.signature,
-                options?.providerVersion
+                options?.providerVersion,
+                options?.orgId
             );
             proofRequestInstance.sessionId = data.sessionId
             proofRequestInstance.resolvedProviderVersion = data.resolvedProviderVersion
@@ -634,6 +635,12 @@ export class ReclaimProofRequest {
                         }
                     }
                 }, 'fromJsonString');
+            }
+
+            if (options?.orgId) {
+                validateFunctionParams([
+                    { input: options.orgId, paramName: 'options.orgId', isString: true }
+                ], 'fromJsonString');
             }
             const proofRequestInstance = new ReclaimProofRequest(applicationId, providerId, options);
             proofRequestInstance.sessionId = sessionId;
@@ -1145,8 +1152,8 @@ export class ReclaimProofRequest {
         return template;
     }
 
-    private buildSharePageUrl(template: string): string {
-        return `${this.appSharePageUrl}/?template=${template}`;
+    private buildSharePageUrl(template: string, url?: string): string {
+        return `${url ?? this.appSharePageUrl}/?template=${template}`;
     }
 
     private async openPortalTab(templateData: TemplateData, preOpenedTab?: Window | null): Promise<void> {
@@ -1272,12 +1279,13 @@ export class ReclaimProofRequest {
         this.closeModal();
         this.closePortalTab();
         this.closeEmbeddedFlow();
+        this.sessionId = '';
 
         // Best-effort backend update. Swallow errors: by the time we cancel, the
         // user is already leaving, and a backend that has moved the session to a
         // final state will reject the update (which is fine — nothing to cancel).
         try {
-            await updateSession(sessionId, SessionStatus.SESSION_CANCELLED);
+            await updateSession(sessionId, SessionStatus.SESSION_CANCELLED, this.options?.orgId);
         } catch (error) {
             logger.info(`cancelSession: backend update failed for ${sessionId}: ${error}`);
         }
@@ -1382,6 +1390,7 @@ export class ReclaimProofRequest {
             metadata: this.options?.metadata,
             preferredLocale: this.options?.preferredLocale,
             acceptTeeAttestation: this.options?.acceptTeeAttestation,
+            orgId: this.options?.orgId,
             teeAttestationVersion: this.context.attestationNonceData?.attestationVersion ?? SDK_TEE_ATTESTATION_VERSION,
         }
 
@@ -1423,7 +1432,7 @@ export class ReclaimProofRequest {
 
         try {
             const templateData = this.getTemplateData()
-            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
+            await updateSession(this.sessionId, SessionStatus.SESSION_STARTED, this.options?.orgId)
 
             if (mode === 'app') {
                 const template = this.encodeTemplateData(templateData);
@@ -1510,7 +1519,7 @@ export class ReclaimProofRequest {
             logger.info(`Triggering Reclaim flow (mode: ${mode})`);
 
             const deviceType = getDeviceType();
-            updateSession(this.sessionId, SessionStatus.SESSION_STARTED)
+            updateSession(this.sessionId, SessionStatus.SESSION_STARTED, this.options?.orgId)
 
             // Iframe embedding — takes priority when target element is provided
             if (launchOptions && 'target' in launchOptions && !launchOptions.target) {
@@ -1550,12 +1559,13 @@ export class ReclaimProofRequest {
             } else if (deviceType === DeviceType.MOBILE) {
                 if (mode === 'app') {
                     // App Clip only if useAppClip is true and iOS
-                    if (this.options?.useAppClip && getMobileDeviceType() === DeviceType.IOS) {
-                        logger.info('Redirecting to iOS app clip');
-                        this.redirectToAppClip();
+                    if ((this.options?.useAppClip || options.canUseDeferredDeepLinksFlow)
+                        && getMobileDeviceType() === DeviceType.IOS) {
+                        logger.info('Redirecting for iOS');
+                        await this.redirectToiOSApp(options);
                     } else {
                         // Share page for Android and iOS without useAppClip
-                        logger.info('Redirecting to share page');
+                        logger.info('Redirecting for android');
                         await this.redirectToInstantApp(options);
                     }
                 } else {
@@ -1656,7 +1666,7 @@ export class ReclaimProofRequest {
             let instantAppUrl = this.buildSharePageUrl(template);
             logger.info('Redirecting to Android instant app: ' + instantAppUrl);
 
-            const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
+            const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? true;
 
             if (isDeferredDeeplinksFlowEnabled) {
                 instantAppUrl = instantAppUrl.replace("/verifier", "/link");
@@ -1705,16 +1715,17 @@ export class ReclaimProofRequest {
                     // Test reclaimverifier deep link in iframe
                     iframe.src = deepLink.replace('intent:', 'reclaimverifier:');
 
+                    // App not installed - redirect to the store page to install the app
+                    window.navigator.clipboard.writeText(requestUrl).catch(() => {
+                        console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
+                    });
+
                     // After timeout, assume app not installed
                     timeoutId = setTimeout(() => {
                         document.removeEventListener("visibilitychange", onVisibilityChange);
                         cleanup();
 
                         if (!appInstalled) {
-                            // App not installed - redirect to the store page to install the app
-                            window.navigator.clipboard.writeText(requestUrl).catch(() => {
-                                console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
-                            });
                             window.location.href = deepLink;
                         }
                     }, 1500);
@@ -1733,10 +1744,16 @@ export class ReclaimProofRequest {
         }
     }
 
+    private buildAppClipUrl(): string {
+        const template = this.encodeTemplateData(this.templateData);
+        const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+        return appClipUrl;
+    }
+
     private redirectToAppClip(): void {
         try {
             const template = this.encodeTemplateData(this.templateData);
-            const appClipUrl = this.customAppClipUrl ? `${this.customAppClipUrl}&template=${template}` : `https://appclip.apple.com/id?p=org.reclaimprotocol.app.clip&template=${template}`;
+            const appClipUrl = this.buildAppClipUrl();
             logger.info('Redirecting to iOS app clip: ' + appClipUrl);
             const verifierUrl = `${this.appSharePageUrl}/?template=${template}`;
 
@@ -1749,6 +1766,82 @@ export class ReclaimProofRequest {
             }, 5 * 1000);
         } catch (error) {
             logger.info('Error redirecting to app clip:', error);
+            throw error;
+        }
+    }
+
+    private async redirectToiOSApp(options: ReclaimFlowLaunchOptions): Promise<void> {
+        try {
+            logger.info('Preparing to launch for iOS app: ', options);
+
+            const isDeferredDeeplinksFlowEnabled = options.canUseDeferredDeepLinksFlow ?? false;
+
+            if (!isDeferredDeeplinksFlowEnabled) {
+                return this.redirectToAppClip();
+            }
+
+            const template = this.encodeTemplateData(this.templateData);
+            const defaultiOSDeepLinkUrlBase = 'reclaimverifier://org.reclaimprotocol.app';
+            // Construct iOS deep link
+            const deepLink = this.buildSharePageUrl(
+                template,
+                options.iosDeepLinkBaseUrl || defaultiOSDeepLinkUrlBase
+            );
+            const appClipUrl = this.buildAppClipUrl();
+            const iosAppInstallUrl = options.iosAppDownloadUrl || 'itms-apps://apps.apple.com/in/app/reclaim-verifier/id6503247508';
+            logger.info('Redirecting to iOS app: ' + deepLink, 'or store: ', iosAppInstallUrl);
+
+            try {
+                let appInstalled = false;
+                let timeoutId: string | number | NodeJS.Timeout | undefined;
+
+                // Function to clean up
+                const cleanup = () => {
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                    }
+                };
+
+                // If page becomes hidden, app opened successfully
+                const onVisibilityChange = () => {
+                    logger.info(`App maybe installed, document hidden ${document.hidden}`)
+                    if (document.hidden) {
+                        appInstalled = true;
+                        cleanup();
+                    }
+                };
+
+                // Listen for visibility change
+                document.addEventListener("visibilitychange", onVisibilityChange, { once: true });
+
+                // Test reclaimverifier deep link in iframe
+                // iframe.src = deepLink;
+                window.location.href = deepLink;
+                // window.location.href = appClipUrl;
+
+                window.navigator.clipboard.writeText(deepLink).catch(() => {
+                    console.error("We can't access the clipboard. Please copy this link and open Reclaim Verifier app.");
+                });
+
+                // After timeout, assume app not installed
+                timeoutId = setTimeout(() => {
+                    logger.info(`App may not be installed, document hidden ${document.hidden}, appInstalled: ${appInstalled}`)
+
+                    document.removeEventListener("visibilitychange", onVisibilityChange);
+                    cleanup();
+
+                    if (!appInstalled) {
+                        // App not installed - redirect to the store page to install the app
+                        window.location.href = iosAppInstallUrl;
+                    }
+                }, 3000);
+            } catch (e) {
+                console.error('something went wrong during launch, opening store', e);
+                // Final fallback → verifier
+                window.location.href = iosAppInstallUrl;
+            }
+        } catch (error) {
+            logger.info('Error redirecting to instant app:', error);
             throw error;
         }
     }

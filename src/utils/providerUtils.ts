@@ -45,25 +45,63 @@ export async function fetchProviderHashRequirementsBy(providerId: string, exactP
 
 /**
  * Generates an array of `RequestSpec` objects by replacing template parameters with their corresponding values.
- * 
- * If the input template includes `templateParams` (e.g., `['param1', 'param2']`), this function will 
- * cartesian-map (or pairwise-map) the provided `templateParameters` record (e.g., `{ param1: ['v1', 'v2'], param2: ['a1', 'a2'] }`) 
- * to generate multiple unique `RequestSpec` configurations.
- * 
+ *
+ * If the input template includes `templateParams` (e.g., `['param1', 'param2']`), this function will
+ * cartesian-map (or pairwise-map) the provided `templateParameters` record (e.g., `{ param1: ['v1', 'v2'], param2: ['a1', 'a2'] }`)
+ * to generate `RequestSpec` configurations. How those configurations are shaped is controlled by
+ * `template.templateParamsMode` (defaults to `'separate'`):
+ *
+ * - `'separate'`: each value pair produces its own independent `RequestSpec` — N values in, N
+ *   specs out, each expected to match its own separate proof.
+ * - `'merge'`: all value pairs are folded into a single `RequestSpec`, whose `responseMatches`/
+ *   `responseRedactions` arrays gain one entry per value — N values in, 1 spec out (with N
+ *   entries), expected to match one proof that bundles all N values into a single claim.
+ *
  * The function ensures that:
- * 1. Parameters strictly specified in `template.templateParams` are found.
+ * 1. Parameters strictly specified in `template.templateParams` are found — unless NONE of them
+ *    are present at all AND the template is optional (`template.required === false`), in which
+ *    case that template is silently skipped (contributes no spec) rather than throwing. This is
+ *    the expected shape for a template describing data a user may legitimately not have at all
+ *    (e.g. zero followed artists never produces that group's witness params in any proof).
+ *    A required (default) template with missing params still throws, and a template with only
+ *    SOME of its declared params present (a partial, inconsistent match) still throws regardless
+ *    of `required` — that indicates malformed data, not legitimate absence.
  * 2. All specified template parameters arrays have the exact same length (pairwise mapping).
  * 3. String replacements are fully applied (all occurrences) to `responseMatches` (value) and `responseRedactions` (jsonPath, xPath, regex).
- * 
+ *
  * @param requestSpecTemplates - The base template `RequestSpec` containing parameter placeholders.
  * @param templateParameters - A record mapping parameter names to arrays of strings representing the extracted values.
- * @returns An array of fully constructed `RequestSpec` objects with templates replaced.
- * @throws {InvalidRequestSpecError} If required parameters are missing or parameter value arrays have mismatched lengths.
+ * @returns An array of fully constructed `RequestSpec` objects with templates replaced. May contain
+ *   fewer entries than `requestSpecTemplates` when optional templates were skipped per the above.
+ * @throws {InvalidRequestSpecError} If a required template's parameters are missing, or any template's
+ *   parameter value arrays have mismatched lengths.
  */
 export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: RequestSpec[], templateParameters: Record<string, string[]>): RequestSpec[] {
     if (!requestSpecTemplates) return [];
 
     const generatedRequestTemplate: RequestSpec[] = [];
+
+    const getRequestSpecVariableTemplate = (key: string) => {
+        return `\${${key}}`;
+    }
+
+    const substitute = <T extends { value: string }>(match: T, currentTemplateParams: Record<string, string>): T => {
+        const copy = { ...match };
+        for (const [key, value] of Object.entries(currentTemplateParams)) {
+            copy.value = copy.value.split(getRequestSpecVariableTemplate(key)).join(value);
+        }
+        return copy;
+    }
+
+    const substituteRedaction = (redaction: ResponseRedactionSpec, currentTemplateParams: Record<string, string>): ResponseRedactionSpec => {
+        const copy = { ...redaction };
+        for (const [key, value] of Object.entries(currentTemplateParams)) {
+            copy.jsonPath = copy.jsonPath ? copy.jsonPath.split(getRequestSpecVariableTemplate(key)).join(value) : copy.jsonPath;
+            copy.xPath = copy.xPath ? copy.xPath.split(getRequestSpecVariableTemplate(key)).join(value) : copy.xPath;
+            copy.regex = copy.regex ? copy.regex.split(getRequestSpecVariableTemplate(key)).join(value): copy.regex;
+        }
+        return copy;
+    }
 
     for (const template of requestSpecTemplates) {
         const templateVariables = template.templateParams ?? [];
@@ -75,6 +113,17 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
         const templateParamsPairMatch = Object.entries(templateParameters).filter(([key, value]) => templateVariables.includes(key) && value.length)
         const hasAllTemplateVariableMatch = templateParamsPairMatch.length === templateVariables.length;
         if (!hasAllTemplateVariableMatch) {
+            // An optional template (required: false) with NONE of its params present
+            // at all just means this run has nothing to prove for it (e.g. a user
+            // with zero followed artists never submits a proof carrying that group's
+            // index list) — skip it rather than aborting the whole batch. A partial
+            // match (some but not all params present) is a different, inconsistent
+            // situation regardless of `required` — that's malformed data, not
+            // legitimate absence, so it still throws. A required (default) template
+            // missing any params, partial or total, also still throws as before.
+            if (template.required === false && templateParamsPairMatch.length === 0) {
+                continue;
+            }
             throw new InvalidRequestSpecError(`Not all template variables are present for template`);
         }
 
@@ -85,8 +134,30 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
             throw new InvalidRequestSpecError(`Not all template variables have same length for template`);
         }
 
-        const getRequestSpecVariableTemplate = (key: string) => {
-            return `\${${key}}`;
+        if (template.templateParamsMode === 'merge') {
+            const mergedMatches: ResponseMatchSpec[] = [];
+            const mergedRedactions: ResponseRedactionSpec[] = [];
+
+            for (let i = 0; i < templateParamsPairMatchLength; i++) {
+                const currentTemplateParams: Record<string, string> = {};
+                for (const [key, values] of templateParamsPairMatch) {
+                    currentTemplateParams[key] = values[i];
+                }
+
+                for (const match of template.responseMatches ?? []) {
+                    mergedMatches.push(substitute(match, currentTemplateParams));
+                }
+                for (const redaction of template.responseRedactions ?? []) {
+                    mergedRedactions.push(substituteRedaction(redaction, currentTemplateParams));
+                }
+            }
+
+            generatedRequestTemplate.push({
+                ...template,
+                responseMatches: mergedMatches,
+                responseRedactions: mergedRedactions,
+            });
+            continue;
         }
 
         for (let i = 0; i < templateParamsPairMatchLength; i++) {
@@ -97,22 +168,8 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
 
             const spec: RequestSpec = {
                 ...template,
-                responseMatches: template.responseMatches ? template.responseMatches.map(m => ({ ...m })) : [],
-                responseRedactions: template.responseRedactions ? template.responseRedactions.map(r => ({ ...r })) : [],
-            }
-
-            for (const match of spec.responseMatches) {
-                for (const [key, value] of Object.entries(currentTemplateParams)) {
-                    match.value = match.value.split(getRequestSpecVariableTemplate(key)).join(value);
-                }
-            }
-
-            for (const redaction of spec.responseRedactions) {
-                for (const [key, value] of Object.entries(currentTemplateParams)) {
-                    redaction.jsonPath = redaction.jsonPath.split(getRequestSpecVariableTemplate(key)).join(value);
-                    redaction.xPath = redaction.xPath.split(getRequestSpecVariableTemplate(key)).join(value);
-                    redaction.regex = redaction.regex.split(getRequestSpecVariableTemplate(key)).join(value);
-                }
+                responseMatches: (template.responseMatches ?? []).map(m => substitute(m, currentTemplateParams)),
+                responseRedactions: (template.responseRedactions ?? []).map(r => substituteRedaction(r, currentTemplateParams)),
             }
 
             generatedRequestTemplate.push(spec);
@@ -123,7 +180,17 @@ export function generateSpecsFromRequestSpecTemplate(requestSpecTemplates: Reque
 }
 
 export function takeTemplateParametersFromProofs(proofs?: Proof[]): Record<string, string[]> {
-    return takePairsWhereValueIsArray(proofs?.map(it => JSON.parse(it.claimData.context).extractedParameters as Record<string, string>).reduce((acc, it) => ({ ...acc, ...it }), {}));
+    return takePairsWhereValueIsArray(proofs?.map(it => {
+        let parameters: Record<string, string> = {};
+        let contextParameters: Record<string, string> = {};
+        try {
+            parameters = JSON.parse(it.claimData.parameters).paramValues as Record<string, string>;
+        } catch (_) { }
+        try {
+            contextParameters = JSON.parse(it.claimData.context).extractedParameters as Record<string, string>;
+        } catch (_) { }
+        return { ...parameters, ...contextParameters };
+    }).reduce((acc, it) => ({ ...acc, ...it }), {}));
 }
 
 export function takePairsWhereValueIsArray(o: Record<string, string> | undefined): Record<string, string[]> {
@@ -283,6 +350,21 @@ export interface RequestSpec {
      * during dynamic request spec construction.
      */
     templateParams?: string[]
+    /**
+     * Controls how a template with multiple values per `templateParams` entry is expanded by
+     * `generateSpecsFromRequestSpecTemplate`.
+     *
+     * - `'separate'` (default): each value produces its own independent `RequestSpec` (and
+     *   therefore its own expected hash), matching N separate proofs. Use this when the same
+     *   small claim shape is expected to appear as N separate proofs (e.g. one proof per employee
+     *   record).
+     * - `'merge'`: all values are folded into a single `RequestSpec`, with one `responseMatches`/
+     *   `responseRedactions` entry generated per value, matching one proof/hash. Use this when a
+     *   single claim bundles many values together (e.g. one claim proving 30 playlist names at
+     *   once) — the shape that `'separate'` cannot express, since it can only ever produce many
+     *   small specs, never one combined spec.
+     */
+    templateParamsMode?: 'separate' | 'merge'
 }
 
 /**

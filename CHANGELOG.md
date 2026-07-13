@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.1]
+
+### Fixed
+
+- `generateSpecsFromRequestSpecTemplate` no longer throws `InvalidRequestSpecError` for an optional (`required: false`) `templateParams` template whose params are entirely absent from the submitted proofs (e.g. a user with zero followed artists never produces that group's witness params at all) — it's now silently skipped instead of aborting the whole `verifyProof` call. A template with only some of its declared params present (a partial, inconsistent match) still throws regardless of `required`, and a required (default) template missing any params still throws as before.
+
+## [5.8.0]
+
+### Added
+
+- `ProofRequestOptions.orgId` is now also sent on session initialization (`POST /api/sdk/init/session/`), so the backend can attribute the session — and its `SESSION_INIT` analytics record — to the partner organization at creation time instead of waiting for the first status update. Omitted entirely when unset.
+
+## [5.7.0]
+
+### Added
+
+- New `ProofRequestOptions.orgId` option for partner organization attribution (e.g. the SheerID orgId). When set, the SDK includes it in the body of its own session status updates (`SESSION_STARTED`, `SESSION_CANCELLED`) and embeds it top-level in the request template so the verification client forwards it on every status update it posts. Round-trips through `toJsonString`/`fromJsonString`. Optional and omitted entirely when unset; it has no effect on the verification process.
+
+## [5.6.2]
+
+### Fix
+
+- Inclusion of parameters from `JSON.parse($.claimData.parameters).paramValues` along with `JSON.parse($.claimData.context).extractedParameters`.
+
+## [5.6.1]
+
+### Added
+
+- `RequestSpec.templateParamsMode` (`'separate' | 'merge'`, defaults to `'separate'`) controls how `generateSpecsFromRequestSpecTemplate` expands a template with multiple `templateParams` values. `'separate'` is the existing/default behavior — one independent spec (and expected hash) per value, matching N separate proofs. `'merge'` is new: it folds every value into a single spec whose `responseMatches`/`responseRedactions` gain one entry per value, matching one proof that bundles many values into a single claim (e.g. a `customInjection` provider that proves 30+ playlist names in one claim instead of 30 separate ones). See the README's "Provider Authors: Validating Dynamically Injected Claims" section for examples.
+
+## [5.6.0]
+
+- Enable deferred deep links for android by default.
+- Add opt-in for deferred deep links for iOS. Defaults to app clip.
+
 ## [5.5.0]
 
 ### Added
