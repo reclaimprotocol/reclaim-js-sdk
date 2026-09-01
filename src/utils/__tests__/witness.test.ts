@@ -171,6 +171,58 @@ describe('Witness', () => {
             expect(result).toHaveLength(2); 
         });
 
+        it('should preserve large sets of required rules without enumerating every subset', () => {
+            const responseMatches = Array.from({ length: 32 }, (_, index) => ({
+                type: 'contains' as const,
+                value: `required-${index}`,
+                invert: false,
+                isOptional: false,
+            }));
+            const responseRedactions = Array.from({ length: 32 }, (_, index) => ({
+                jsonPath: `$.required[${index}]`,
+                regex: `required-${index}`,
+                xPath: '',
+            }));
+
+            const result = getProviderParamsAsCanonicalizedString({
+                url: 'https://example.com',
+                method: 'GET',
+                body: '',
+                responseMatches,
+                responseRedactions,
+            });
+
+            expect(result).toEqual([
+                canonicalStringify({
+                    url: 'https://example.com',
+                    method: 'GET',
+                    body: '',
+                    responseMatches: responseMatches.map(({ isOptional: _, ...match }) => ({
+                        ...match,
+                        invert: undefined,
+                    })),
+                    responseRedactions,
+                }),
+            ]);
+        });
+
+        it('should reject an unbounded number of optional-rule combinations', () => {
+            const responseMatches = Array.from({ length: 31 }, (_, index) => ({
+                type: 'contains' as const,
+                value: `optional-${index}`,
+                invert: false,
+                isOptional: true,
+            }));
+
+            expect(() => getProviderParamsAsCanonicalizedString({
+                url: 'https://example.com',
+                method: 'GET',
+                body: '',
+                responseMatches,
+                responseRedactions: [],
+            })).toThrow('Cannot hash more than 30 optional response match rules');
+        });
+
         it('should handle undefined rules properly and return base object', () => {
             const params: HttpProviderClaimParams = { url: 'http://a', method: 'GET', body: '' } as any;
             const result = getProviderParamsAsCanonicalizedString(params);
