@@ -108,6 +108,7 @@
     "uuid": "^9.0.1"
   },
   "overrides": {
-    "@conventional-changelog/git-client": "^2.0.0"
+    "@conventional-changelog/git-client": "^2.0.0",
+    "undici@6": "6.29.1"
   }
 }
