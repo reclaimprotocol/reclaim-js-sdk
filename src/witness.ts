@@ -75,7 +75,7 @@ function strToUint8Array(str: string): Uint8Array {
  * starting claim creation to make a valid proof if the server payload may not contain them.
  * 
  * To ensure the eventual Proof's Hash safely validates against the parent template's Requirement Hash, logic here 
- * loops $2^N$ times using bitmask computation (where N = number of rule pairs) and yields canonically sorted 
+ * loops $2^N$ times using bitmask computation (where N = number of optional rule pairs) and yields canonically sorted
  * permutations for every sub-set of optional combinations. 
  * Any combination forcefully omitting a mathematically required (`isOptional: false`) rule is stripped out.
  * 
@@ -89,22 +89,34 @@ function strToUint8Array(str: string): Uint8Array {
 export function getProviderParamsAsCanonicalizedString(params: HttpProviderClaimParams): string[] {
   // redaction cannot be more than response match
   const pairsCount = params?.responseMatches?.length ?? 0;
+  const optionalPairPositions = new Map<number, number>();
   const validCanonicalizedStrings: string[] = [];
 
-  // Total combinations: 2^pairsCount
-  const totalCombinations = 1 << pairsCount;
+  for (let i = 0; i < pairsCount; i++) {
+    if (params.responseMatches[i]?.isOptional) {
+      optionalPairPositions.set(i, optionalPairPositions.size);
+    }
+  }
+
+  if (optionalPairPositions.size > 30) {
+    throw new RangeError('Cannot hash more than 30 optional response match rules');
+  }
+
+  // Required rules are present in every result, so only optional rules need a
+  // bit in the combination mask.
+  const totalCombinations = 1 << optionalPairPositions.size;
 
   for (let i = 0; i < totalCombinations; i++) {
-    let isValidCombination = true;
     let includedCount = 0;
 
     const currentMatches: HashableHttpProviderClaimParams['responseMatches'] = [];
     const currentRedactions: HashableHttpProviderClaimParams['responseRedactions'] = [];
 
     for (let j = 0; j < pairsCount; j++) {
-      const isIncluded = (i & (1 << j)) !== 0;
       const match = params?.responseMatches?.[j];
       const redaction = params?.responseRedactions?.[j];
+      const optionalPosition = optionalPairPositions.get(j);
+      const isIncluded = optionalPosition === undefined || (i & (1 << optionalPosition)) !== 0;
 
       if (isIncluded) {
         if (match) {
@@ -124,15 +136,10 @@ export function getProviderParamsAsCanonicalizedString(params: HttpProviderClaim
           });
         }
         includedCount++;
-      } else {
-        if (match && !match.isOptional) {
-          isValidCombination = false;
-          break;
-        }
       }
     }
 
-    if (isValidCombination && includedCount > 0) {
+    if (includedCount > 0) {
       const filteredParams: HashableHttpProviderClaimParams = {
         url: params?.url ?? '',
         // METHOD needs to be explicitly specified and absence or unknown method should cause error, but we're choosing to ignore it in this case
